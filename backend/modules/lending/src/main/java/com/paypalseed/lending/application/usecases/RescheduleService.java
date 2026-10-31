@@ -11,6 +11,7 @@ import com.paypalseed.engines.schedule.ScheduleErrors;
 import com.paypalseed.lending.api.dto.LendingDtos.ReschedulePreview;
 import com.paypalseed.lending.api.dto.LendingDtos.RescheduleRequest;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
+import com.paypalseed.lending.api.dto.LendingDtos.Slot;
 import com.paypalseed.lending.api.events.LendingEvents;
 import com.paypalseed.lending.domain.model.LendingErrors;
 import com.paypalseed.lending.domain.model.LoanRow;
@@ -25,6 +26,7 @@ import com.paypalseed.platform.kernel.Ids;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,24 +69,42 @@ public class RescheduleService {
                 queries.view(loan, proposed, refolded, today), LoanQueries.diff(ScheduleDiff.between(now.schedule(), proposed)));
     }
 
+    /**
+     * Applies an approved option. Idempotent on {@code approvalRef}: under the loan lock, a replay finds the version
+     * this approval created and returns it without writing or publishing anything. When {@code expectedProposed} is
+     * given, the proposal is recomputed under the same lock and must equal what was approved.
+     */
     @Transactional
-    public ScheduleView apply(RescheduleRequest request, String approvalRef) {
+    public ScheduleView apply(RescheduleRequest request, String approvalRef, List<Slot> expectedProposed) {
         Objects.requireNonNull(approvalRef, "approvalRef");
         LoanRow loan = loans.lock(request.loanId())
                 .orElseThrow(() -> new DomainException(LendingErrors.LOAN_NOT_FOUND, "No loan " + request.loanId()));
+        String causedBy = "approval:" + approvalRef;
+        LocalDate today = clock.today();
+        Optional<Integer> applied = schedules.versionCausedBy(loan.id(), causedBy);
+        if (applied.isPresent()) {
+            Schedule version = schedules.loadCurrent(loan.id(), applied.get(), loan.dueDay());
+            return queries.view(loan, version, Allocator.allocate(version, history(loan), loan.policy()), today);
+        }
         if (!loan.isActive()) {
             throw new DomainException(LendingErrors.LOAN_NOT_ACTIVE, "Loan is " + loan.status());
         }
-        LocalDate today = clock.today();
         LoanRecalculator.Projection now = recalculator.project(loan, List.of());
         Schedule proposed = propose(loan, now, request, today);
-        schedules.insert(loan.id(), proposed, loan.policyVersion(), "approval:" + approvalRef, today);
+        if (expectedProposed != null) {
+            List<Slot> actual = proposed.instalments().stream().map(i -> new Slot(i.seq(), i.dueDate(), i.amountCents())).toList();
+            if (!actual.equals(expectedProposed)) {
+                throw new DomainException(LendingErrors.RESCHEDULE_PREVIEW_CHANGED,
+                        "The proposal for loan " + loan.id() + " no longer matches the approved preview");
+            }
+        }
+        schedules.insert(loan.id(), proposed, loan.policyVersion(), causedBy, today);
         loans.setCurrentVersion(loan.id(), proposed.version());
         attempts.cancelPlanned(loan.id(), "rescheduled");
         LoanRow relocked = loans.lock(loan.id()).orElseThrow();
         LoanRecalculator.Outcome outcome = recalculator.recalculate(relocked, today, LoanRecalculator.Cause.RESCHEDULE);
         events.publishEvent(new LendingEvents.ScheduleChanged(Ids.newId(), loan.id(), loan.memberId(), today,
-                now.schedule().version(), proposed.version(), proposed.reason().name(), "approval:" + approvalRef,
+                now.schedule().version(), proposed.version(), proposed.reason().name(), causedBy,
                 proposed.instalments().stream()
                         .map(i -> new LendingEvents.InstalmentView(i.seq(), i.dueDate(), i.amountCents())).toList()));
         events.publishEvent(new LendingEvents.MandateSyncRequested(Ids.newId(), loan.id(), loan.memberId(), today));

@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Public and Desk API
-  version: 1.1.0
+  version: 1.2.0
   description: |
-    Member, desk and webhook endpoints. Feature 4 (repayment schedule and autopay) is described here;
-    see docs/features/f4-repayment-autopay/02-design.md §6.
+    Member, desk and webhook endpoints. Feature 4 (repayment schedule and autopay) and Feature 5 (hardship
+    safety net) are described here; see docs/features/f4-repayment-autopay/02-design.md §6 and
+    docs/features/f5-hardship-safety-net/02-design.md §6.
 
     Errors are RFC 9457 `application/problem+json` with a stable `type`
     (`https://problems.paypal-seed.dev/{code}`) and the same `code` property. Money is integer cents (USD).
@@ -17,6 +18,10 @@ tags:
   - name: autopay
   - name: desk
   - name: webhooks
+  - name: hardship
+    description: Member side of the hardship safety net (F5)
+  - name: hardship-desk
+    description: Officer and checker desk for hardship cases, and the agent kill switch (F5)
 security:
   - memberSession: []
 
@@ -238,15 +243,252 @@ paths:
   /api/v1/webhooks/zapier/sms:
     post:
       tags: [webhooks]
-      summary: Member SMS replies via Zapier (HMAC-SHA256 over "timestamp.body")
+      summary: Member SMS replies via Zapier (HMAC-SHA256 over "timestamp.body"); A to D, NO and HELP go to the hardship case of that member
       security: []
       parameters:
         - { name: X-Seed-Timestamp, in: header, required: true, schema: { type: string } }
         - { name: X-Seed-Signature, in: header, required: true, schema: { type: string } }
-      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { from: { type: string }, text: { type: string } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { from: { type: string }, text: { type: string }, messageId: { type: string, description: 'Zapier message id; replays with the same id are ignored' } } } } } }
       responses:
-        '200': { description: Keyword handled, content: { application/json: { schema: { type: object, properties: { keyword: { type: string, enum: [STOP, START, PAY, HELP, YES, UNKNOWN] } } } } } }
+        '200': { description: Keyword handled, content: { application/json: { schema: { type: object, properties: { keyword: { type: string, enum: [STOP, START, PAY, HELP, YES, A, B, C, D, NO, UNKNOWN] } } } } } }
         '401': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/{loanId}/hardship:
+    get:
+      tags: [hardship]
+      summary: The member's open hardship case and its active offer (F5)
+      description: |
+        Every number in `options[].summary` comes from the schedule engine preview. `offer.message.text` is the only
+        AI-written field; it passed the grounding check, or it is the template (`source: TEMPLATE`). The risk level and
+        score are never shown to the member. Another member's loan returns 404 `hardship-no-open-offer`.
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es], default: en } }
+      responses:
+        '200':
+          description: Case and offer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HardshipView' }
+              examples:
+                ana:
+                  summary: Ana, month 3, after a 52% drop in sales
+                  value:
+                    caseId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01
+                    status: OFFER_VIEWED
+                    target: { seq: 3, dueDate: '2027-03-20', amountCents: 15000 }
+                    offer:
+                      offerId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e02
+                      revision: 1
+                      expiresOn: '2027-03-25'
+                      recommended: C
+                      message: { locale: en, source: AI, text: "Your sales look lower than usual. Here are four ways to make March easier. You choose." }
+                      options:
+                        - { optionId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0a, label: A, primitive: MOVE_DATE, args: { seq: 3, days: 14 },
+                            summary: { movedFromDate: 20897, movedToDate: 20911, days: 14, amountCents: 15000, lastDueDate: 21050, maxInstalmentCents: 15000 },
+                            tier: AUTO_POLICY, sustainable: false, recommended: false, warnings: [NOT_SUSTAINABLE_AT_CURRENT_INCOME] }
+                        - { optionId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0b, label: B, primitive: DEFER_TO_END, args: { seq: 3 },
+                            summary: { removedFromDate: 20897, addedOnDate: 21081, amountCents: 15000, months: 1, lastDueDate: 21081, maxInstalmentCents: 15000 },
+                            tier: MAKER_CHECKER, sustainable: false, recommended: false, warnings: [NOT_SUSTAINABLE_AT_CURRENT_INCOME] }
+                        - { optionId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0c, label: C, primitive: REAMORTIZE, args: { extraMonths: 2 },
+                            summary: { extraMonths: 2, instalments: 8, firstDueDate: 20897, minInstalmentCents: 11200, lastDueDate: 21111, maxInstalmentCents: 11300 },
+                            tier: MAKER_CHECKER, sustainable: true, recommended: true, warnings: [] }
+                        - { optionId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0d, label: D, primitive: PAYMENT, args: { amountCents: 6900 },
+                            summary: { payNowCents: 6900, stillDueOnDate: 20897, stillDueCents: 8100 },
+                            tier: NONE, sustainable: false, recommended: false, warnings: [LEAVES_SHORTFALL] }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hardship/cases:
+    post:
+      tags: [hardship]
+      summary: Ask for help (opens a case at once, never gated by the score)
+      description: |
+        `reasonText` is untrusted. It goes only to the closed-set reason classifier; the text is not stored, logged,
+        put in an event or shown to an agent. Only the category is kept.
+      parameters:
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es], default: en } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loanId]
+              properties:
+                loanId: { type: string, format: uuid }
+                reasonText: { type: string, maxLength: 500 }
+            example: { loanId: 0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01, reasonText: "Sales dropped this month." }
+      responses:
+        '201': { description: Case and offer, content: { application/json: { schema: { $ref: '#/components/schemas/HardshipView' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { description: 'hardship-not-eligible (loan not active, in the 60-plus bucket, or a case is already open)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/hardship/cases/{caseId}/choice:
+    post:
+      tags: [hardship]
+      summary: The member chooses one option of the active offer (recorded consent)
+      description: |
+        Option A is approved by policy at once; B and C open a maker-checker approval request; D waits for the payment.
+        If the schedule changed since the offer, the offer is rebuilt as a new revision and the call returns
+        409 `hardship-offer-stale`: show the new numbers and ask again.
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [offerId, optionId]
+              properties:
+                offerId: { type: string, format: uuid }
+                optionId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Choice recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HardshipChoice' }
+              example: { caseId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01, status: PENDING_APPROVAL, optionLabel: B, tier: MAKER_CHECKER,
+                         decisionDueAt: '2027-03-12T17:42:00Z', holdUntil: null, payNowCents: null }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'hardship-offer-stale | hardship-case-closed', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: 'hardship-policy-violation | hardship-unknown-option', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/hardship/cases/{caseId}/decline:
+    post:
+      tags: [hardship]
+      summary: One-tap decline; no reason needed
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { description: Declined, content: { application/json: { schema: { type: object, properties: { caseId: { type: string, format: uuid }, status: { type: string, enum: [DECLINED_BY_MEMBER] } } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/hardship/cases:
+    get:
+      tags: [hardship-desk]
+      summary: Hardship queue (keyset paged, newest first; filters are an allowlist)
+      security: [ { staffSession: [] } ]
+      description: Roles OFFICER, CHECKER or ADMIN. An unknown filter value returns 422 `hardship-invalid-filter`.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/HardshipCaseStatus' } }, style: form, explode: true }
+        - { name: level, in: query, required: false, schema: { type: array, items: { type: string, enum: [NONE, WATCH, LIKELY_MISS, IMMINENT] } }, style: form, explode: true }
+        - { name: origin, in: query, required: false, schema: { type: array, items: { type: string, enum: [PROACTIVE_SCAN, MEMBER_HELP, STAFF] } }, style: form, explode: true }
+        - { name: before, in: query, required: false, description: Keyset cursor (`nextBefore` of the previous page), schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows: { type: array, items: { $ref: '#/components/schemas/HardshipQueueRow' } }
+                  nextBefore: { type: [string, 'null'], format: uuid }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/hardship/cases/{caseId}:
+    get:
+      tags: [hardship-desk]
+      summary: Evidence panel (signals with numbers, options, member choice, narratives with their source, approval, agent run)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/CaseId' } ]
+      responses:
+        '200': { description: Case detail, content: { application/json: { schema: { $ref: '#/components/schemas/HardshipCaseDetail' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/hardship/cases/{caseId}/decision:
+    post:
+      tags: [hardship-desk]
+      summary: Maker or checker decision (which one follows from the approval request)
+      description: |
+        The first decision is the maker's (role OFFICER); the second is the checker's (role CHECKER), by a different
+        person who is not the member. A decision on a stale offer voids the request and returns 409 `approval-stale`.
+      security: [ { staffSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reasonCode, evidenceViewedMs]
+              properties:
+                decision: { type: string, enum: [APPROVE, REJECT] }
+                reasonCode: { type: string, maxLength: 64 }
+                note: { type: string, maxLength: 500 }
+                evidenceViewedMs: { type: integer, minimum: 0, description: Time the evidence panel was open; feeds the rubber-stamp detector }
+            example: { decision: APPROVE, reasonCode: INCOME_DROP_VERIFIED, note: "Signals match the member's own message.", evidenceViewedMs: 41200 }
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId: { type: string, format: uuid }
+                  requestStatus: { type: string, enum: [OPEN, APPROVED, REJECTED, VOIDED] }
+                  role: { type: string, enum: [MAKER, CHECKER] }
+                  next: { type: [string, 'null'], enum: [CHECKER, null] }
+                  auditSeq: { type: integer }
+              example: { requestId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10, requestStatus: OPEN, role: MAKER, next: CHECKER, auditSeq: 18423 }
+        '403': { description: 'sod-violation (the checker is the maker or the member) or missing role', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'approval-stale | hardship-not-awaiting-decision', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: reason-code-required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/hardship/cases/{caseId}/retry:
+    post:
+      tags: [hardship-desk]
+      summary: Retry an approved case whose execution ran out of attempts (roles OFFICER or ADMIN)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/CaseId' } ]
+      responses:
+        '200': { description: Execution retried }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/agents/kill-switch:
+    get:
+      tags: [hardship-desk]
+      summary: Effective agent mode and circuit state (roles OFFICER, CHECKER or ADMIN)
+      security: [ { staffSession: [] } ]
+      parameters: [ { name: agent, in: query, required: false, schema: { type: string, default: guardian } } ]
+      responses:
+        '200': { description: State, content: { application/json: { schema: { $ref: '#/components/schemas/KillSwitchState' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [hardship-desk]
+      summary: Change an agent mode (audited, append-only history)
+      description: |
+        Any OFFICER, CHECKER or ADMIN may make a scope more restrictive (LIVE to SHADOW to TEMPLATES_ONLY) at once.
+        Moving back to a less restrictive mode needs ADMIN (`kill-switch-up-needs-admin`). Automatic trips only ever
+        move to TEMPLATES_ONLY.
+      security: [ { staffSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, mode, reason]
+              properties:
+                scope: { type: string, pattern: 'GLOBAL|[a-z][a-z0-9-]{1,40}', examples: [GLOBAL, guardian] }
+                mode: { type: string, enum: [LIVE, SHADOW, TEMPLATES_ONLY] }
+                reason: { type: string, maxLength: 500 }
+            example: { scope: GLOBAL, mode: TEMPLATES_ONLY, reason: "Grounding failures spiked after a model change" }
+      responses:
+        '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/KillSwitchState' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
 
 components:
   securitySchemes:
@@ -254,6 +496,7 @@ components:
     staffSession: { type: http, scheme: bearer, description: Staff passkey session (dev profile accepts X-Seed-Staff-Id and X-Seed-Staff-Roles) }
   parameters:
     LoanId: { name: loanId, in: path, required: true, schema: { type: string, format: uuid } }
+    CaseId: { name: caseId, in: path, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 128 } }
   responses:
     Problem:
@@ -383,3 +626,144 @@ components:
         loansProcessed: { type: integer }
         loansFailed: { type: integer }
         triggerRef: { type: string }
+    HardshipCaseStatus:
+      type: string
+      enum: [DETECTED, OUTREACH_SENT, OFFER_VIEWED, OPTION_CHOSEN, PENDING_APPROVAL, APPROVED, APPROVED_EXECUTION_FAILED,
+             APPLIED, DECLINED_BY_MEMBER, REJECTED_BY_OFFICER, EXPIRED, CANCELLED_PAID, SUPERSEDED]
+    HardshipOption:
+      type: object
+      description: |
+        One option of the active offer. `summary` holds numbers only: cents, days, counts; keys ending in `Date` are
+        epoch days. `recommended` is set by the OptionRanker (code), never by a model; no option is preselected.
+      properties:
+        optionId: { type: string, format: uuid }
+        label: { type: string, enum: [A, B, C, D] }
+        primitive: { type: string, enum: [MOVE_DATE, DEFER_TO_END, REAMORTIZE, PAYMENT] }
+        args: { type: object, additionalProperties: { type: integer } }
+        summary: { type: object, additionalProperties: { type: integer } }
+        tier: { type: string, enum: [AUTO_POLICY, MAKER_CHECKER, NONE] }
+        sustainable: { type: [boolean, 'null'], description: Null when there is no consented income data }
+        recommended: { type: boolean }
+        warnings: { type: array, items: { type: string, enum: [NOT_SUSTAINABLE_AT_CURRENT_INCOME, STILL_TIGHT, LEAVES_SHORTFALL] } }
+    HardshipView:
+      type: object
+      properties:
+        caseId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/HardshipCaseStatus' }
+        target:
+          type: object
+          properties:
+            seq: { type: integer }
+            dueDate: { type: string, format: date }
+            amountCents: { type: integer }
+        offer:
+          type: [object, 'null']
+          properties:
+            offerId: { type: string, format: uuid }
+            revision: { type: integer }
+            expiresOn: { type: string, format: date }
+            recommended: { type: [string, 'null'], enum: [A, B, C, D, null] }
+            message:
+              type: object
+              properties:
+                locale: { type: string, enum: [en, es] }
+                source: { type: string, enum: [AI, TEMPLATE] }
+                text: { type: string }
+            options: { type: array, items: { $ref: '#/components/schemas/HardshipOption' } }
+    HardshipChoice:
+      type: object
+      properties:
+        caseId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/HardshipCaseStatus' }
+        optionLabel: { type: string, enum: [A, B, C, D] }
+        tier: { type: string, enum: [AUTO_POLICY, MAKER_CHECKER, NONE] }
+        decisionDueAt: { type: [string, 'null'], format: date-time, description: Officer SLA for MAKER_CHECKER options }
+        holdUntil: { type: [string, 'null'], format: date, description: Grace hold placed while the decision is pending }
+        payNowCents: { type: [integer, 'null'], description: Option D amount }
+    HardshipQueueRow:
+      type: object
+      properties:
+        caseId: { type: string, format: uuid }
+        loanId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/HardshipCaseStatus' }
+        level: { type: string, enum: [NONE, WATCH, LIKELY_MISS, IMMINENT] }
+        points: { type: integer }
+        origin: { type: string, enum: [PROACTIVE_SCAN, MEMBER_HELP, STAFF] }
+        targetSeq: { type: integer }
+        targetDueDate: { type: string, format: date }
+        targetAmountCents: { type: integer }
+        chosenOption: { type: [string, 'null'] }
+        openedOn: { type: string, format: date }
+    HardshipCaseDetail:
+      type: object
+      properties:
+        summary: { $ref: '#/components/schemas/HardshipQueueRow' }
+        policyVersion: { type: string, examples: [hardship-v1] }
+        signals:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string, examples: [INCOME_DROP_SEVERE] }
+              points: { type: integer }
+              evidence: { type: object, additionalProperties: { type: integer }, description: The numbers that fired the signal (cents, bps, days, counts) }
+        offerRevision: { type: [integer, 'null'] }
+        recommended: { type: [string, 'null'] }
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              primitive: { type: string }
+              args: { type: object, additionalProperties: { type: integer } }
+              snapshotHash: { type: string, description: SHA-256 of exactly what the member saw; approvals and the apply recheck it }
+              tier: { type: string }
+              recommended: { type: boolean }
+              sustainable: { type: [boolean, 'null'] }
+              warnings: { type: array, items: { type: string } }
+              summary: { type: object, additionalProperties: { type: integer } }
+        chosenOption: { type: [string, 'null'] }
+        choiceChannel: { type: [string, 'null'], enum: [APP, SMS, null] }
+        narratives:
+          type: array
+          items:
+            type: object
+            properties:
+              audience: { type: string, enum: [MEMBER, OFFICER] }
+              locale: { type: string }
+              text: { type: string }
+              source: { type: string, enum: [TEMPLATE, AI, AI_SHADOW] }
+              grounding: { type: string }
+              agentRunId: { type: [string, 'null'], format: uuid }
+              createdAt: { type: string, format: date-time }
+        approval:
+          type: [object, 'null']
+          properties:
+            id: { type: string, format: uuid }
+            tier: { type: string, enum: [AUTO_POLICY, MAKER_CHECKER] }
+            status: { type: string, enum: [OPEN, APPROVED, REJECTED, EXPIRED, VOIDED] }
+            snapshotHash: { type: string }
+            slaDueAt: { type: string, format: date-time }
+            checkerRequired: { type: boolean }
+            decisions:
+              type: array
+              items:
+                type: object
+                properties:
+                  role: { type: string, enum: [POLICY, MAKER, CHECKER] }
+                  staffRef: { type: string, description: Pseudonymous staff reference }
+                  decision: { type: string, enum: [APPROVE, REJECT] }
+                  reasonCode: { type: string }
+                  decidedAt: { type: string, format: date-time }
+        lastAgentRunId: { type: [string, 'null'], format: uuid }
+        rubberStampFlag: { type: boolean, description: The viewing officer's recent decisions look too fast to be real review }
+        closedReason: { type: [string, 'null'] }
+    KillSwitchState:
+      type: object
+      properties:
+        mode: { type: string, enum: [LIVE, SHADOW, TEMPLATES_ONLY] }
+        since: { type: string, format: date-time }
+        reason: { type: string }
+        trippedBy: { type: string, enum: [OFFICER, AUTO_VALIDATOR_REJECTIONS, AUTO_GROUNDING_FAILURES, AUTO_BUDGET, AUTO_INJECTION_CANARY] }
+        circuits: { type: object, additionalProperties: { type: string }, description: Model id to breaker state }

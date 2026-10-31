@@ -14,6 +14,12 @@ public final class SmsKeywords {
         PAY,
         HELP,
         YES,
+        /** Hardship option letters and the decline word; they act only on the member's own open case. */
+        A,
+        B,
+        C,
+        D,
+        NO,
         UNKNOWN
     }
 
@@ -27,6 +33,11 @@ public final class SmsKeywords {
             case "PAY", "PAGAR" -> Keyword.PAY;
             case "HELP", "AYUDA" -> Keyword.HELP;
             case "YES", "SI", "SÍ" -> Keyword.YES;
+            case "A" -> Keyword.A;
+            case "B" -> Keyword.B;
+            case "C" -> Keyword.C;
+            case "D" -> Keyword.D;
+            case "NO" -> Keyword.NO;
             default -> Keyword.UNKNOWN;
         };
     }

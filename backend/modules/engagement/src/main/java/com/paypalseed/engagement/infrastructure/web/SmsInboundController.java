@@ -7,9 +7,11 @@ import com.paypalseed.engagement.domain.model.SmsKeywords;
 import com.paypalseed.engagement.domain.model.SmsKeywords.Keyword;
 import com.paypalseed.engagement.infrastructure.clients.ZapierSmsClient;
 import com.paypalseed.engagement.infrastructure.persistence.ReminderRepository;
+import com.paypalseed.hardship.api.HardshipFacade;
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -21,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Member SMS replies relayed by Zapier, verified by HMAC and parsed with {@link SmsKeywords}. STOP
- * and START change the opt-out. Other keywords are acknowledged and logged only.
+ * and START change the opt-out. Hardship keywords (option letters, NO, HELP) go to hardship, which acts
+ * only on the member's own case. Other keywords are acknowledged and logged only.
  */
 @RestController
 class SmsInboundController {
@@ -35,12 +38,15 @@ class SmsInboundController {
     private final ReminderRepository contacts;
     private final ReminderService reminders;
     private final ObjectMapper json;
+    private final HardshipFacade hardship;
 
-    SmsInboundController(ZapierSmsClient zapier, ReminderRepository contacts, ReminderService reminders, ObjectMapper json) {
+    SmsInboundController(ZapierSmsClient zapier, ReminderRepository contacts, ReminderService reminders, ObjectMapper json,
+                         HardshipFacade hardship) {
         this.zapier = zapier;
         this.contacts = contacts;
         this.reminders = reminders;
         this.json = json;
+        this.hardship = hardship;
     }
 
     @PostMapping(path = "/api/v1/webhooks/zapier/sms", consumes = "application/json")
@@ -64,8 +70,24 @@ class SmsInboundController {
         switch (keyword) {
             case STOP -> reminders.setOptOut(member.get(), true);
             case START -> reminders.setOptOut(member.get(), false);
+            case A, B, C, D, NO, HELP -> hardship.handleSmsReply(member.get(), keyword.name(), messageId(message, body),
+                    contacts.latestLoanOf(member.get()).orElse(null));
             default -> log.info("SMS keyword {} from member {}", keyword, member.get());
         }
         return new Ack(keyword.name());
+    }
+
+    /** Zapier's message id when it sends one; otherwise a digest of the signed body, so a replay is still a duplicate. */
+    private static String messageId(JsonNode message, String body) {
+        String id = message.path("messageId").asText("");
+        if (!id.isBlank()) {
+            return id.length() > 120 ? id.substring(0, 120) : id;
+        }
+        try {
+            return "sha256:" + java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(body.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 }
