@@ -1,6 +1,7 @@
 // Module: governance (F7: proposal -> verdict -> approval (maker-checker) -> execution, audit hash chain)
 plugins {
     `java-library`
+    id("jooq-module")
 }
 
 dependencies {

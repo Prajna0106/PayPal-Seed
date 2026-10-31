@@ -118,6 +118,16 @@ public class ReminderRepository {
                 .execute();
     }
 
+    /** The loan of the member's newest message, so an SMS reply can be tied to a loan. */
+    public Optional<UUID> latestLoanOf(UUID memberId) {
+        return dsl.select(REMINDER.LOAN_ID)
+                .from(REMINDER)
+                .where(REMINDER.MEMBER_ID.eq(memberId))
+                .orderBy(REMINDER.CREATED_AT.desc())
+                .limit(1)
+                .fetchOptional(REMINDER.LOAN_ID);
+    }
+
     public List<Reminder> forLoan(UUID loanId) {
         return dsl.selectFrom(REMINDER)
                 .where(REMINDER.LOAN_ID.eq(loanId))
