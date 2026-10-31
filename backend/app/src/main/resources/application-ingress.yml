@@ -1,1 +1,5 @@
-# Webhook ingress role configuration
+# ingress role: PayPal webhooks (verify, store, 200) and the inbox poller.
+seed:
+  jobs:
+    enabled: true
+    inbox-poll-ms: 500
