@@ -1,6 +1,8 @@
 package com.paypalseed.savings.infrastructure;
 
 import com.paypalseed.platform.messaging.EventOutbox;
+import com.paypalseed.savings.api.SavingsFacade;
+import com.paypalseed.savings.application.SavingsFacadeImpl;
 import com.paypalseed.savings.application.ports.SavingsGoalRepository;
 import com.paypalseed.savings.application.usecases.CreateGoalUseCase;
 import com.paypalseed.savings.application.usecases.PauseResumeGoalUseCase;
@@ -30,5 +32,14 @@ public class SavingsConfiguration {
     @Bean
     public PauseResumeGoalUseCase pauseResumeGoalUseCase(SavingsGoalRepository repository) {
         return new PauseResumeGoalUseCase(repository);
+    }
+
+    @Bean
+    public SavingsFacade savingsFacade(
+        RecordDepositUseCase recordDepositUseCase,
+        PauseResumeGoalUseCase pauseResumeGoalUseCase,
+        SavingsGoalRepository repository
+    ) {
+        return new SavingsFacadeImpl(recordDepositUseCase, pauseResumeGoalUseCase, repository);
     }
 }
