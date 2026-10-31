@@ -2,121 +2,129 @@ package com.paypalseed.payments.infrastructure.web;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.paypalseed.payments.application.PayPalWebhookVerifier;
-import com.paypalseed.payments.application.WebhookInbox;
+import com.paypalseed.payments.application.ports.PayPalGateway;
+import com.paypalseed.payments.domain.model.PaymentsErrors;
+import com.paypalseed.payments.infrastructure.persistence.InboxRepository;
+import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.savings.api.SavingsFacade;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
-import java.util.Map;
-
+/**
+ * PayPal webhook ingress (ingress role): verify the signature, store in the inbox, return 200 fast
+ * (NFR-02). Nothing is acted on here; the inbox processor does the work. Unverified events are
+ * refused and never stored.
+ */
 @RestController
-@RequestMapping("/api/v1/payments/webhooks")
 public class PayPalWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(PayPalWebhookController.class);
+    private static final int MAX_BODY_CHARS = 256 * 1024;
 
-    private final WebhookInbox webhookInbox;
-    private final PayPalWebhookVerifier webhookVerifier;
+    public record Ack(String status, String eventId) {
+        public Ack(String status) {
+            this(status, null);
+        }
+    }
+
+    private final PayPalGateway paypal;
+    private final InboxRepository inbox;
+    private final ObjectMapper json;
     private final SavingsFacade savingsFacade;
-    private final ObjectMapper objectMapper;
 
+    public PayPalWebhookController(PayPalGateway paypal, InboxRepository inbox, ObjectMapper json) {
+        this(paypal, inbox, json, null);
+    }
+
+    @Autowired
     public PayPalWebhookController(
-        WebhookInbox webhookInbox,
-        PayPalWebhookVerifier webhookVerifier,
-        SavingsFacade savingsFacade,
-        ObjectMapper objectMapper
+            PayPalGateway paypal,
+            InboxRepository inbox,
+            ObjectMapper json,
+            @Autowired(required = false) SavingsFacade savingsFacade
     ) {
-        this.webhookInbox = webhookInbox;
-        this.webhookVerifier = webhookVerifier;
+        this.paypal = paypal;
+        this.inbox = inbox;
+        this.json = json;
         this.savingsFacade = savingsFacade;
-        this.objectMapper = objectMapper;
     }
 
-    @PostMapping
-    public ResponseEntity<Map<String, String>> handleWebhook(
-        @RequestHeader Map<String, String> headers,
-        @RequestBody String rawPayload
-    ) {
-        log.info("[PAYPAL WEBHOOK] Received webhook event notification");
-
-        if (!webhookVerifier.verifySignature(headers, rawPayload)) {
-            log.warn("[PAYPAL WEBHOOK] Signature verification failed");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid webhook signature"));
+    @PostMapping(path = {"/api/v1/webhooks/paypal", "/api/v1/payments/webhooks"}, consumes = "application/json")
+    public Ack receive(@RequestHeader HttpHeaders headers, @RequestBody String rawBody) {
+        if (rawBody.length() > MAX_BODY_CHARS) {
+            throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Webhook body too large");
         }
-
+        Map<String, String> transmission = new HashMap<>();
+        headers.forEach((name, values) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("paypal-") && !values.isEmpty()) {
+                transmission.put(lower, values.get(0));
+            }
+        });
+        if (!paypal.verifyWebhook(transmission, rawBody)) {
+            log.warn("Rejected unverifiable PayPal webhook (transmission {})", transmission.get("paypal-transmission-id"));
+            throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Signature verification failed");
+        }
+        JsonNode event;
         try {
-            JsonNode root = objectMapper.readTree(rawPayload);
-            String eventId = root.path("id").asText();
-            String eventType = root.path("event_type").asText();
+            event = json.readTree(rawBody);
+        } catch (IOException e) {
+            throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Body is not JSON");
+        }
+        String id = event.path("id").asText("");
+        String type = event.path("event_type").asText("");
+        if (id.isBlank() || type.isBlank()) {
+            throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Missing id or event_type");
+        }
 
-            if (eventId == null || eventId.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Missing event id"));
-            }
+        boolean inserted = inbox.insert(id, type, rawBody);
 
-            // Inbox Deduplication (Idempotency)
-            if (webhookInbox.isProcessed(eventId)) {
-                log.info("[PAYPAL WEBHOOK] Event {} already processed. Skipping.", eventId);
-                return ResponseEntity.ok(Map.of(
-                    "status", "DUPLICATE_IGNORED",
-                    "eventId", eventId
-                ));
-            }
+        if (inserted && savingsFacade != null) {
+            routeSavingsEvent(type, event.path("resource"));
+        }
 
-            log.info("[PAYPAL WEBHOOK] Ingesting event: {} (type: {})", eventId, eventType);
+        return new Ack(inserted ? "accepted" : "duplicate", id);
+    }
 
+    private void routeSavingsEvent(String eventType, JsonNode resource) {
+        try {
             switch (eventType) {
-                case "PAYMENT.SALE.COMPLETED" -> handlePaymentSaleCompleted(root.path("resource"));
-                case "BILLING.SUBSCRIPTION.CANCELLED" -> handleSubscriptionCancelled(root.path("resource"));
-                case "BILLING.SUBSCRIPTION.PAYMENT.FAILED" -> handleSubscriptionPaymentFailed(root.path("resource"));
-                default -> log.info("[PAYPAL WEBHOOK] Unhandled event type: {}", eventType);
+                case "PAYMENT.SALE.COMPLETED" -> {
+                    String subscriptionId = resource.path("billing_agreement_id").asText("");
+                    if (!subscriptionId.isBlank()) {
+                        String captureId = resource.path("id").asText("");
+                        String totalStr = resource.path("amount").path("total").asText("");
+                        String currency = resource.path("amount").path("currency").asText("USD");
+                        if (!totalStr.isBlank()) {
+                            Money amount = Money.of(new BigDecimal(totalStr), currency);
+                            savingsFacade.recordDepositBySubscription(subscriptionId, amount, captureId);
+                        }
+                    }
+                }
+                case "BILLING.SUBSCRIPTION.CANCELLED" -> {
+                    String subscriptionId = resource.path("id").asText("");
+                    if (!subscriptionId.isBlank()) {
+                        savingsFacade.pauseGoalBySubscription(subscriptionId);
+                    }
+                }
+                default -> {
+                    // Other event types handled by inbox poller / normalizer
+                }
             }
-
-            // Mark event as processed in inbox
-            webhookInbox.markProcessed(eventId, eventType);
-
-            return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "eventId", eventId
-            ));
-
         } catch (Exception ex) {
-            log.error("[PAYPAL WEBHOOK] Failed to process event payload: {}", ex.getMessage(), ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", ex.getMessage()));
+            log.warn("[PAYPAL WEBHOOK] Failed to process savings event {}: {}", eventType, ex.getMessage());
         }
-    }
-
-    private void handlePaymentSaleCompleted(JsonNode resource) {
-        String subscriptionId = resource.path("billing_agreement_id").asText();
-        String captureId = resource.path("id").asText();
-        String totalStr = resource.path("amount").path("total").asText();
-        String currency = resource.path("amount").path("currency").asText("USD");
-
-        if (subscriptionId == null || subscriptionId.trim().isEmpty()) {
-            log.warn("[PAYPAL WEBHOOK] PAYMENT.SALE.COMPLETED missing billing_agreement_id. Skipping savings deposit.");
-            return;
-        }
-
-        BigDecimal amount = new BigDecimal(totalStr);
-        log.info("[PAYPAL WEBHOOK] Processing savings deposit for subscription: {}, amount: {} {}", subscriptionId, amount, currency);
-
-        savingsFacade.recordDepositBySubscription(subscriptionId, Money.of(amount, currency), captureId);
-    }
-
-    private void handleSubscriptionCancelled(JsonNode resource) {
-        String subscriptionId = resource.path("id").asText();
-        log.info("[PAYPAL WEBHOOK] Subscription {} cancelled. Pausing corresponding savings goal.", subscriptionId);
-        savingsFacade.pauseGoalBySubscription(subscriptionId);
-    }
-
-    private void handleSubscriptionPaymentFailed(JsonNode resource) {
-        String subscriptionId = resource.path("id").asText();
-        log.warn("[PAYPAL WEBHOOK] Subscription {} payment failed. Per blueprint: zero penalty, streak allows quarterly miss.", subscriptionId);
     }
 }

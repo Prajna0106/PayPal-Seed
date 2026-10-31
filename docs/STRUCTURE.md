@@ -228,10 +228,10 @@ Render Workflows is TS-first, so it stays a thin trigger layer: each step calls 
 | Concern | Choice |
 | --- | --- |
 | Backend | Java 21 (virtual threads), Spring Boot 3, Spring Modulith, Gradle Kotlin DSL |
-| Data access | jOOQ + Flyway, Postgres (schema per module), ledger constraint triggers and row locks |
+| Data access | jOOQ (type-safe SQL, classes generated per module from its Flyway migrations, see [ADR 0008](adr/0008-jooq-per-module-generated-sql.md)) + Flyway (one run per module schema), Postgres; constraint triggers, row locks, `SKIP LOCKED` |
 | Cache / idempotency / rate limits | Render Key Value (Redis-compatible) |
 | Events | Transactional outbox (Spring Modulith); Kafka externalization when needed |
 | API | OpenAPI-first; openapi-generator for Spring interfaces and the TS client |
 | Front end | Next.js App Router, TypeScript, PayPal JS SDK v6, Donate SDK, Bryntum, AG Studio |
-| Testing | JUnit 5, jqwik (property), Testcontainers, Spring Modulith tests, ArchUnit, Postman/Newman, Playwright, k6 |
+| Testing | JUnit 5, jqwik (property), embedded PostgreSQL 16 (zonky: a real server, no Docker needed), Spring Modulith verify, ArchUnit, Postman/Newman, Playwright, k6 |
 | Observability | OpenTelemetry → Elastic; Astropods agent spans |

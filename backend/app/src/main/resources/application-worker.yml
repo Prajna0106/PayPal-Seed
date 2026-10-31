@@ -1,1 +1,4 @@
-# Background worker role configuration
+# worker role: inbox, reminders and event-retry pollers.
+seed:
+  jobs:
+    enabled: true
