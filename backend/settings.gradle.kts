@@ -1,7 +1,14 @@
+pluginManagement {
+    includeBuild("build-logic")
+}
+
 rootProject.name = "paypal-seed-backend"
 
 include("app")
 include("architecture-tests")
+
+// build tools
+include("tools:jooq-codegen")
 
 // platform
 include("platform:kernel")

@@ -25,6 +25,7 @@ bin/
 out/
 *.class
 *.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
 *.war
 
 # Test & Coverage

@@ -1,0 +1,6 @@
+# Demo: shared business date that the demo clock moves, and developer header authentication.
+seed:
+  clock:
+    mode: database
+  security:
+    dev-header-auth: true

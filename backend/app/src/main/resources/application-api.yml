@@ -1,1 +1,4 @@
-# API role configuration
+# api role: REST for the member app, desk, partners and internal jobs. No pollers.
+seed:
+  jobs:
+    enabled: false

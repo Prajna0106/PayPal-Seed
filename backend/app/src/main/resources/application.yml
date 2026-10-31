@@ -1,5 +1,66 @@
 spring:
   application:
     name: paypal-seed
+  threads:
+    virtual:
+      enabled: true            # Java 21 virtual threads for request handling and async listeners
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/paypalseed}
+    username: ${DATABASE_USER:seed}
+    password: ${DATABASE_PASSWORD:seed_password}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:20}
+      connection-timeout: ${DATABASE_CONNECTION_TIMEOUT_MS:5000}   # fail fast when the pool is exhausted instead of queueing requests
+  jooq:
+    sql-dialect: POSTGRES
+  flyway:
+    enabled: false             # platform/persistence runs one Flyway per module schema
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: true        # event_publication table: the transactional outbox
+    republish-outstanding-events-on-restart: true
+  jackson:
+    default-property-inclusion: non_absent
+    serialization:
+      write-dates-as-timestamps: false
+  mvc:
+    problemdetails:
+      enabled: true
+
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+seed:
+  db:
+    query-timeout-seconds: ${SEED_DB_QUERY_TIMEOUT_SECONDS:30}   # a runaway statement fails instead of holding a connection
+    slow-query-ms: ${SEED_DB_SLOW_QUERY_MS:250}                  # statements slower than this are logged (SQL only, no values)
+  clock:
+    mode: ${SEED_CLOCK_MODE:system}         # 'database' turns on the shared demo clock
+  cob:
+    mode: ${SEED_COB_MODE:TIMERS}           # TIMERS (index of due work) or SCAN (every active loan)
+    shard-count: ${SEED_COB_SHARDS:8}
+  security:
+    internal-token: ${SEED_INTERNAL_TOKEN:}  # bearer token for /internal/** (Render Workflows); 16+ chars
+    dev-header-auth: false
+  paypal:
+    base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
+    client-id: ${PAYPAL_CLIENT_ID:}
+    client-secret: ${PAYPAL_CLIENT_SECRET:}
+    webhook-id: ${PAYPAL_WEBHOOK_ID:}
+    loan-plan-id: ${PAYPAL_LOAN_PLAN_ID:}
+  zapier:
+    sms-hook-url: ${ZAPIER_SMS_HOOK_URL:}
+    signing-secret: ${ZAPIER_SIGNING_SECRET:}
