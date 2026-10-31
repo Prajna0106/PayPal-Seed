@@ -1,11 +1,5 @@
-// Module: ledger (F7a: accounts, journal, posting rules, balances, reconciliation)
+// Module: ledger (F7a: accounts, append-only double-entry journal, balances)
 plugins {
     `java-library`
-}
-
-dependencies {
-    implementation(project(":platform:kernel"))
-    implementation(project(":platform:persistence"))
-    implementation(project(":platform:messaging"))
-    testImplementation(project(":platform:testing"))
+    id("jooq-module")
 }
