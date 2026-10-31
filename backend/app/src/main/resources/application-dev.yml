@@ -1,0 +1,5 @@
+# Local development against infra/docker-compose.yml.
+seed:
+  security:
+    dev-header-auth: true
+    internal-token: ${SEED_INTERNAL_TOKEN:local-dev-internal-token}

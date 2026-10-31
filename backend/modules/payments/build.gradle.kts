@@ -1,16 +1,12 @@
-// Module: payments (PayPal: executor (only write client), webhook ingress, sagas, txn search)
+// Module: payments (PayPal: executor (only write client), webhook ingress, normaliser, mandate reconciler)
 plugins {
     `java-library`
+    id("jooq-module")
 }
-
 dependencies {
-    implementation(project(":platform:kernel"))
-    implementation(project(":platform:persistence"))
-    implementation(project(":platform:messaging"))
+    implementation(project(":engines:schedule"))
     implementation(project(":modules:savings"))
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation(project(":platform:messaging"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
-
-    testImplementation(project(":platform:testing"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

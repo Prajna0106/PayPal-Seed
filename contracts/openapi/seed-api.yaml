@@ -1,12 +1,385 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Public and Desk API
-  version: 1.0.0
-  description: Public member endpoints, desk operations, and partner verification
+  version: 1.1.0
+  description: |
+    Member, desk and webhook endpoints. Feature 4 (repayment schedule and autopay) is described here;
+    see docs/features/f4-repayment-autopay/02-design.md §6.
+
+    Errors are RFC 9457 `application/problem+json` with a stable `type`
+    (`https://problems.paypal-seed.dev/{code}`) and the same `code` property. Money is integer cents (USD).
+    Dates are business dates in America/Los_Angeles.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: schedule
+  - name: payments
+  - name: autopay
+  - name: desk
+  - name: webhooks
+security:
+  - memberSession: []
+
 paths:
-  /api/v1/health:
+  /api/v1/loans:
     get:
-      summary: Health check
+      tags: [schedule]
+      summary: The signed-in member's loans
+      responses:
+        '200': { description: Loans, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LoanSummary' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/{loanId}/schedule:
+    get:
+      tags: [schedule]
+      summary: Current (or a given) schedule version with derived instalment status
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+        - { name: version, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: If-None-Match, in: header, required: false, schema: { type: string } }
       responses:
         '200':
-          description: OK
+          description: Schedule
+          headers: { ETag: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleView' } } }
+        '304': { description: Not modified }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/{loanId}/schedule/versions:
+    get:
+      tags: [schedule]
+      summary: Every schedule version, with the diff from the previous one
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200': { description: Versions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/VersionView' } } } } }
+
+  /api/v1/loans/{loanId}/timeline:
+    get:
+      tags: [schedule]
+      summary: Bryntum Scheduler Pro payload (instalments, previous plan as ghost events, grace windows)
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200': { description: Timeline, content: { application/json: { schema: { $ref: '#/components/schemas/TimelineView' } } } }
+
+  /api/v1/loans/{loanId}/transactions:
+    get:
+      tags: [payments]
+      summary: Money events of the loan (receipts, reversals, overpayment refunds)
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200': { description: Transactions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TransactionView' } } } } }
+
+  /api/v1/loans/{loanId}/payoff-quote:
+    get:
+      tags: [payments]
+      summary: Outstanding balance (0% loan, valid until the next money event)
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200':
+          description: Quote
+          content: { application/json: { schema: { type: object, required: [loanId, outstandingCents, validOn],
+            properties: { loanId: { type: string, format: uuid }, outstandingCents: { type: integer }, validOn: { type: string, format: date } } } } }
+
+  /api/v1/loans/{loanId}/payments/preview:
+    post:
+      tags: [payments]
+      summary: What paying an amount today would do. Pure engine call; writes nothing
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [amountCents], properties: { amountCents: { type: integer, minimum: 1 } } } } } }
+      responses:
+        '200': { description: Projected schedule, content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleView' } } } }
+
+  /api/v1/loans/{loanId}/schedule/preview:
+    post:
+      tags: [schedule]
+      summary: What a hardship option would do. Pure engine call; writes nothing
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RescheduleRequest' } } } }
+      responses:
+        '200': { description: Current and proposed schedules, content: { application/json: { schema: { $ref: '#/components/schemas/ReschedulePreview' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/{loanId}/payments:
+    post:
+      tags: [payments]
+      summary: Create a PayPal order for a catch-up, early, payoff or pay-what-you-can payment
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountCents, purpose]
+              properties:
+                amountCents: { type: integer, minimum: 100, description: Whole dollars only, at most the outstanding balance }
+                purpose: { type: string, enum: [CATCH_UP, EARLY, PAYOFF, PAY_WHAT_YOU_CAN] }
+      responses:
+        '201': { description: Order, content: { application/json: { schema: { $ref: '#/components/schemas/CheckoutOrder' } } } }
+        '409': { description: idempotency-key-reused, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: amount-not-whole-dollars | amount-exceeds-outstanding | amount-too-small | loan-not-active, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: dependency-unavailable (retry with the same Idempotency-Key), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/loans/{loanId}/payments/{orderId}/capture:
+    post:
+      tags: [payments]
+      summary: Capture an approved order. The repayment itself is recorded from the payment event
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+        - { name: orderId, in: path, required: true, schema: { type: string, maxLength: 64 } }
+      responses:
+        '200': { description: Captured, content: { application/json: { schema: { $ref: '#/components/schemas/CapturedOrder' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/{loanId}/overpayment-refunds:
+    post:
+      tags: [payments]
+      summary: Refund money held as overpayment (newest captures first)
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [amountCents], properties: { amountCents: { type: integer, minimum: 1 } } } } } }
+      responses:
+        '201':
+          description: Refunded
+          content: { application/json: { schema: { type: object, properties: { paypalRefundIds: { type: array, items: { type: string } }, amountCents: { type: integer } } } } }
+        '422': { description: no-overpayment | refund-exceeds-overpayment, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/loans/{loanId}/autopay:
+    post:
+      tags: [autopay]
+      summary: Start autopay (PayPal subscription, $1 x quantity). Idempotent while approval is pending
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [returnUrl, cancelUrl], properties: { returnUrl: { type: string, maxLength: 2048 }, cancelUrl: { type: string, maxLength: 2048 } } } } }
+      responses:
+        '201': { description: Mandate with approve URL, content: { application/json: { schema: { $ref: '#/components/schemas/MandateView' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [autopay]
+      summary: Stop autopay; the loan returns to manual payments
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '204': { description: Stopped }
+
+  /api/v1/loans/{loanId}/autopay/confirm:
+    post:
+      tags: [autopay]
+      summary: Return-URL confirmation; safe to race with the activation webhook
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [subscriptionId], properties: { subscriptionId: { type: string, maxLength: 64 } } } } } }
+      responses:
+        '200': { description: Mandate, content: { application/json: { schema: { $ref: '#/components/schemas/MandateView' } } } }
+
+  /api/v1/members/me/due-day-suggestion:
+    get:
+      tags: [schedule]
+      summary: Suggested due day (day after money usually arrives; falls back to stated payday)
+      parameters: [ { name: statedPayday, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 31 } } ]
+      responses:
+        '200':
+          description: Suggestion
+          content: { application/json: { schema: { type: object, properties: { dueDay: { type: integer }, basis: { type: string, enum: [INCOME_PATTERN, STATED_PAYDAY, DEFAULT] }, reason: { type: string } } } } }
+
+  /api/v1/desk/loans/{loanId}/schedule:
+    get:
+      tags: [desk]
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/LoanId' }, { name: version, in: query, schema: { type: integer } } ]
+      responses:
+        '200': { description: Schedule, content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleView' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/loans/{loanId}/integrity:
+    get:
+      tags: [desk]
+      summary: INV-2 check for one loan (allocation, cached state and ledger agree)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200':
+          description: Integrity report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  loanId: { type: string, format: uuid }
+                  outstandingCents: { type: integer }
+                  ledgerReceivableCents: { type: integer }
+                  overpaidCents: { type: integer }
+                  memberOverpaidCents: { type: integer }
+                  ledgerMemberOverpaymentCents: { type: integer }
+                  consistent: { type: boolean }
+
+  /api/v1/desk/cob-runs:
+    get:
+      tags: [desk]
+      security: [ { staffSession: [] } ]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Close-of-business runs, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CobRun' } } } } }
+
+  /api/v1/webhooks/paypal:
+    post:
+      tags: [webhooks]
+      summary: PayPal webhook ingress (verify signature, store in inbox, fast 200)
+      security: []
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [id, event_type, resource] } } } }
+      responses:
+        '200': { description: accepted | duplicate, content: { application/json: { schema: { type: object, properties: { status: { type: string, enum: [accepted, duplicate] } } } } } }
+        '422': { description: invalid-webhook (signature failed; never stored), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/webhooks/zapier/sms:
+    post:
+      tags: [webhooks]
+      summary: Member SMS replies via Zapier (HMAC-SHA256 over "timestamp.body")
+      security: []
+      parameters:
+        - { name: X-Seed-Timestamp, in: header, required: true, schema: { type: string } }
+        - { name: X-Seed-Signature, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { from: { type: string }, text: { type: string } } } } } }
+      responses:
+        '200': { description: Keyword handled, content: { application/json: { schema: { type: object, properties: { keyword: { type: string, enum: [STOP, START, PAY, HELP, YES, UNKNOWN] } } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    memberSession: { type: http, scheme: bearer, description: PayPal login session (dev profile accepts X-Seed-Member-Id) }
+    staffSession: { type: http, scheme: bearer, description: Staff passkey session (dev profile accepts X-Seed-Staff-Id and X-Seed-Staff-Roles) }
+  parameters:
+    LoanId: { name: loanId, in: path, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 128 } }
+  responses:
+    Problem:
+      description: RFC 9457 problem
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, examples: ['https://problems.paypal-seed.dev/loan-not-found'] }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    LoanSummary:
+      type: object
+      properties:
+        loanId: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        principalCents: { type: integer }
+        outstandingCents: { type: integer }
+        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+        collectionMode: { type: string, enum: [AUTOPAY, MANUAL] }
+        bucket: { $ref: '#/components/schemas/Bucket' }
+        dpd: { type: integer }
+        currentVersion: { type: integer }
+    Bucket: { type: string, enum: [CURRENT, DPD_1_7, DPD_8_30, DPD_31_60, DPD_60_PLUS] }
+    InstalmentLine:
+      type: object
+      properties:
+        seq: { type: integer }
+        dueDate: { type: string, format: date }
+        amountCents: { type: integer }
+        paidCents: { type: integer }
+        remainingCents: { type: integer }
+        status: { type: string, enum: [SCHEDULED, DUE, PARTIALLY_PAID, IN_GRACE, LATE, PAID, PAID_LATE, PREPAID] }
+        paidOn: { type: [string, 'null'], format: date }
+    ScheduleView:
+      type: object
+      properties:
+        loanId: { type: string, format: uuid }
+        version: { type: integer }
+        reason: { type: string, enum: [ORIGINAL, HARDSHIP_MOVE_DATE, HARDSHIP_PAUSE, HARDSHIP_REAMORTIZE, CORRECTION] }
+        businessDate: { type: string, format: date }
+        principalCents: { type: integer }
+        outstandingCents: { type: integer }
+        overpaidCents: { type: integer }
+        loanStatus: { type: string }
+        collectionMode: { type: string }
+        dpd: { type: integer }
+        bucket: { $ref: '#/components/schemas/Bucket' }
+        instalments: { type: array, items: { $ref: '#/components/schemas/InstalmentLine' } }
+    Slot:
+      type: object
+      properties: { seq: { type: integer }, dueDate: { type: string, format: date }, amountCents: { type: integer } }
+    VersionView:
+      type: object
+      properties:
+        version: { type: integer }
+        reason: { type: string }
+        causedBy: { type: string }
+        createdOn: { type: string, format: date }
+        instalments: { type: array, items: { $ref: '#/components/schemas/Slot' } }
+        diffFromPrevious:
+          type: [object, 'null']
+          properties:
+            removed: { type: array, items: { $ref: '#/components/schemas/Slot' } }
+            added: { type: array, items: { $ref: '#/components/schemas/Slot' } }
+    RescheduleRequest:
+      type: object
+      required: [primitive]
+      properties:
+        primitive: { type: string, enum: [MOVE_DATE, DEFER_TO_END, REAMORTIZE] }
+        seq: { type: integer, description: Defaults to the first instalment still owed }
+        days: { type: integer, minimum: 1, maximum: 14 }
+        extraMonths: { type: integer, minimum: 1, maximum: 6 }
+    ReschedulePreview:
+      type: object
+      properties:
+        current: { $ref: '#/components/schemas/ScheduleView' }
+        proposed: { $ref: '#/components/schemas/ScheduleView' }
+        diff: { type: object }
+    TransactionView:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [RECEIPT, REVERSAL, OVERPAYMENT_REFUND] }
+        source: { type: string, enum: [AUTOPAY, AUTOPAY_RETRY, CHECKOUT, PAYMENT_LINK, RECONCILER, PAYPAL, SEED] }
+        paypalTxnId: { type: string }
+        amountCents: { type: integer }
+        feeCents: { type: integer }
+        effectiveDate: { type: string, format: date }
+    TimelineView:
+      type: object
+      properties:
+        resources: { type: array, items: { type: object } }
+        events: { type: array, items: { type: object } }
+        ghostEvents: { type: array, items: { type: object } }
+        dependencies: { type: array, items: { type: object } }
+        timeRanges: { type: array, items: { type: object } }
+    CheckoutOrder:
+      type: object
+      properties: { orderId: { type: string }, status: { type: string }, approveUrl: { type: string }, amountCents: { type: integer } }
+    CapturedOrder:
+      type: object
+      properties: { orderId: { type: string }, paypalTxnId: { type: string }, status: { type: string }, amountCents: { type: integer } }
+    MandateView:
+      type: object
+      properties:
+        mandateId: { type: string, format: uuid }
+        loanId: { type: string, format: uuid }
+        status: { type: string, enum: [APPROVAL_PENDING, ACTIVE, SUSPENDED, CANCELLED, EXPIRED] }
+        subscriptionId: { type: string }
+        approveUrl: { type: string }
+        quantity: { type: integer, description: Dollars per charge }
+        nextBillingDate: { type: string, format: date }
+    CobRun:
+      type: object
+      properties:
+        businessDate: { type: string, format: date }
+        status: { type: string, enum: [RUNNING, COMPLETED, DEGRADED] }
+        mode: { type: string, enum: [TIMERS, SCAN] }
+        shardCount: { type: integer }
+        loansProcessed: { type: integer }
+        loansFailed: { type: integer }
+        triggerRef: { type: string }

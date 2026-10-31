@@ -1,11 +1,9 @@
-// Module: engagement (reminders, SMS/Slack/Sheets via Zapier, in-app notifications)
+// Module: engagement (reminders, SMS via Zapier, quiet hours, opt-out)
 plugins {
     `java-library`
+    id("jooq-module")
 }
-
 dependencies {
-    implementation(project(":platform:kernel"))
-    implementation(project(":platform:persistence"))
-    implementation(project(":platform:messaging"))
-    testImplementation(project(":platform:testing"))
+    implementation(project(":modules:lending"))
+    implementation(project(":modules:payments"))
 }
