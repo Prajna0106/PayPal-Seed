@@ -1,0 +1,48 @@
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# Node / Web / Next.js
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Java / Gradle
+.gradle/
+build/
+bin/
+out/
+*.class
+*.jar
+*.war
+
+# Test & Coverage
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

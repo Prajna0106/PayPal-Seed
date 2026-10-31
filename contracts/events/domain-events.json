@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PayPal Seed Domain Events",
+  "definitions": {
+    "SavingsDepositedEvent": {
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "memberId": { "type": "string" },
+        "amount": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "memberId", "amount", "timestamp"]
+    }
+  }
+}

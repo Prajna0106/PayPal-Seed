@@ -1,0 +1,23 @@
+{
+  "index_patterns": [
+    "seed-signals-*"
+  ],
+  "template": {
+    "settings": {
+      "number_of_shards": 1
+    },
+    "mappings": {
+      "properties": {
+        "member_id": {
+          "type": "keyword"
+        },
+        "signal_type": {
+          "type": "keyword"
+        },
+        "timestamp": {
+          "type": "date"
+        }
+      }
+    }
+  }
+}

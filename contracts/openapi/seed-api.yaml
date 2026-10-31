@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: PayPal Seed Public and Desk API
+  version: 1.0.0
+  description: Public member endpoints, desk operations, and partner verification
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK

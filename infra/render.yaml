@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: seed-api
+    env: java
+    envVars:
+      - key: SEED_ROLE
+        value: api
+  - type: web
+    name: seed-ingress
+    env: java
+    envVars:
+      - key: SEED_ROLE
+        value: ingress
+  - type: worker
+    name: seed-worker
+    env: java
+    envVars:
+      - key: SEED_ROLE
+        value: worker
+  - type: web
+    name: seed-member-web
+    env: node
+  - type: web
+    name: seed-desk-web
+    env: node
+databases:
+  - name: seed-postgres
+    plan: standard

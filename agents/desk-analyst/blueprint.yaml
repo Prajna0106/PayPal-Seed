@@ -1,0 +1,5 @@
+name: desk-analyst-agent
+model: gemini-1.5-pro
+role: read-only
+tools:
+  - openapi_spec: ../shared/agent-tools.yaml

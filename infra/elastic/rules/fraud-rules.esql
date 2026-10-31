@@ -1,0 +1,5 @@
+FROM seed-signals-*
+| WHERE signal_type == "VELOCITY_EXCEEDED"
+| STATS count = count(*) BY member_id
+| WHERE count > 3
+| LIMIT 100

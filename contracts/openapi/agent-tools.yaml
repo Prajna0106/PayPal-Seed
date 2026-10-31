@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: PayPal Seed Agent Read-Only Tools & Proposals
+  version: 1.0.0
+  description: Scoped read-only tool contracts and proposal submission for Astropods
+paths:
+  /agent/v1/proposals:
+    post:
+      summary: Submit action proposal for human/governance approval
+      responses:
+        '202':
+          description: Proposal queued

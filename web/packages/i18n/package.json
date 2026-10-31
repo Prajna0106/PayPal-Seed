@@ -1,0 +1,5 @@
+{
+  "name": "@paypal-seed/i18n",
+  "version": "1.0.0",
+  "main": "./src/index.ts"
+}

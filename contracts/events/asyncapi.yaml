@@ -1,0 +1,11 @@
+asyncapi: 3.0.0
+info:
+  title: PayPal Seed Domain Events AsyncAPI
+  version: 1.0.0
+channels:
+  savingsEvents:
+    address: seed.savings.events
+  lendingEvents:
+    address: seed.lending.events
+  ledgerEvents:
+    address: seed.ledger.events

@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: PayPal Seed Internal Jobs API
+  version: 1.0.0
+  description: Idempotent backend triggers invoked by Render Workflows or internal schedulers
+paths:
+  /internal/jobs/age-loans:
+    post:
+      summary: Daily loan aging batch step
+      responses:
+        '200':
+          description: Batch complete
