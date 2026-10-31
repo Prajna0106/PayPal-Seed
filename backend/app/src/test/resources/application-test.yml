@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    username: postgres
+    password: postgres
+  modulith:
+    republish-outstanding-events-on-restart: false
+
+seed:
+  jobs:
+    enabled: false              # tests drive the inbox, reminders and COB explicitly
+  security:
+    dev-header-auth: true
+    internal-token: test-internal-token-0123456789
+  zapier:
+    signing-secret: test-zapier-secret
+
+logging:
+  level:
+    com.paypalseed: INFO
+    org.springframework.modulith: WARN

@@ -1,12 +1,97 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Internal Jobs API
-  version: 1.0.0
-  description: Idempotent backend triggers invoked by Render Workflows or internal schedulers
+  version: 1.1.0
+  description: |
+    Idempotent backend triggers for Render Workflows and the worker role. Every route requires
+    `Authorization: Bearer <SEED_INTERNAL_TOKEN>` (service role). Close of business runs business dates
+    strictly in order (ADR 0007).
+security:
+  - serviceToken: []
 paths:
-  /internal/jobs/age-loans:
+  /internal/jobs/cob/{date}/start:
     post:
-      summary: Daily loan aging batch step
+      summary: Start close of business for a date (returns the existing run if already started)
+      parameters:
+        - { name: date, in: path, required: true, schema: { type: string, format: date } }
+        - { name: trigger, in: query, schema: { type: string, maxLength: 128 } }
+      responses:
+        '200': { description: Run }
+        '409': { description: cob-out-of-order (the previous date is not closed, or this is not the next date) }
+        '422': { description: cob-in-the-future }
+  /internal/jobs/cob/{date}/shards/{shard}:
+    post:
+      summary: Close up to maxLoans loans of one shard; call again until done
+      parameters:
+        - { name: date, in: path, required: true, schema: { type: string, format: date } }
+        - { name: shard, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 63 } }
+        - { name: maxLoans, in: query, schema: { type: integer, minimum: 1, maximum: 50000, default: 2000 } }
       responses:
         '200':
-          description: Batch complete
+          description: Shard progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { businessDate: { type: string, format: date }, shard: { type: integer }, done: { type: boolean },
+                              processed: { type: integer }, skipped: { type: integer }, failed: { type: integer } }
+  /internal/jobs/cob/{date}/finish:
+    post:
+      summary: Close loans skipped while locked; mark the run COMPLETED or DEGRADED
+      parameters: [ { name: date, in: path, required: true, schema: { type: string, format: date } } ]
+      responses: { '200': { description: Run } }
+  /internal/jobs/cob/catch-up:
+    post:
+      summary: Close every date after the last closed one up to `to` (default today), in order
+      parameters: [ { name: to, in: query, schema: { type: string, format: date } } ]
+      responses: { '200': { description: Runs } }
+  /internal/jobs/mandates/reconcile:
+    post:
+      summary: "Daily safety net: reconcile every active autopay mandate with its schedule (ADR 0005)"
+      responses: { '200': { description: Number of loans queued } }
+  /internal/loans/disbursed:
+    post:
+      summary: Register a disbursed loan (F2 hand-over); idempotent on disbursementRef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, principalCents, instalmentCount, dueDay, disbursedOn, disbursementRef]
+              properties:
+                memberId: { type: string, format: uuid }
+                principalCents: { type: integer, description: Whole dollars }
+                instalmentCount: { type: integer, minimum: 1, maximum: 36 }
+                dueDay: { type: integer, minimum: 1, maximum: 31 }
+                disbursedOn: { type: string, format: date }
+                disbursementRef: { type: string, maxLength: 128 }
+      responses: { '201': { description: Loan summary } }
+  /internal/loans/{loanId}/reschedules:
+    post:
+      summary: Apply an approved hardship option as a new schedule version (F5 governance calls this)
+      parameters: [ { name: loanId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [primitive, approvalRef]
+              properties:
+                primitive: { type: string, enum: [MOVE_DATE, DEFER_TO_END, REAMORTIZE] }
+                seq: { type: integer }
+                days: { type: integer, minimum: 1, maximum: 14 }
+                extraMonths: { type: integer, minimum: 1, maximum: 6 }
+                approvalRef: { type: string, maxLength: 128 }
+      responses:
+        '200': { description: New schedule }
+        '422': { description: A rescheduling rule refused the request (problem code names the rule) }
+  /internal/demo-clock/advance:
+    post:
+      summary: Demo profile only. Move the shared business date forward
+      parameters: [ { name: days, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 400 } } ]
+      responses: { '200': { description: New business date } }
+components:
+  securitySchemes:
+    serviceToken: { type: http, scheme: bearer }
