@@ -1,6 +1,24 @@
 [
   {
-    "input": "health check",
-    "expected": "valid"
+    "id": "f1-f2-eval-01-sewing-machine-goal",
+    "description": "Maria earns $1,950/mo with $1,200/mo expenses ($750 disposable) saving toward a $1,200 sewing machine",
+    "input": {
+      "goalName": "Sewing Machine Reserve",
+      "statedMonthlyIncome": "$1,950",
+      "statedMonthlyExpenses": "$1,200",
+      "disposableMonthlyIncome": "$750",
+      "suggestedMonthlySaving": "$75",
+      "streakMonthsToUnlock": 4,
+      "totalSavedAfterStreak": "$300",
+      "unlockedTier": "LEVEL_1",
+      "unlockedLoanAmount": "$1,200",
+      "maxMonthlyInstalment": "$150",
+      "suggestedLoanTermMonths": 8,
+      "suggestedMonthlyInstalment": "$150"
+    },
+    "expected": {
+      "mustIncludeDollars": ["$75", "$1,200", "$150"],
+      "mustNotContain": ["FICO", "credit score", "late fee", "APR", "penalty"]
+    }
   }
 ]

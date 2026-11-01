@@ -34,6 +34,7 @@ subprojects {
     tasks.withType<Test> {
         // Scaffolded modules (rules, assessment, ...) still carry placeholder test classes with no tests.
         failOnNoDiscoveredTests = false
+        jvmArgs("-Dnet.bytebuddy.experimental=true")
         useJUnitPlatform {
             includeEngines("junit-jupiter", "jqwik")
         }

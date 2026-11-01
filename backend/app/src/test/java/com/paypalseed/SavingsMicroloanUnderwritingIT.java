@@ -11,10 +11,13 @@ import com.paypalseed.lending.application.usecases.MicroloanApplicationService.S
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
 import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.savings.api.SavingsFacade;
+import com.paypalseed.savings.api.dto.CoachSuggestionRequest;
+import com.paypalseed.savings.api.dto.CoachSuggestionResponse;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
 import com.paypalseed.savings.application.usecases.CreateGoalUseCase;
 import com.paypalseed.savings.application.usecases.ProcessWithdrawalUseCase;
 import com.paypalseed.savings.application.usecases.RecordDepositUseCase;
+import com.paypalseed.savings.application.usecases.SuggestSavingsPlanUseCase;
 import com.paypalseed.savings.domain.model.SavingsGoal;
 import com.paypalseed.support.IntegrationTest;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
@@ -22,6 +25,7 @@ import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
 import com.paypalseed.underwriting.application.usecases.FairLoanCheckService;
 import com.paypalseed.underwriting.application.usecases.FairLoanCheckService.RunFairCheckCommand;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment.OfficerDecisionType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.OptionalLong;
@@ -31,15 +35,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * End-to-end PostgreSQL + Flyway + jOOQ integration test covering:
- * - Feature 1: Goal Savings (`savings.savings_goal`) + Double-Entry Ledger (`MEMBER_SAVINGS` <-> `PROGRAM_CASH`)
+ * - Feature 1: Goal Savings (`savings.savings_goal`), AI Coach (`coach-agent`), + Double-Entry Ledger (`MEMBER_SAVINGS` <-> `PROGRAM_CASH`)
  * - Feature 2: Savings-Linked Microloans (`lending.loan_application` -> `lending.loan`)
- * - Feature 3: The Fair Loan Check (`underwriting.income_consent` & `underwriting.fair_loan_check_assessment`)
+ * - Feature 3: The Fair Loan Check (`underwriting.income_consent`, `underwriting.fair_loan_check_assessment`, + `underwriting-agent`)
  * - Automatic F2 <-> F3 income resolution & linked assessment generation
  */
 class SavingsMicroloanUnderwritingIT extends IntegrationTest {
 
     @Autowired
     CreateGoalUseCase createGoalUseCase;
+
+    @Autowired
+    SuggestSavingsPlanUseCase suggestSavingsPlanUseCase;
 
     @Autowired
     RecordDepositUseCase recordDepositUseCase;
@@ -61,6 +68,20 @@ class SavingsMicroloanUnderwritingIT extends IntegrationTest {
         UUID anaId = UUID.randomUUID();
         UUID officer1 = UUID.randomUUID();
         UUID officer2 = UUID.randomUUID();
+
+        // 0. F1/F2 AI Coach: Suggest monthly saving amount and comfortable loan repayment term
+        CoachSuggestionResponse coachSuggestion = suggestSavingsPlanUseCase.execute(new CoachSuggestionRequest(
+            anaId.toString(),
+            "Commercial Stand Mixer Goal",
+            new BigDecimal("1200.00"),
+            new BigDecimal("1600.00"),
+            new BigDecimal("850.00"),
+            "USD"
+        ));
+        assertThat(coachSuggestion.suggestedMonthlySaving()).isEqualByComparingTo("75.00");
+        assertThat(coachSuggestion.unlockedLoanAmount()).isEqualByComparingTo("1200.00");
+        assertThat(coachSuggestion.suggestedLoanTermMonths()).isEqualTo(8);
+        assertThat(coachSuggestion.messageEn()).contains("$75").contains("$1,200");
 
         // 1. F1: Create savings goal and record 4 monthly deposits ($75 x 4 = $300)
         SavingsGoal goal = createGoalUseCase.execute(new CreateGoalUseCase.Command(
@@ -174,5 +195,16 @@ class SavingsMicroloanUnderwritingIT extends IntegrationTest {
             .query(Integer.class)
             .single();
         assertThat(appRows).isEqualTo(1);
+
+        // Verify agent_run audit trail recorded runs for both coach-agent and underwriting-agent
+        Integer coachRuns = jdbc.sql("SELECT COUNT(*) FROM agentgateway.agent_run WHERE agent = 'coach-agent'")
+            .query(Integer.class)
+            .single();
+        assertThat(coachRuns).isGreaterThanOrEqualTo(1);
+
+        Integer underwritingRuns = jdbc.sql("SELECT COUNT(*) FROM agentgateway.agent_run WHERE agent = 'underwriting-agent'")
+            .query(Integer.class)
+            .single();
+        assertThat(underwritingRuns).isGreaterThanOrEqualTo(1);
     }
 }

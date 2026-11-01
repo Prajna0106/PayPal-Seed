@@ -1,6 +1,51 @@
 [
   {
-    "input": "health check",
-    "expected": "valid"
+    "id": "f3-eval-01-recommended-level1",
+    "description": "Maria has 4 months of $75/mo savings and $1,950 average monthly income requesting $1,200 over 8 months",
+    "input": {
+      "recommended": true,
+      "unlockedTier": "LEVEL_1",
+      "averageMonthlyIncome": "$1,950",
+      "lowestMonthlyIncome": "$1,700",
+      "lowestIncomeMonth": "2026-08",
+      "provenMonthlySaving": "$75",
+      "monthsSaved": "4 of 4",
+      "safeMonthlyInstalmentCap": "$150",
+      "requestedLoanAmount": "$1,200",
+      "requestedTermMonths": 8,
+      "suggestedLoanAmount": "$1,200",
+      "suggestedTermMonths": 8,
+      "suggestedMonthlyInstalment": "$150",
+      "purpose": "Used commercial sewing machine"
+    },
+    "expected": {
+      "mustIncludeDollars": ["$1,950", "$75", "$1,200", "$150"],
+      "mustNotContain": ["FICO", "credit score", "late fee", "APR", "penalty"]
+    }
+  },
+  {
+    "id": "f3-eval-02-disputed-seasonal-dip",
+    "description": "Member disputed August dip explaining school uniform expenses and workshop closure",
+    "input": {
+      "recommended": true,
+      "unlockedTier": "LEVEL_1",
+      "averageMonthlyIncome": "$1,950",
+      "lowestMonthlyIncome": "$1,700",
+      "lowestIncomeMonth": "2026-08",
+      "provenMonthlySaving": "$75",
+      "monthsSaved": "4 of 4",
+      "safeMonthlyInstalmentCap": "$150",
+      "requestedLoanAmount": "$1,200",
+      "requestedTermMonths": 8,
+      "suggestedLoanAmount": "$1,200",
+      "suggestedTermMonths": 8,
+      "suggestedMonthlyInstalment": "$150",
+      "purpose": "Used commercial sewing machine",
+      "memberDisputeNote": "August was lower because my workshop closed for 10 days; September and October returned to $2,100."
+    },
+    "expected": {
+      "mustIncludeDollars": ["$1,950", "$1,200", "$150"],
+      "mustNotContain": ["FICO", "credit score", "late fee", "APR", "penalty"]
+    }
   }
 ]
