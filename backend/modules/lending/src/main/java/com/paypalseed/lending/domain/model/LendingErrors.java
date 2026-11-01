@@ -25,6 +25,14 @@ public final class LendingErrors {
             ErrorCode.notFound("cob-run-not-found", "No close-of-business run for that date");
     public static final ErrorCode COB_IN_THE_FUTURE =
             ErrorCode.validation("cob-in-the-future", "Close of business cannot run for a future business date");
+    public static final ErrorCode RESCHEDULE_PREVIEW_CHANGED = ErrorCode.conflict("reschedule-preview-changed",
+            "The schedule changed since the approved preview; the member must confirm the new numbers");
+    public static final ErrorCode HOLD_CONFLICT =
+            ErrorCode.conflict("hold-conflict", "Another case already holds this instalment");
+    public static final ErrorCode HOLD_OUT_OF_RANGE =
+            ErrorCode.validation("hold-out-of-range", "A hold may last until at most 10 days after the due date");
+    public static final ErrorCode HOLD_NOT_APPLICABLE =
+            ErrorCode.validation("hold-not-applicable", "The instalment is not owed in the current schedule version");
 
     // Feature 2: Savings-linked microloans
     public static final ErrorCode APPLICATION_NOT_FOUND =

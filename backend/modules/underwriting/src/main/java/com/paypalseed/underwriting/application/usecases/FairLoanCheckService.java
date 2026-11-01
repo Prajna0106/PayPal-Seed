@@ -7,7 +7,6 @@ import com.paypalseed.engines.assessment.AssessmentEngine.MonthlyIncomePoint;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
-import com.paypalseed.underwriting.api.UnderwritingFacade;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
@@ -30,7 +29,7 @@ import org.springframework.stereotype.Service;
  * and persists auditable explanation cards and human officer decisions.
  */
 @Service
-public class FairLoanCheckService implements UnderwritingFacade {
+public class FairLoanCheckService {
 
     public record RunFairCheckCommand(
         UUID applicationId,
@@ -56,21 +55,18 @@ public class FairLoanCheckService implements UnderwritingFacade {
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
     }
 
-    @Override
     public ConsentStatusView grantConsent(UUID memberId) {
         Objects.requireNonNull(memberId, "memberId is required");
         ConsentRecord saved = repository.saveConsent(memberId, true, Instant.now());
         return toConsentView(saved);
     }
 
-    @Override
     public ConsentStatusView revokeConsent(UUID memberId) {
         Objects.requireNonNull(memberId, "memberId is required");
         ConsentRecord saved = repository.saveConsent(memberId, false, Instant.now());
         return toConsentView(saved);
     }
 
-    @Override
     public ConsentStatusView getConsentStatus(UUID memberId) {
         Objects.requireNonNull(memberId, "memberId is required");
         return repository.findConsent(memberId)
@@ -163,7 +159,6 @@ public class FairLoanCheckService implements UnderwritingFacade {
         return toCardView(assessment);
     }
 
-    @Override
     public Optional<FairCheckCardView> findAssessment(UUID assessmentId) {
         return repository.findAssessmentById(assessmentId).map(FairLoanCheckService::toCardView);
     }

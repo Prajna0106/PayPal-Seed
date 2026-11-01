@@ -1,12 +1,869 @@
 openapi: 3.1.0
 info:
-  title: PayPal Seed Agent Read-Only Tools & Proposals
+  title: PayPal Seed Agent Tools and Proposals
   version: 1.0.0
-  description: Scoped read-only tool contracts and proposal submission for Astropods
+  description: |
+    The only surface AI agents (the Guardian and its helpers) may call. Served by `agent-gateway`.
+
+    Rules that every endpoint here follows:
+    - **Read-only tools.** Nothing under `/agent/v1/tools` changes state. `preview-option` is a POST only because it
+      takes a body; it runs the pure schedule engine and writes nothing.
+    - **One write-like action.** `POST /agent/v1/proposals` files an *untrusted proposal*. A deterministic validator
+      re-computes every number, then governance (maker-checker) and the member decide. No agent token can reach a
+      write endpoint of `lending`, `payments`, `ledger` or `hardship`.
+    - **Scoped, short-lived token.** Each agent run gets a bearer token bound to one `runId`, one `loanId` and one
+      `caseId`, valid for at most 10 minutes. Asking for any other loan returns 404, the same as a missing loan.
+    - **Redacted by construction.** Responses carry a pseudonymous `memberRef`, whole-dollar or cent amounts, dates and
+      signal codes. They never carry names, emails, phone numbers, addresses or PayPal payer ids.
+    - **Kill switch.** When the mode is `TEMPLATES_ONLY`, every endpoint except `GET /agent/v1/kill-switch` answers
+      503 `agent-disabled`, and the platform sends deterministic template messages instead.
+
+    Money is `integer` cents (USD). Dates are business dates in `America/Los_Angeles` (`YYYY-MM-DD`).
+    Errors are RFC 9457 `application/problem+json`; `type` is `https://problems.paypal-seed.dev/{code}`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: https://seed-api.onrender.com
+    description: Render (sandbox program)
+  - url: http://localhost:8080
+    description: Local development
+security:
+  - agentToken: []
+tags:
+  - name: tools
+    description: Read-only tools. Safe to retry.
+  - name: proposals
+    description: The single write-like action. Idempotent on `Idempotency-Key`.
+  - name: extractor
+    description: Tool-less, closed-set extraction of untrusted member text.
+  - name: control
+    description: Kill switch and circuit state.
+
 paths:
+  /agent/v1/tools/loan-summary:
+    get:
+      tags: [tools]
+      operationId: get_loan_summary
+      summary: Loan summary for the run's loan
+      description: Principal, outstanding, status, bucket and days past due. Scope `loan:read`.
+      x-agent-tool: { name: get_loan_summary, readOnly: true, scope: "loan:read" }
+      security:
+        - agentToken: ["loan:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: The loan summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoanSummaryTool" }
+              examples:
+                ana:
+                  value:
+                    loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                    memberRef: "m_7Qk2xP"
+                    principalCents: 120000
+                    outstandingCents: 90000
+                    status: ACTIVE
+                    bucket: CURRENT
+                    dpd: 0
+                    instalmentCount: 8
+                    paidInstalments: 2
+                    collectionMode: AUTOPAY
+                    businessDate: "2027-01-18"
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/repayment-schedule:
+    get:
+      tags: [tools]
+      operationId: get_repayment_schedule
+      summary: Current schedule version with paid and remaining per instalment
+      description: Scope `schedule:read`. Same numbers as the member's schedule screen.
+      x-agent-tool: { name: get_repayment_schedule, readOnly: true, scope: "schedule:read" }
+      security:
+        - agentToken: ["schedule:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: The current schedule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleTool" }
+              examples:
+                ana:
+                  value:
+                    loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                    version: 1
+                    reason: ORIGINAL
+                    businessDate: "2027-01-18"
+                    instalments:
+                      - { seq: 3, dueDate: "2027-02-01", amountCents: 15000, paidCents: 0, remainingCents: 15000 }
+                      - { seq: 4, dueDate: "2027-03-01", amountCents: 15000, paidCents: 0, remainingCents: 15000 }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/loan-aging:
+    get:
+      tags: [tools]
+      operationId: get_loan_aging
+      summary: Days past due, bucket and the next instalment that matters
+      description: Scope `loan:read`.
+      x-agent-tool: { name: get_loan_aging, readOnly: true, scope: "loan:read" }
+      security:
+        - agentToken: ["loan:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: Aging facts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgingTool" }
+              examples:
+                dueSoon:
+                  value:
+                    loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                    bucket: CURRENT
+                    dpd: 0
+                    nextInstalment: { seq: 3, dueDate: "2027-02-01", amountCents: 15000, daysUntilDue: 14 }
+                    graceEndsOn: "2027-02-06"
+                    missedInstalments: 0
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/hardship-signals:
+    get:
+      tags: [tools]
+      operationId: get_hardship_signals
+      summary: Scorecard signals and level computed by code
+      description: |
+        Returns what the deterministic scorecard (`engines/rules`) fired, with the evidence numbers behind each signal,
+        and the level it computed. The agent may cite these signals; it may not invent others. Scope `signals:read`.
+      x-agent-tool: { name: get_hardship_signals, readOnly: true, scope: "signals:read" }
+      security:
+        - agentToken: ["signals:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: The scorecard result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignalsTool" }
+              examples:
+                likelyMiss:
+                  value:
+                    loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                    policyVersion: "hardship-v1"
+                    computedLevel: LIKELY_MISS
+                    points: 7
+                    signals:
+                      - code: S1_INCOME_DROP
+                        points: 5
+                        evidence: { recentWeeklyInflowCents: 9600, medianWeeklyInflowCents: 20000, dropPercent: 52 }
+                      - code: S2_COVERAGE
+                        points: 2
+                        evidence: { projectedInflowBeforeDueCents: 12000, instalmentCents: 15000, coverageRatioPercent: 80 }
+                    suppressed: false
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/income-summary:
+    get:
+      tags: [tools]
+      operationId: get_income_summary
+      summary: Consented income summary, banded
+      description: |
+        A summary of the member's own consented PayPal income (from Transaction Search, via F3). Weekly inflow figures
+        are rounded to whole dollars; no counterparties, no transaction ids, no payer ids. Returns 404 `no-consent`
+        when the member has not consented. Scope `income:read`.
+      x-agent-tool: { name: get_income_summary, readOnly: true, scope: "income:read" }
+      security:
+        - agentToken: ["income:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: The income summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeSummaryTool" }
+              examples:
+                ana:
+                  value:
+                    loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                    windowDays: 90
+                    medianWeeklyInflowCents: 20000
+                    last4WeeksAverageCents: 9600
+                    usualPaydayWeekday: FRIDAY
+                    lastInflowDaysAgo: 6
+                    weeklyInflowCents: [21000, 19000, 20000, 22000, 20000, 18000, 21000, 20000, 19000, 10000, 9000, 9600]
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/offered-options:
+    get:
+      tags: [tools]
+      operationId: list_offered_options
+      summary: Every option on the member's offer, previewed by the schedule engine
+      description: |
+        The options the code built for this case, each with its `previewHash` and the `recommended` flag the
+        code's OptionRanker set. The Guardian copies these into its proposal unchanged; it never chooses them.
+        Scope `preview:run`.
+      x-agent-tool: { name: list_offered_options, readOnly: true, scope: "preview:run" }
+      security:
+        - agentToken: ["preview:run"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: The offered options.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OfferedOptionsTool" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/preview-option:
+    post:
+      tags: [tools]
+      operationId: preview_option
+      summary: What an option would do to the schedule, without writing anything
+      description: |
+        Runs the pure schedule engine (`LendingFacade.previewReschedule`) and returns the hypothetical schedule, a diff
+        and a `previewHash`. The proposal must carry the same hash; the validator recomputes it. Scope `preview:run`.
+        This is a read-only tool even though it is a POST.
+      x-agent-tool: { name: preview_option, readOnly: true, scope: "preview:run" }
+      security:
+        - agentToken: ["preview:run"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PreviewOptionRequest" }
+            examples:
+              pause:
+                value: { loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01", option: PAUSE_ONE_MONTH, seq: 3 }
+              restructure:
+                value: { loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01", option: EXTEND_PLAN, extraMonths: 3 }
+      responses:
+        "200":
+          description: The previewed outcome.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OptionPreview" }
+              examples:
+                pause:
+                  value:
+                    option: PAUSE_ONE_MONTH
+                    primitive: DEFER_TO_END
+                    previewHash: "sha256:3f9a1c0e5b7d42a8"
+                    eligible: true
+                    approvalTier: OFFICER_AND_CHECKER
+                    removed: [{ seq: 3, dueDate: "2027-02-01", amountCents: 15000 }]
+                    added: [{ seq: 8, dueDate: "2027-09-01", amountCents: 15000 }]
+                    newLastDueDate: "2027-09-01"
+                    totalInstalmentsAfter: 8
+                    delayDays: 212
+                    recommended: true
+        "422":
+          description: The option is not allowed by policy (for example a cap was reached) or its arguments are out of range.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ProblemDetail" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/tools/prior-cases:
+    get:
+      tags: [tools]
+      operationId: list_prior_cases
+      summary: Earlier hardship cases on this loan
+      description: Outcome and option only, no free text. Used to respect caps and avoid repeating an offer. Scope `signals:read`.
+      x-agent-tool: { name: list_prior_cases, readOnly: true, scope: "signals:read" }
+      security:
+        - agentToken: ["signals:read"]
+      parameters:
+        - $ref: "#/components/parameters/LoanId"
+      responses:
+        "200":
+          description: Prior cases, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PriorCasesTool" }
+              examples:
+                none:
+                  value: { loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01", cases: [] }
+        default: { $ref: "#/components/responses/Problem" }
+
   /agent/v1/proposals:
     post:
-      summary: Submit action proposal for human/governance approval
+      tags: [proposals]
+      operationId: submit_proposal
+      summary: Submit an action proposal for validation and human approval
+      description: |
+        The Guardian's only write-like action. The body is untrusted. The validator checks, in order: schema, token
+        binding, level recomputation (escalate-only), option set and preview hashes, recommended option, grounding of
+        every figure, forbidden content, policy eligibility and outreach limits. The response carries the verdict;
+        a `REJECTED` verdict means the platform sends the deterministic template message instead. Nothing here
+        changes a schedule: the member's choice and the required approvals do that later.
+
+        Replaying the same `Idempotency-Key` with the same body returns the first result with 200. The same key with a
+        different body returns 409 `idempotency-key-reused`.
+      x-agent-tool: { name: submit_proposal, readOnly: false, scope: "proposal:submit" }
+      security:
+        - agentToken: ["proposal:submit"]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HardshipProposal" }
+            examples:
+              anaPause:
+                summary: Level matches the scorecard, pause recommended
+                value:
+                  runId: "0197f3a9-0000-7000-8000-00000000a001"
+                  caseId: "0197f3a8-1111-7000-8000-00000000c001"
+                  loanId: "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01"
+                  agentVersion: "guardian@2027.01.1"
+                  promptHash: "sha256:9c1d77e0a2b34f55"
+                  assessment:
+                    computedLevel: LIKELY_MISS
+                    proposedLevel: LIKELY_MISS
+                    escalated: false
+                    citedSignals: [S1_INCOME_DROP, S2_COVERAGE]
+                  options:
+                    - { option: MOVE_DATE, seq: 3, days: 7, previewHash: "sha256:11aa22bb33cc44dd", recommended: false }
+                    - { option: PAUSE_ONE_MONTH, seq: 3, previewHash: "sha256:3f9a1c0e5b7d42a8", recommended: true }
+                    - { option: EXTEND_PLAN, extraMonths: 3, previewHash: "sha256:55ee66ff77aa88bb", recommended: false }
+                  figures:
+                    - { value: 52, unit: PERCENT, kind: INCOME_DROP, source: { tool: get_hardship_signals, field: "signals[0].evidence.dropPercent" } }
+                    - { value: 15000, unit: USD_CENTS, kind: INSTALMENT, source: { tool: get_repayment_schedule, field: "instalments[0].amountCents" } }
+                    - { value: "2027-02-01", unit: DATE, kind: DUE_DATE, source: { tool: get_repayment_schedule, field: "instalments[0].dueDate" } }
+                  narrative:
+                    officerBrief: "Weekly income fell 52% over the last four weeks. The $150 instalment due 2027-02-01 is likely to be missed. A one-month pause is the lightest option that fits."
+                    memberMessage:
+                      en: "Hi, your income looks lower than usual lately. Your $150 payment is due on 2027-02-01. You can move the date, pause one month, or make the plan longer. Reply 1, 2 or 3, or tap the link."
+                      es: "Hola, tus ingresos parecen más bajos de lo normal. Tu pago de $150 vence el 2027-02-01. Puedes mover la fecha, pausar un mes o alargar el plan. Responde 1, 2 o 3, o toca el enlace."
       responses:
-        '202':
-          description: Proposal queued
+        "202":
+          description: Proposal accepted for the next step. The verdict is in the body.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProposalReceipt" }
+              examples:
+                approvable:
+                  value:
+                    proposalId: "0197f3a9-2222-7000-8000-00000000d001"
+                    status: QUEUED_FOR_MEMBER
+                    verdict: { result: APPROVABLE, checks: 12, failed: [] }
+                    templateFallback: false
+                rejected:
+                  value:
+                    proposalId: "0197f3a9-3333-7000-8000-00000000d002"
+                    status: REJECTED
+                    verdict:
+                      result: REJECTED
+                      checks: 12
+                      failed:
+                        - { code: V06_UNGROUNDED_FIGURE, detail: "The number 175 does not appear in any tool result of this run." }
+                    templateFallback: true
+        "200":
+          description: Replay of an earlier request with the same `Idempotency-Key`. Same body as the first response.
+          headers:
+            Idempotent-Replayed:
+              description: Always `true` on a replay.
+              schema: { type: string, enum: ["true"] }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProposalReceipt" }
+        "409":
+          description: The `Idempotency-Key` was used before with a different body.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ProblemDetail" }
+              examples:
+                reused:
+                  value:
+                    type: "https://problems.paypal-seed.dev/idempotency-key-reused"
+                    title: Idempotency key reused
+                    status: 409
+                    detail: "This key was already used with a different request body."
+        "422":
+          description: The body failed schema validation.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ProblemDetail" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/extract-reason:
+    post:
+      tags: [extractor]
+      operationId: extract_reason
+      summary: Turn a member's free text into a closed-set category
+      description: |
+        The only place untrusted member text is read by a model. The extractor has no tools, receives only the text
+        and the language, and must answer with the JSON below. The output is validated against the closed enum; any
+        other output is replaced with `{category: OTHER, confidence: 0}`. The category is stored on the case as a
+        label for officers. It is never copied into another prompt and never changes a score, an option or an
+        approval. Scope `extract:run`.
+      x-agent-tool: { name: extract_reason, readOnly: true, scope: "extract:run" }
+      security:
+        - agentToken: ["extract:run"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExtractReasonRequest" }
+            examples:
+              jobLoss:
+                value: { caseId: "0197f3a8-1111-7000-8000-00000000c001", language: en, text: "my hours got cut at the bakery this month" }
+      responses:
+        "200":
+          description: The extracted category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExtractReasonResponse" }
+              examples:
+                jobLoss:
+                  value: { category: INCOME_REDUCED, confidence: 0.86, language: en, usedFallback: false }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /agent/v1/kill-switch:
+    get:
+      tags: [control]
+      operationId: get_kill_switch
+      summary: Current agent mode
+      description: |
+        Agents call this before a run and after every circuit-breaker transition. It is the one endpoint that still
+        answers while the mode is `TEMPLATES_ONLY`. Scope `killswitch:read`.
+      x-agent-tool: { name: get_kill_switch, readOnly: true, scope: "killswitch:read" }
+      security:
+        - agentToken: ["killswitch:read"]
+      responses:
+        "200":
+          description: The mode and why.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KillSwitchState" }
+              examples:
+                live:
+                  value: { mode: LIVE, since: "2027-01-10T08:00:00Z", reason: null, trippedBy: null, circuits: { primary: CLOSED, secondary: CLOSED } }
+                tripped:
+                  value:
+                    mode: TEMPLATES_ONLY
+                    since: "2027-01-18T19:42:11Z"
+                    reason: "Grounding failures exceeded 3 in one hour"
+                    trippedBy: AUTO_GROUNDING_FAILURES
+                    circuits: { primary: OPEN, secondary: CLOSED }
+        default: { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    agentToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Short-lived token minted by `agent-gateway` for one agent run. Claims: `runId`, `loanId`, `caseId`,
+        `scopes` (a subset of `loan:read`, `schedule:read`, `signals:read`, `income:read`, `preview:run`,
+        `proposal:submit`, `extract:run`, `killswitch:read`), `exp` (at most 10 minutes after `iat`), `jti`.
+        A token for one loan cannot read another: the gateway answers 404, the same as a missing loan.
+
+  parameters:
+    LoanId:
+      name: loanId
+      in: query
+      required: true
+      description: Must equal the `loanId` claim of the token, otherwise 404.
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: The agent `runId`. The same key and body returns the first result; a different body is a 409.
+      schema: { type: string, minLength: 8, maxLength: 80 }
+
+  responses:
+    Problem:
+      description: Error. RFC 9457 problem details.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetail" }
+          examples:
+            notFound:
+              summary: Another loan, or no such loan
+              value:
+                type: "https://problems.paypal-seed.dev/not-found"
+                title: Not found
+                status: 404
+                detail: "No such loan."
+            scope:
+              summary: Token lacks the scope
+              value:
+                type: "https://problems.paypal-seed.dev/insufficient-scope"
+                title: Insufficient scope
+                status: 403
+                detail: "This token cannot call income-summary."
+            disabled:
+              summary: Kill switch in TEMPLATES_ONLY
+              value:
+                type: "https://problems.paypal-seed.dev/agent-disabled"
+                title: Agent disabled
+                status: 503
+                detail: "Agents are switched off. Template messages are used instead."
+            rateLimited:
+              summary: Per-case or per-run limit reached
+              value:
+                type: "https://problems.paypal-seed.dev/rate-limited"
+                title: Rate limited
+                status: 429
+                detail: "This run used its 6 tool calls."
+
+  schemas:
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
+
+    Cents:
+      type: integer
+      format: int64
+      minimum: 0
+      description: US dollars in cents.
+    Level:
+      type: string
+      enum: [NONE, WATCH, LIKELY_MISS, IMMINENT]
+    Bucket:
+      type: string
+      enum: [CURRENT, DPD_1_7, DPD_8_30, DPD_31_60, DPD_60_PLUS]
+    OptionName:
+      type: string
+      enum: [MOVE_DATE, PAUSE_ONE_MONTH, EXTEND_PLAN, PAY_WHAT_YOU_CAN]
+      description: |
+        A is `MOVE_DATE` (primitive MOVE_DATE), B is `PAUSE_ONE_MONTH` (DEFER_TO_END), C is `EXTEND_PLAN`
+        (REAMORTIZE), D is `PAY_WHAT_YOU_CAN` (an ordinary payment, not a reschedule).
+    ApprovalTier:
+      type: string
+      enum: [MEMBER_ONLY, OFFICER_AND_CHECKER, NONE]
+    Slot:
+      type: object
+      required: [seq, dueDate, amountCents]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        dueDate: { type: string, format: date }
+        amountCents: { $ref: "#/components/schemas/Cents" }
+
+    LoanSummaryTool:
+      type: object
+      required: [loanId, memberRef, principalCents, outstandingCents, status, bucket, dpd, businessDate]
+      properties:
+        loanId: { type: string, format: uuid }
+        memberRef: { type: string, description: "Pseudonymous reference. Not the member id." }
+        principalCents: { $ref: "#/components/schemas/Cents" }
+        outstandingCents: { $ref: "#/components/schemas/Cents" }
+        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+        bucket: { $ref: "#/components/schemas/Bucket" }
+        dpd: { type: integer, minimum: 0 }
+        instalmentCount: { type: integer }
+        paidInstalments: { type: integer }
+        collectionMode: { type: string, enum: [AUTOPAY, MANUAL] }
+        businessDate: { type: string, format: date }
+
+    ScheduleTool:
+      type: object
+      required: [loanId, version, instalments, businessDate]
+      properties:
+        loanId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        reason: { type: string, enum: [ORIGINAL, HARDSHIP_MOVE_DATE, HARDSHIP_PAUSE, HARDSHIP_REAMORTIZE, CORRECTION] }
+        businessDate: { type: string, format: date }
+        instalments:
+          type: array
+          items:
+            type: object
+            required: [seq, dueDate, amountCents, paidCents, remainingCents]
+            properties:
+              seq: { type: integer }
+              dueDate: { type: string, format: date }
+              amountCents: { $ref: "#/components/schemas/Cents" }
+              paidCents: { $ref: "#/components/schemas/Cents" }
+              remainingCents: { $ref: "#/components/schemas/Cents" }
+
+    AgingTool:
+      type: object
+      required: [loanId, bucket, dpd]
+      properties:
+        loanId: { type: string, format: uuid }
+        bucket: { $ref: "#/components/schemas/Bucket" }
+        dpd: { type: integer, minimum: 0 }
+        nextInstalment:
+          type: object
+          properties:
+            seq: { type: integer }
+            dueDate: { type: string, format: date }
+            amountCents: { $ref: "#/components/schemas/Cents" }
+            daysUntilDue: { type: integer }
+        graceEndsOn: { type: [string, "null"], format: date }
+        missedInstalments: { type: integer, minimum: 0 }
+
+    Signal:
+      type: object
+      required: [code, points, evidence]
+      properties:
+        code:
+          type: string
+          description: Scorecard codes from 03-algorithms §3 (S1 to S7 in the design text).
+          enum: [INCOME_DROP_MODERATE, INCOME_DROP_SEVERE, LOW_COVERAGE, CRITICAL_COVERAGE, AUTOPAY_FAILED, AUTOPAY_FAILED_TWICE,
+                 PAYDAY_SLIP, IN_GRACE, RECENT_LATE, SAVINGS_STRESS, MEMBER_REQUEST, AI_ESCALATION]
+        points: { type: integer, minimum: 0 }
+        evidence:
+          type: object
+          description: Numbers behind the signal. Keys depend on the code. Every figure an agent quotes must come from here.
+          additionalProperties: { type: [integer, string, boolean] }
+
+    SignalsTool:
+      type: object
+      required: [loanId, policyVersion, computedLevel, points, signals, suppressed]
+      properties:
+        loanId: { type: string, format: uuid }
+        policyVersion: { type: string }
+        computedLevel: { $ref: "#/components/schemas/Level" }
+        points: { type: integer, minimum: 0 }
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/Signal" }
+        suppressed:
+          type: boolean
+          description: True when pending PayPal money, an open case or an opt-out suppresses outreach.
+        suppressionReason: { type: [string, "null"] }
+
+    IncomeSummaryTool:
+      type: object
+      required: [loanId, windowDays, medianWeeklyInflowCents, last4WeeksAverageCents]
+      properties:
+        loanId: { type: string, format: uuid }
+        windowDays: { type: integer }
+        medianWeeklyInflowCents: { $ref: "#/components/schemas/Cents" }
+        last4WeeksAverageCents: { $ref: "#/components/schemas/Cents" }
+        usualPaydayWeekday: { type: [string, "null"], enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY, null] }
+        lastInflowDaysAgo: { type: integer, minimum: 0 }
+        weeklyInflowCents:
+          type: array
+          description: Oldest first, whole dollars, at most 13 weeks.
+          maxItems: 13
+          items: { $ref: "#/components/schemas/Cents" }
+
+    PreviewOptionRequest:
+      type: object
+      required: [loanId, option]
+      properties:
+        loanId: { type: string, format: uuid }
+        option: { $ref: "#/components/schemas/OptionName" }
+        seq: { type: integer, minimum: 1, description: "Instalment affected. Required for MOVE_DATE and PAUSE_ONE_MONTH." }
+        days: { type: integer, minimum: 1, maximum: 14, description: "MOVE_DATE only." }
+        extraMonths: { type: integer, minimum: 1, maximum: 6, description: "EXTEND_PLAN only." }
+        amountCents: { $ref: "#/components/schemas/Cents" }
+      additionalProperties: false
+
+    OptionPreview:
+      type: object
+      required: [option, previewHash, eligible, approvalTier]
+      properties:
+        option: { $ref: "#/components/schemas/OptionName" }
+        primitive: { type: [string, "null"], enum: [MOVE_DATE, DEFER_TO_END, REAMORTIZE, null] }
+        label: { type: string, enum: [A, B, C, D] }
+        previewHash: { type: [string, "null"], pattern: "^sha256:[0-9a-f]{16}$", description: "Short form of the snapshot hash of the canonical proposed schedule. Recomputed by the validator." }
+        args: { type: object, additionalProperties: { type: integer }, description: "The arguments the code chose." }
+        summary: { type: object, description: "Engine numbers in cents, days or counts; keys ending in Date hold ISO dates." }
+        sustainable: { type: [boolean, "null"] }
+        warnings: { type: array, items: { type: string } }
+        eligible: { type: boolean }
+        ineligibleReason: { type: [string, "null"] }
+        approvalTier: { $ref: "#/components/schemas/ApprovalTier" }
+        removed: { type: array, items: { $ref: "#/components/schemas/Slot" } }
+        added: { type: array, items: { $ref: "#/components/schemas/Slot" } }
+        newLastDueDate: { type: string, format: date }
+        totalInstalmentsAfter: { type: integer }
+        newInstalmentCents: { $ref: "#/components/schemas/Cents" }
+        delayDays: { type: integer, minimum: 0, description: "Days the last payment moves later. The code's burden measure." }
+        recommended: { type: boolean, description: "Set by the code's OptionRanker, never by a model." }
+
+    OfferedOptionsTool:
+      type: object
+      required: [loanId, options]
+      properties:
+        loanId: { type: string, format: uuid }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/OptionPreview" }
+
+    PriorCasesTool:
+      type: object
+      required: [loanId, cases]
+      properties:
+        loanId: { type: string, format: uuid }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [caseId, openedOn, outcome]
+            properties:
+              caseId: { type: string, format: uuid }
+              openedOn: { type: string, format: date }
+              chosenOption: { oneOf: [{ $ref: "#/components/schemas/OptionName" }, { type: "null" }] }
+              outcome: { type: string, enum: [APPLIED, DECLINED_BY_MEMBER, REJECTED_BY_OFFICER, EXPIRED, CANCELLED_PAID, SUPERSEDED, OPEN] }
+
+    Figure:
+      type: object
+      required: [value, unit, kind, source]
+      description: One number or date the narrative quotes, with where it came from. The validator checks it against the stored tool results of the run.
+      properties:
+        value: { type: [integer, string] }
+        unit: { type: string, enum: [USD_CENTS, PERCENT, DAYS, DATE, COUNT] }
+        kind: { type: string, description: "A short label such as INSTALMENT, DUE_DATE, INCOME_DROP, NEW_INSTALMENT." }
+        source:
+          type: object
+          required: [tool, field]
+          properties:
+            tool: { type: string, enum: [get_loan_summary, get_repayment_schedule, get_loan_aging, get_hardship_signals, get_income_summary, list_offered_options, preview_option, list_prior_cases] }
+            field: { type: string, description: "JSON path inside that tool's response." }
+
+    ProposedOption:
+      type: object
+      required: [option, previewHash, recommended]
+      properties:
+        option: { $ref: "#/components/schemas/OptionName" }
+        label: { type: string, enum: [A, B, C, D] }
+        seq: { type: integer }
+        days: { type: integer }
+        extraMonths: { type: integer }
+        amountCents: { $ref: "#/components/schemas/Cents" }
+        previewHash: { type: [string, "null"], pattern: "^sha256:[0-9a-f]{16}$" }
+        recommended: { type: boolean }
+
+    HardshipProposal:
+      type: object
+      required: [runId, caseId, loanId, agentVersion, promptHash, assessment, options, figures, narrative]
+      properties:
+        runId: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        loanId: { type: string, format: uuid }
+        agentVersion: { type: string, example: "guardian@2027.01.1" }
+        promptHash: { type: string, pattern: "^sha256:[0-9a-f]{16}$" }
+        assessment:
+          type: object
+          required: [computedLevel, proposedLevel, escalated, citedSignals]
+          properties:
+            computedLevel: { $ref: "#/components/schemas/Level" }
+            proposedLevel:
+              allOf: [{ $ref: "#/components/schemas/Level" }]
+              description: Equal to `computedLevel`, or exactly one step higher (escalate-only). Never lower.
+            escalated: { type: boolean }
+            citedSignals:
+              type: array
+              description: Signal codes the agent relied on. Every code must appear in `get_hardship_signals`.
+              items: { type: string }
+        options:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ProposedOption" }
+        figures:
+          type: array
+          maxItems: 40
+          items: { $ref: "#/components/schemas/Figure" }
+        narrative:
+          type: object
+          required: [officerBrief, memberMessage]
+          properties:
+            officerBrief: { type: string, maxLength: 1200 }
+            memberMessage:
+              type: object
+              required: [en, es]
+              properties:
+                en: { type: string, maxLength: 480 }
+                es: { type: string, maxLength: 520 }
+      additionalProperties: false
+
+    CheckFailure:
+      type: object
+      required: [code, detail]
+      properties:
+        code:
+          type: string
+          enum:
+            - V01_SCHEMA
+            - V02_TOKEN_BINDING
+            - V03_LEVEL_NOT_ESCALATE_ONLY
+            - V04_OPTION_SET_OR_PREVIEW_MISMATCH
+            - V05_RECOMMENDATION_NOT_FROM_CODE
+            - V06_UNGROUNDED_FIGURE
+            - V07_FORBIDDEN_CONTENT
+            - V08_POLICY_INELIGIBLE
+            - V09_OUTREACH_LIMIT
+            - V10_LANGUAGE
+            - V11_LENGTH
+            - V12_CASE_STATE
+        detail: { type: string }
+
+    Verdict:
+      type: object
+      required: [result, checks, failed]
+      properties:
+        result: { type: string, enum: [APPROVABLE, REJECTED] }
+        checks: { type: integer, description: "Number of checks run." }
+        failed:
+          type: array
+          items: { $ref: "#/components/schemas/CheckFailure" }
+
+    ProposalReceipt:
+      type: object
+      required: [proposalId, status, verdict, templateFallback]
+      properties:
+        proposalId: { type: string, format: uuid }
+        status: { type: string, enum: [QUEUED_FOR_MEMBER, REJECTED, SHADOWED] }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        templateFallback:
+          type: boolean
+          description: True when the platform will send the deterministic template message instead of the agent's words.
+
+    ExtractReasonRequest:
+      type: object
+      required: [caseId, language, text]
+      properties:
+        caseId: { type: string, format: uuid }
+        language: { type: string, enum: [en, es] }
+        text: { type: string, maxLength: 500, description: "Untrusted member text. Never logged unmasked." }
+      additionalProperties: false
+
+    ExtractReasonResponse:
+      type: object
+      required: [category, confidence, language, usedFallback]
+      properties:
+        category:
+          type: string
+          enum: [INCOME_REDUCED, JOB_LOSS, MEDICAL, FAMILY_EMERGENCY, UNEXPECTED_EXPENSE, TIMING_ONLY, OTHER]
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        language: { type: string, enum: [en, es] }
+        usedFallback:
+          type: boolean
+          description: True when the model output failed validation and the safe default was used.
+
+    KillSwitchState:
+      type: object
+      required: [mode, since, circuits]
+      properties:
+        mode: { type: string, enum: [LIVE, SHADOW, TEMPLATES_ONLY] }
+        since: { type: string, format: date-time }
+        reason: { type: [string, "null"] }
+        trippedBy:
+          type: [string, "null"]
+          enum: [OFFICER, AUTO_VALIDATOR_REJECTIONS, AUTO_GROUNDING_FAILURES, AUTO_BUDGET, AUTO_INJECTION_CANARY, null]
+        circuits:
+          type: object
+          description: State of each model circuit breaker.
+          additionalProperties: { type: string, enum: [CLOSED, HALF_OPEN, OPEN] }

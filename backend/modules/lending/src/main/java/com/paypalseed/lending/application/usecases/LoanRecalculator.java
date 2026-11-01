@@ -17,6 +17,8 @@ import com.paypalseed.lending.domain.model.LoanRow.CollectionMode;
 import com.paypalseed.lending.domain.model.LoanRow.LoanStatus;
 import com.paypalseed.lending.domain.model.LoanTransaction;
 import com.paypalseed.lending.infrastructure.persistence.AttemptRepository;
+import com.paypalseed.lending.infrastructure.persistence.HardshipSupportRepository;
+import com.paypalseed.lending.infrastructure.persistence.HardshipSupportRepository.Hold;
 import com.paypalseed.lending.infrastructure.persistence.LoanRepository;
 import com.paypalseed.lending.infrastructure.persistence.ProjectionRepository;
 import com.paypalseed.lending.infrastructure.persistence.ScheduleRepository;
@@ -63,17 +65,19 @@ public class LoanRecalculator {
     private final ProjectionRepository projections;
     private final TimerRepository timers;
     private final AttemptRepository attempts;
+    private final HardshipSupportRepository holds;
     private final ApplicationEventPublisher events;
 
     public LoanRecalculator(LoanRepository loans, ScheduleRepository schedules, TransactionRepository transactions,
                             ProjectionRepository projections, TimerRepository timers, AttemptRepository attempts,
-                            ApplicationEventPublisher events) {
+                            HardshipSupportRepository holds, ApplicationEventPublisher events) {
         this.loans = loans;
         this.schedules = schedules;
         this.transactions = transactions;
         this.projections = projections;
         this.timers = timers;
         this.attempts = attempts;
+        this.holds = holds;
         this.events = events;
     }
 
@@ -111,10 +115,15 @@ public class LoanRecalculator {
                     allocation.outstandingCents()));
         }
 
-        if (status == LoanStatus.ACTIVE) {
+        if (status == LoanStatus.ACTIVE && !aging.graceExpiredSeqs().isEmpty()) {
+            List<Hold> loanHolds = holds.allFor(loan.id());
             for (int seq : aging.graceExpiredSeqs()) {
+                if (loanHolds.stream().anyMatch(h -> h.seq() == seq && h.coversOn(schedule.version(), asOf))) {
+                    continue; // F5 grace hold: a human is still deciding; days past due and the bucket still move
+                }
                 Instalment inst = schedule.instalment(seq);
-                if (projections.recordMissed(loan.id(), schedule.version(), seq, inst.dueDate(), asOf)) {
+                if (projections.recordMissed(loan.id(), schedule.version(), seq, inst.dueDate(), asOf,
+                        missAttribution(loanHolds, schedule.version(), seq))) {
                     events.publishEvent(new LendingEvents.InstalmentMissed(Ids.newId(), loan.id(), loan.memberId(), asOf,
                             schedule.version(), seq, inst.dueDate()));
                 }
@@ -153,6 +162,21 @@ public class LoanRecalculator {
 
         LoanRow after = loans.find(loan.id()).orElseThrow();
         return new Outcome(loan, after, schedule, allocation, aging, history);
+    }
+
+    /** True while an unreleased F5 hold covers this instalment on {@code asOf}. */
+    boolean isHeld(LoanRow loan, int version, int seq, LocalDate asOf) {
+        return holds.unreleased(loan.id(), seq).filter(h -> h.coversOn(version, asOf)).isPresent();
+    }
+
+    /** NULL when no hold was involved; SLA_BREACH when our own decision ran late, so F6 does not count it. */
+    private static String missAttribution(List<Hold> loanHolds, int version, int seq) {
+        List<Hold> onInstalment = loanHolds.stream().filter(h -> h.version() == version && h.seq() == seq).toList();
+        if (onInstalment.isEmpty()) {
+            return null;
+        }
+        return onInstalment.stream().anyMatch(h -> HardshipSupportRepository.CAUSE_SLA_ESCALATION.equals(h.cause()))
+                ? "SLA_BREACH" : "MEMBER";
     }
 
     static String retryRef(java.util.UUID attemptId) {

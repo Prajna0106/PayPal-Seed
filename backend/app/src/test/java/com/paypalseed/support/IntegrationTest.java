@@ -66,6 +66,12 @@ public abstract class IntegrationTest {
         FakePayPal fakePayPal() {
             return new FakePayPal();
         }
+
+        @Bean
+        @Primary
+        FakeLlm fakeLlm() {
+            return new FakeLlm();
+        }
     }
 
     private static final AtomicInteger DATABASES = new AtomicInteger();
@@ -105,10 +111,13 @@ public abstract class IntegrationTest {
     protected LedgerFacade ledger;
     @Autowired
     protected InboxProcessor inbox;
+    @Autowired
+    protected FakeLlm llm;
 
     @BeforeEach
     void resetFakes() {
         paypal.reset();
+        llm.reset();
     }
 
     /** Registers a disbursed loan of {@code dollars} over {@code months}, due on {@code dueDay}. */

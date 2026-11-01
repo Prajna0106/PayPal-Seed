@@ -69,6 +69,13 @@ public class AttemptRepository {
                 COLLECTION_ATTEMPT.PLANNED_ON);
     }
 
+    /** Charges that failed on or after {@code from} (scheduled charges and retries). */
+    public int failedSince(UUID loanId, LocalDate from) {
+        return dsl.fetchCount(COLLECTION_ATTEMPT, COLLECTION_ATTEMPT.LOAN_ID.eq(loanId)
+                .and(COLLECTION_ATTEMPT.STATUS.eq(Status.FAILED.name()))
+                .and(COLLECTION_ATTEMPT.PLANNED_ON.ge(from)));
+    }
+
     public Optional<Attempt> find(UUID id) {
         return dsl.selectFrom(COLLECTION_ATTEMPT).where(COLLECTION_ATTEMPT.ID.eq(id))
                 .fetchOptional(AttemptRepository::map);
