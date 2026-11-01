@@ -66,7 +66,20 @@ paths:
                 dueDay: { type: integer, minimum: 1, maximum: 31 }
                 disbursedOn: { type: string, format: date }
                 disbursementRef: { type: string, maxLength: 128 }
-      responses: { '201': { description: Loan summary } }
+      responses:
+        '201':
+          description: Loan summary (the same shape as LoanSummary in seed-api.yaml)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [loanId, memberId, principalCents, outstandingCents, status]
+                properties:
+                  loanId: { type: string, format: uuid }
+                  memberId: { type: string, format: uuid }
+                  principalCents: { type: integer, format: int64 }
+                  outstandingCents: { type: integer, format: int64 }
+                  status: { type: string }
   /internal/loans/{loanId}/reschedules:
     post:
       summary: Apply an approved hardship option as a new schedule version (F5 governance calls this)
@@ -178,6 +191,36 @@ paths:
                   weeklyInflowCents: { type: array, items: { type: integer }, minItems: 13, maxItems: 13, description: Oldest first, ending yesterday }
                   usualPaydayDow: { type: [integer, 'null'] }
                   activeWeeks: { type: integer }
+  /internal/auth/paypal/exchange:
+    post:
+      summary: Turn the one-time code from a Log in with PayPal redirect into a member and a session (member web app's server only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, codeVerifier, redirectUri]
+              properties:
+                code: { type: string, maxLength: 4096 }
+                codeVerifier: { type: string, maxLength: 256 }
+                redirectUri: { type: string, maxLength: 2048 }
+      responses:
+        '200':
+          description: Logged in. The token is a session credential, so keep it out of the browser's reach and out of logs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [memberId, token, expiresAt]
+                properties:
+                  memberId: { type: string, format: uuid }
+                  displayName: { type: string }
+                  token: { type: string }
+                  expiresAt: { type: string, format: date-time }
+        '401': { description: PayPal refused the code (paypal-login-rejected) or would not say who logged in (paypal-identity-refused) }
+        '403': { description: Not the service token, or the member is suspended (account-suspended) }
+        '503': { description: PayPal is unavailable or login is not configured }
   /internal/demo-clock/advance:
     post:
       summary: Demo profile only. Move the shared business date forward

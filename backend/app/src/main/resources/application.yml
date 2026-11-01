@@ -48,7 +48,7 @@ seed:
     enabled: ${SEED_LLM_ENABLED:true}
     base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
     api-key: ${OPENROUTER_API_KEY:}
-    models: ${SEED_LLM_MODELS:openai/gpt-4o-mini,anthropic/claude-3.5-haiku}   # placeholder chain until spike SH3
+    models: ${SEED_LLM_MODELS:google/gemini-3.1-flash-lite}
     daily-budget-micro-usd: ${SEED_LLM_DAILY_BUDGET_MICRO_USD:20000000}         # $20; spending it trips the kill switch
     max-concurrent: ${SEED_LLM_MAX_CONCURRENT:8}                                 # bulkhead per process
     call-timeout: ${SEED_LLM_CALL_TIMEOUT:20s}
@@ -68,7 +68,7 @@ seed:
     base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
     client-id: ${PAYPAL_CLIENT_ID:}
     client-secret: ${PAYPAL_CLIENT_SECRET:}
-    login-client-id: ${PAYPAL_LOGIN_CLIENT_ID:}          # Log in with PayPal; identity module only
+    login-client-id: ${PAYPAL_LOGIN_CLIENT_ID:}          # Log in with PayPal
     login-client-secret: ${PAYPAL_LOGIN_CLIENT_SECRET:}
     webhook-id: ${PAYPAL_WEBHOOK_ID:}
     loan-plan-id: ${PAYPAL_LOAN_PLAN_ID:}

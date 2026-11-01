@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.paypalseed.identity.application.ports.PayPalLogin.PayPalIdentity;
+import com.paypalseed.payments.api.PayPalLogin.PayPalIdentity;
 import com.paypalseed.support.FakePayPalLogin;
 import com.paypalseed.support.IntegrationTest;
 import java.util.UUID;

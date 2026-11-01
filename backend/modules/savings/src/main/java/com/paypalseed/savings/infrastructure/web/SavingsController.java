@@ -4,6 +4,8 @@ import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.platform.security.Actor;
+import com.paypalseed.savings.api.dto.CoachSuggestionRequest;
+import com.paypalseed.savings.api.dto.CoachSuggestionResponse;
 import com.paypalseed.savings.api.dto.CreateGoalRequest;
 import com.paypalseed.savings.api.dto.SavingsGoalResponse;
 import com.paypalseed.savings.api.dto.WithdrawRequest;
@@ -12,15 +14,22 @@ import com.paypalseed.savings.application.usecases.CreateGoalUseCase;
 import com.paypalseed.savings.application.usecases.PauseResumeGoalUseCase;
 import com.paypalseed.savings.application.usecases.ProcessWithdrawalUseCase;
 import com.paypalseed.savings.application.usecases.RecordDepositUseCase;
+import com.paypalseed.savings.application.usecases.SuggestSavingsPlanUseCase;
 import com.paypalseed.savings.domain.model.SavingsGoal;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/savings")
@@ -31,6 +40,7 @@ public class SavingsController {
     private final ProcessWithdrawalUseCase processWithdrawalUseCase;
     private final PauseResumeGoalUseCase pauseResumeGoalUseCase;
     private final SavingsGoalRepository repository;
+    private final SuggestSavingsPlanUseCase suggestSavingsPlanUseCase;
 
     public SavingsController(
         CreateGoalUseCase createGoalUseCase,
@@ -39,11 +49,40 @@ public class SavingsController {
         PauseResumeGoalUseCase pauseResumeGoalUseCase,
         SavingsGoalRepository repository
     ) {
+        this(
+            createGoalUseCase,
+            recordDepositUseCase,
+            processWithdrawalUseCase,
+            pauseResumeGoalUseCase,
+            repository,
+            new SuggestSavingsPlanUseCase()
+        );
+    }
+
+    @Autowired
+    public SavingsController(
+        CreateGoalUseCase createGoalUseCase,
+        RecordDepositUseCase recordDepositUseCase,
+        ProcessWithdrawalUseCase processWithdrawalUseCase,
+        PauseResumeGoalUseCase pauseResumeGoalUseCase,
+        SavingsGoalRepository repository,
+        @Autowired(required = false) SuggestSavingsPlanUseCase suggestSavingsPlanUseCase
+    ) {
         this.createGoalUseCase = createGoalUseCase;
         this.recordDepositUseCase = recordDepositUseCase;
         this.processWithdrawalUseCase = processWithdrawalUseCase;
         this.pauseResumeGoalUseCase = pauseResumeGoalUseCase;
         this.repository = repository;
+        this.suggestSavingsPlanUseCase = suggestSavingsPlanUseCase != null
+            ? suggestSavingsPlanUseCase
+            : new SuggestSavingsPlanUseCase();
+    }
+
+    @PostMapping("/coach/suggest")
+    public ResponseEntity<CoachSuggestionResponse> suggestPlan(Actor actor, @RequestBody CoachSuggestionRequest body) {
+        CoachSuggestionRequest request = new CoachSuggestionRequest(actor.requireMember().toString(), body.goalName(),
+            body.targetAmount(), body.statedMonthlyIncome(), body.statedMonthlyExpenses(), body.currency());
+        return ResponseEntity.ok(suggestSavingsPlanUseCase.execute(request));
     }
 
     @PostMapping("/goals")

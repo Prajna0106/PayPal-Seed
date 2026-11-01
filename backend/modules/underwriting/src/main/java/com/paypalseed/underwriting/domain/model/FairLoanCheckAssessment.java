@@ -27,7 +27,7 @@ public class FairLoanCheckAssessment {
     private final UUID memberId;
     private final UUID applicationId;
     private final String purpose;
-    private final FairCheckResult result;
+    private FairCheckResult result;
     private final String modelVersion;
     private final Instant createdAt;
 
@@ -114,6 +114,40 @@ public class FairLoanCheckAssessment {
         this.memberDisputed = true;
         this.memberDisputeNote = note.trim();
         this.disputedAt = Objects.requireNonNull(now, "now is required");
+    }
+
+    /**
+     * Replaces the plain-language explanation and officer questions with grounded AI narration
+     * while keeping every computed numeric field and inputsHash immutable.
+     */
+    public void withGroundedNarration( java.util.List<String> plainLanguageReasons, java.util.List<String> officerQuestions) {
+        if (plainLanguageReasons == null || plainLanguageReasons.isEmpty() || officerQuestions == null || officerQuestions.isEmpty()) {
+            return;
+        }
+        this.result = new FairCheckResult(
+            result.recommended(),
+            result.unlockedTier(),
+            result.usedFallbackStatedIncome(),
+            result.averageMonthlyIncomeCents(),
+            result.lowestMonthlyIncomeCents(),
+            result.lowestIncomeMonth(),
+            result.coefficientOfVariation(),
+            result.highIncomeVolatility(),
+            result.provenMonthlySavingCents(),
+            result.monthsSaved(),
+            result.targetMonthsWindow(),
+            result.instalmentCapCents(),
+            result.requestedAmountCents(),
+            result.requestedTermMonths(),
+            result.suggestedLoanCents(),
+            result.suggestedTermMonths(),
+            result.suggestedMonthlyInstalmentCents(),
+            result.inputsHash(),
+            plainLanguageReasons,
+            officerQuestions,
+            result.usedData(),
+            result.neverUsedData()
+        );
     }
 
     /**

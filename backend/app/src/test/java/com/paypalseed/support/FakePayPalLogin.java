@@ -1,7 +1,6 @@
 package com.paypalseed.support;
 
-import com.paypalseed.identity.application.IdentityErrors;
-import com.paypalseed.identity.application.ports.PayPalLogin;
+import com.paypalseed.payments.api.PayPalLogin;
 import com.paypalseed.platform.kernel.DomainException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +18,7 @@ public class FakePayPalLogin implements PayPalLogin {
     public PayPalIdentity identify(String code, String codeVerifier, String redirectUri) {
         PayPalIdentity identity = codes.remove(code);
         if (identity == null) {
-            throw new DomainException(IdentityErrors.PAYPAL_LOGIN_REJECTED, "unknown code");
+            throw new DomainException(LOGIN_REJECTED, "unknown code");
         }
         return identity;
     }

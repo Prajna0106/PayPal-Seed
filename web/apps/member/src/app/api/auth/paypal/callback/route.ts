@@ -1,6 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { backend } from "@/lib/api-client";
-import { APP_ORIGIN, cookieOptions, LOGIN_COOKIE, PAYPAL_CALLBACK, SESSION_COOKIE } from "@/lib/auth";
+import { isProblem, unwrap } from "@paypal-seed/api-client";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import type { NextRequest } from "next/server";
+import { LOGIN_COOKIE, PAYPAL_CALLBACK } from "@/features/auth/server/paypal-login";
+import { internalApi } from "@/server/api";
+import { startSession } from "@/server/session";
 
 const REASONS: Record<string, string> = {
   "paypal-login-rejected": "rejected",
@@ -8,40 +12,44 @@ const REASONS: Record<string, string> = {
   "account-suspended": "suspended",
 };
 
-function finish(path: string) {
-  const response = NextResponse.redirect(`${APP_ORIGIN}${path}`, 303);
-  response.cookies.delete({ name: LOGIN_COOKIE, ...cookieOptions });
-  return response;
-}
-
-const failed = (reason: string) => finish(`/login?error=${reason}`);
-
 /** PayPal sends the browser back here. The state check proves this browser is the one that started the login. */
 export async function GET(request: NextRequest) {
-  const [expectedState, verifier] = request.cookies.get(LOGIN_COOKIE)?.value.split(".") ?? [];
+  const store = await cookies();
+  const [expectedState, verifier] = store.get(LOGIN_COOKIE)?.value.split(".") ?? [];
+  store.delete(LOGIN_COOKIE);
+
   const params = request.nextUrl.searchParams;
-  if (!expectedState || !verifier || params.get("state") !== expectedState) return failed("expired");
-  if (params.get("error")) return failed("cancelled");
   const code = params.get("code");
-  if (!code) return failed("rejected");
+  if (!expectedState || !verifier || params.get("state") !== expectedState) {
+    redirect("/login?error=expired");
+  }
+  if (params.get("error")) {
+    redirect("/login?error=cancelled");
+  }
+  if (!code) {
+    redirect("/login?error=rejected");
+  }
 
-  let exchange: Response;
+  const failure = await logIn(code, verifier);
+  redirect(failure ? `/login?error=${failure}` : "/app");
+}
+
+/** Returns why the login failed, or nothing once the session has started. */
+async function logIn(code: string, verifier: string): Promise<string | undefined> {
   try {
-    exchange = await backend("/internal/auth/paypal/exchange", process.env.SEED_INTERNAL_TOKEN ?? "", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, codeVerifier: verifier, redirectUri: PAYPAL_CALLBACK }),
+    const member = await unwrap(
+      internalApi().POST("/internal/auth/paypal/exchange", {
+        body: { code, codeVerifier: verifier, redirectUri: PAYPAL_CALLBACK },
+      }),
+    );
+    await startSession({
+      kind: "member",
+      memberId: member.memberId,
+      displayName: member.displayName?.slice(0, 60) || "Member",
+      sessionToken: member.token,
     });
-  } catch {
-    return failed("unavailable");
+    return undefined;
+  } catch (error) {
+    return (isProblem(error) && REASONS[error.code]) || "unavailable";
   }
-  if (!exchange.ok) {
-    const problem = await exchange.json().catch(() => ({}));
-    return failed(REASONS[problem.code] ?? "unavailable");
-  }
-
-  const { token, expiresAt } = await exchange.json();
-  const response = finish("/");
-  response.cookies.set(SESSION_COOKIE, token, { ...cookieOptions, expires: new Date(expiresAt) });
-  return response;
 }
