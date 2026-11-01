@@ -1,0 +1,230 @@
+/*
+ * PayPal Seed design system. Tokens follow web/DESIGN.md (ElevenLabs-derived): off-white canvas, warm near-black
+ * ink, light serif display, Inter body, ink pill buttons, hairline cards, pastel gradient orbs as atmosphere only.
+ * Apps import this file once from their root globals.css.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Workspace packages are not scanned automatically: include the design system's own sources. */
+@source "../";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-canvas: #f5f5f5;
+  --color-canvas-soft: #fafafa;
+  --color-canvas-deep: #0c0a09;
+  --color-ink: #0c0a09;
+  --color-ink-soft: #292524;
+  --color-body: #4e4e4e;
+  --color-muted-ink: #777169;
+  --color-muted-soft: #a8a29e;
+  --color-hairline: #e7e5e4;
+  --color-hairline-soft: #f0efed;
+  --color-hairline-strong: #d6d3d1;
+  --color-surface: #ffffff;
+  --color-surface-strong: #f0efed;
+  --color-surface-dark: #0c0a09;
+  --color-surface-dark-elevated: #1c1917;
+  --color-on-dark-soft: #a8a29e;
+
+  --color-gradient-mint: #a7e5d3;
+  --color-gradient-peach: #f4c5a8;
+  --color-gradient-lavender: #c8b8e0;
+  --color-gradient-sky: #a8c8e8;
+  --color-gradient-rose: #e8b8c4;
+
+  --color-success: #15803d;
+  --color-success-soft: #e7f4ec;
+  --color-warning: #b45309;
+  --color-warning-soft: #fbf1e3;
+  --color-danger: #c42727;
+  --color-danger-soft: #fbeaea;
+  --color-info: #33669d;
+  --color-info-soft: #eaf1f9;
+
+  --font-display: var(--font-newsreader), "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-pill: 9999px;
+  --shadow-soft: 0 4px 16px rgb(0 0 0 / 0.04);
+  --shadow-lift: 0 12px 32px -12px rgb(12 10 9 / 0.18);
+
+  --animate-orb-drift: orb-drift 18s ease-in-out infinite alternate;
+
+  @keyframes orb-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+      transform: translate3d(4%, -3%, 0) scale(1.08);
+    }
+  }
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --background: #f5f5f5;
+  --foreground: #0c0a09;
+  --card: #ffffff;
+  --card-foreground: #0c0a09;
+  --popover: #ffffff;
+  --popover-foreground: #0c0a09;
+  --primary: #292524;
+  --primary-foreground: #ffffff;
+  --secondary: #f0efed;
+  --secondary-foreground: #292524;
+  --muted: #f0efed;
+  --muted-foreground: #777169;
+  --accent: #f0efed;
+  --accent-foreground: #0c0a09;
+  --destructive: #c42727;
+  --destructive-foreground: #ffffff;
+  --border: #e7e5e4;
+  --input: #d6d3d1;
+  --ring: #a8a29e;
+
+  /* Chart series: the pastel gradient family, deepened enough to read as data. */
+  --chart-1: #3f8f7a;
+  --chart-2: #d0814f;
+  --chart-3: #8a6fc2;
+  --chart-4: #4f87c4;
+  --chart-5: #c4677f;
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: #292524;
+  --sidebar-primary: #292524;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0efed;
+  --sidebar-accent-foreground: #0c0a09;
+  --sidebar-border: #e7e5e4;
+  --sidebar-ring: #a8a29e;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 12px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Editorial display type: Newsreader at weight 300 stands in for the licensed Waldenburg Light. */
+@utility text-display-mega {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 1.6rem + 3.6vw, 4rem);
+  font-weight: 300;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+@utility text-display-xl {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 1.5rem + 2vw, 3rem);
+  font-weight: 300;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+@utility text-display-lg {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.25rem);
+  font-weight: 300;
+  line-height: 1.17;
+  letter-spacing: -0.01em;
+}
+
+@utility text-display-md {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 300;
+  line-height: 1.13;
+  letter-spacing: -0.01em;
+}
+
+@utility text-display-sm {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1.2;
+}
+
+@utility text-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    letter-spacing: 0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-gradient-lavender);
+    color: var(--color-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

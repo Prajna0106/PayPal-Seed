@@ -1,0 +1,4 @@
+{
+  "extends": "@paypal-seed/config/tsconfig/library.json",
+  "include": ["src"]
+}

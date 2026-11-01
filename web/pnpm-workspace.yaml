@@ -1,3 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Native build scripts allowed during install (pnpm 10 blocks lifecycle scripts by default).
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - sharp
+  - unrs-resolver

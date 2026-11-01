@@ -11,7 +11,7 @@ The Guardian reaches models only through the agent gateway, which reads these se
 | `OPENROUTER_API_KEY` | `seed.llm.api-key` | empty | The OpenRouter key. Empty means no model is ever called |
 | `SEED_LLM_ENABLED` | `seed.llm.enabled` | `true` | Set `false` to disable models even with a key |
 | `OPENROUTER_BASE_URL` | `seed.llm.base-url` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
-| `SEED_LLM_MODELS` | `seed.llm.models` | `openai/gpt-4o-mini,anthropic/claude-3.5-haiku` | Fallback chain sent as OpenRouter `models`. A placeholder until spike SH3 confirms the choice |
+| `SEED_LLM_MODELS` | `seed.llm.models` | `google/gemini-3.1-flash-lite` | Comma-separated model chain sent to OpenRouter as `models`; the first is tried first |
 | `SEED_LLM_DAILY_BUDGET_MICRO_USD` | `seed.llm.daily-budget-micro-usd` | `20000000` ($20) | Spending it trips the kill switch to `TEMPLATES_ONLY` |
 | `SEED_LLM_MAX_CONCURRENT` | `seed.llm.max-concurrent` | `8` | Bulkhead: concurrent model calls per process |
 | `SEED_LLM_CALL_TIMEOUT` | `seed.llm.call-timeout` | `20s` | Per call; counts toward the circuit breaker |
