@@ -103,6 +103,28 @@ public class LoanApplication {
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt is required");
     }
 
+    public void restoreLifecycleState(
+        UUID firstApproverId,
+        Instant firstApprovedAt,
+        UUID secondApproverId,
+        Instant secondApprovedAt,
+        String rejectionReason,
+        UUID loanId,
+        String disbursementRef,
+        Instant disbursedAt,
+        Instant coolingOffExpiresAt
+    ) {
+        this.firstApproverId = firstApproverId;
+        this.firstApprovedAt = firstApprovedAt;
+        this.secondApproverId = secondApproverId;
+        this.secondApprovedAt = secondApprovedAt;
+        this.rejectionReason = rejectionReason;
+        this.loanId = loanId;
+        this.disbursementRef = disbursementRef;
+        this.disbursedAt = disbursedAt;
+        this.coolingOffExpiresAt = coolingOffExpiresAt;
+    }
+
     public static LoanApplication submit(
         UUID memberId,
         String purpose,

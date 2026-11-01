@@ -3,6 +3,8 @@ package com.paypalseed.underwriting.application.usecases;
 import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.underwriting.api.UnderwritingFacade;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
 import com.paypalseed.underwriting.infrastructure.persistence.IncomeRepository;
 import com.paypalseed.underwriting.infrastructure.persistence.IncomeRepository.Consent;
@@ -14,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +32,53 @@ public class IncomeSummaryService implements UnderwritingFacade {
 
     private final IncomeRepository income;
     private final BusinessClock clock;
+    private final FairLoanCheckService fairLoanCheck;
 
     public IncomeSummaryService(IncomeRepository income, BusinessClock clock) {
+        this(income, clock, null);
+    }
+
+    @Autowired
+    public IncomeSummaryService(
+        IncomeRepository income,
+        BusinessClock clock,
+        @Autowired(required = false) FairLoanCheckService fairLoanCheck
+    ) {
         this.income = income;
         this.clock = clock;
+        this.fairLoanCheck = fairLoanCheck;
+    }
+
+    @Override
+    public ConsentStatusView grantConsent(UUID memberId) {
+        if (fairLoanCheck != null) {
+            return fairLoanCheck.grantConsent(memberId);
+        }
+        return UnderwritingFacade.super.grantConsent(memberId);
+    }
+
+    @Override
+    public ConsentStatusView revokeConsent(UUID memberId) {
+        if (fairLoanCheck != null) {
+            return fairLoanCheck.revokeConsent(memberId);
+        }
+        return UnderwritingFacade.super.revokeConsent(memberId);
+    }
+
+    @Override
+    public ConsentStatusView getConsentStatus(UUID memberId) {
+        if (fairLoanCheck != null) {
+            return fairLoanCheck.getConsentStatus(memberId);
+        }
+        return UnderwritingFacade.super.getConsentStatus(memberId);
+    }
+
+    @Override
+    public Optional<FairCheckCardView> findAssessment(UUID assessmentId) {
+        if (fairLoanCheck != null) {
+            return fairLoanCheck.findAssessment(assessmentId);
+        }
+        return UnderwritingFacade.super.findAssessment(assessmentId);
     }
 
     @Override

@@ -8,12 +8,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
 /**
- * Thread-safe repository for {@link LoanApplication} instances.
+ * In-memory test double for {@link LoanApplicationRepository}.
  */
-@Repository
 public class InMemoryLoanApplicationRepository implements LoanApplicationRepository {
 
     private final Map<UUID, LoanApplication> store = new ConcurrentHashMap<>();

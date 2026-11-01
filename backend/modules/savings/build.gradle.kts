@@ -1,6 +1,7 @@
 // Module: savings (F1: goals, deposits, withdrawals, top-ups, pause, streaks)
 plugins {
     `java-library`
+    id("jooq-module")
 }
 
 dependencies {
