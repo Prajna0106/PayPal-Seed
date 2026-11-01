@@ -1,5 +1,6 @@
 package com.paypalseed.lending.api.dto;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -60,5 +61,50 @@ public final class LendingDtos {
 
     public record LoanSummary(UUID loanId, UUID memberId, long principalCents, long outstandingCents, String status,
                               String collectionMode, String bucket, int dpd, int currentVersion) {
+    }
+
+    /** Feature 2: Member's current microloan ladder tier and deterministic sizing bounds. */
+    public record EligibilityView(
+        UUID memberId,
+        boolean eligible,
+        String tier,
+        int tierLevel,
+        long tierLimitCents,
+        long maxLoanCents,
+        long maxMonthlyInstalmentCents,
+        int minTermMonths,
+        int maxTermMonths,
+        int currentSavingStreakMonths,
+        long monthlySavingCents,
+        boolean hasActiveLoan,
+        int completedLoansOnTime,
+        List<String> reasons
+    ) {
+    }
+
+    /** Feature 2: Representation of a savings-linked microloan application. */
+    public record LoanApplicationView(
+        UUID id,
+        UUID memberId,
+        String purpose,
+        long requestedAmountCents,
+        int termMonths,
+        int preferredDueDay,
+        String payoutWallet,
+        boolean fairCheckConsented,
+        String unlockedTier,
+        long maxMonthlyInstalmentCents,
+        long monthlyInstalmentCents,
+        String status,
+        UUID firstApproverId,
+        UUID secondApproverId,
+        String rejectionReason,
+        UUID loanId,
+        String disbursementRef,
+        Instant coolingOffExpiresAt,
+        List<String> sizingReasons,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
     }
 }
