@@ -1,6 +1,274 @@
 {
   "info": {
-    "name": "PayPal Seed API",
+    "name": "PayPal Seed API (F1 Savings, F2 Microloans, F3 Fair Loan Check, F4 Schedule)",
+    "description": "End-to-end Postman collection for PayPal Seed. Run requests 1 -> 12 in order; IDs (goalId, assessmentId, applicationId, loanId) are saved automatically to collection variables.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  }
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "memberId", "value": "11111111-1111-1111-1111-111111111111" },
+    { "key": "officer1Id", "value": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+    { "key": "officer2Id", "value": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" },
+    { "key": "goalId", "value": "" },
+    { "key": "assessmentId", "value": "" },
+    { "key": "applicationId", "value": "" },
+    { "key": "loanId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Feature 1: Goal Savings",
+      "item": [
+        {
+          "name": "0. AI Coach: Suggest Monthly Saving & Loan Term",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"goalName\": \"Commercial Stand Mixer\",\n  \"targetAmount\": 1200.00,\n  \"statedMonthlyIncome\": 1600.00,\n  \"statedMonthlyExpenses\": 850.00,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/coach/suggest"
+          }
+        },
+        {
+          "name": "1. Create Savings Goal ($1,200 Mixer, $75/mo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.id) { pm.collectionVariables.set('goalId', res.id); }",
+                  "pm.test('Goal created (201)', () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"name\": \"Commercial Stand Mixer\",\n  \"targetAmount\": 1200.00,\n  \"monthlyAmount\": 75.00,\n  \"currency\": \"USD\",\n  \"targetDate\": \"2027-06-01\",\n  \"payPalSubscriptionId\": \"I-ANA-SUB-01\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/goals"
+          }
+        },
+        {
+          "name": "2. Record Deposit #1 ($75)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
+          }
+        },
+        {
+          "name": "3. Record Deposit #2 ($75)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-2\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
+          }
+        },
+        {
+          "name": "4. Record Deposit #3 ($75)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-3\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
+          }
+        },
+        {
+          "name": "5. Record Deposit #4 ($75 -> 4-Month Streak Unlocked)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-4\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
+          }
+        },
+        {
+          "name": "6. List Member Savings Goals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/savings/members/{{memberId}}/goals"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feature 3: The Fair Loan Check",
+      "item": [
+        {
+          "name": "7. Grant Member Consent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Member-Id", "value": "{{memberId}}" }],
+            "url": "{{baseUrl}}/api/v1/underwriting/consent"
+          }
+        },
+        {
+          "name": "8. Run Fair Loan Check ($1,200 over 8 Months)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.assessmentId) { pm.collectionVariables.set('assessmentId', res.assessmentId); }",
+                  "pm.test('Assessment created (201)', () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Member-Id", "value": "{{memberId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"Commercial stand mixer for home bakery\",\n  \"requestedAmountCents\": 120000,\n  \"requestedTermMonths\": 8,\n  \"monthlyIncomes\": [\n    {\"yearMonth\": \"2026-05\", \"amountCents\": 165000},\n    {\"yearMonth\": \"2026-06\", \"amountCents\": 172000},\n    {\"yearMonth\": \"2026-07\", \"amountCents\": 118000},\n    {\"yearMonth\": \"2026-08\", \"amountCents\": 165000},\n    {\"yearMonth\": \"2026-09\", \"amountCents\": 170000},\n    {\"yearMonth\": \"2026-10\", \"amountCents\": 170000}\n  ],\n  \"statedMonthlyIncomeCents\": 160000,\n  \"statedMonthlyExpensesCents\": 90000\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/underwriting/assessments"
+          }
+        },
+        {
+          "name": "9. Member Flags Dispute Note on July Income",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Member-Id", "value": "{{memberId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"July was a two-week vacation closure; catering invoice paid in August.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/underwriting/assessments/{{assessmentId}}/dispute"
+          }
+        },
+        {
+          "name": "10. Officer Approves Fair Loan Check Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Id", "value": "{{officer1Id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"reason\": \"4/4 months on-time saving and steady bakery sales support $150/month.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/desk/underwriting/assessments/{{assessmentId}}/decision"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feature 2: Savings-Linked Microloans",
+      "item": [
+        {
+          "name": "11. Check Loan Ladder Eligibility",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Member-Id", "value": "{{memberId}}" }],
+            "url": "{{baseUrl}}/api/v1/loans/eligibility"
+          }
+        },
+        {
+          "name": "12. Submit $1,200 / 8-Month Loan Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.id) { pm.collectionVariables.set('applicationId', res.id); }",
+                  "pm.test('Application submitted (201)', () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Member-Id", "value": "{{memberId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"Commercial stand mixer for home bakery\",\n  \"requestedAmountCents\": 120000,\n  \"termMonths\": 8,\n  \"preferredDueDay\": 15,\n  \"payoutWallet\": \"VENMO\",\n  \"fairCheckConsented\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/loans/applications"
+          }
+        },
+        {
+          "name": "13. Officer 1 Approves (Maker -> PENDING_SECOND_APPROVAL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Staff-Id", "value": "{{officer1Id}}" }],
+            "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/approve"
+          }
+        },
+        {
+          "name": "14. Officer 2 Countersigns (Checker -> APPROVED)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Staff-Id", "value": "{{officer2Id}}" }],
+            "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/approve"
+          }
+        },
+        {
+          "name": "15. Disburse Loan (Registers Loan & Schedule Version 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.loanId) { pm.collectionVariables.set('loanId', res.loanId); }",
+                  "pm.test('Loan disbursed (200)', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/disburse"
+          }
+        },
+        {
+          "name": "16. View Generated 8-Month 0% Repayment Schedule (F4)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Seed-Member-Id", "value": "{{memberId}}" }],
+            "url": "{{baseUrl}}/api/v1/loans/{{loanId}}/schedule"
+          }
+        }
+      ]
+    }
+  ]
 }

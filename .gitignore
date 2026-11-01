@@ -50,3 +50,7 @@ pnpm-debug.log*
 
 # Local agent tooling (skills are restored from skills-lock.json)
 .claude/
+
+# jqwik property test database
+.jqwik-database
+**/.jqwik-database

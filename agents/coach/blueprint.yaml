@@ -1,5 +1,15 @@
 name: coach-agent
-model: gemini-1.5-pro
-role: read-only
-tools:
-  - openapi_spec: ../shared/agent-tools.yaml
+version: 1.0.0
+model: openrouter/primary-chain
+role: read-only-narrator
+feature: F1-F2-savings-and-loan-term-coach
+runtime_entry: com.paypalseed.agentgateway.application.usecases.SavingsCoachAgentRunner
+kill_switch_scope: coach-agent
+max_output_tokens: 400
+timeout_seconds: 10
+grounding:
+  enforce_allowed_dollar_figures: true
+  require_saving_and_loan_figures_in_en: true
+  forbid_credit_score_and_fee_terms: true
+  fallback_mode: deterministic_template
+tools: []
