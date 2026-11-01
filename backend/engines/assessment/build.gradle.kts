@@ -4,5 +4,6 @@ plugins {
 }
 dependencies {
     implementation(project(":platform:kernel"))
+    implementation(project(":engines:rules"))
     testImplementation("net.jqwik:jqwik:1.8.5")
 }
