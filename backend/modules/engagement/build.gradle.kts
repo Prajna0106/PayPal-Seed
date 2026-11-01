@@ -6,4 +6,5 @@ plugins {
 dependencies {
     implementation(project(":modules:lending"))
     implementation(project(":modules:payments"))
+    implementation(project(":modules:hardship"))
 }

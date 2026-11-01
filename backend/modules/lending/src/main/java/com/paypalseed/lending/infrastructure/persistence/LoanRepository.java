@@ -1,5 +1,7 @@
 package com.paypalseed.lending.infrastructure.persistence;
 
+import static com.paypalseed.lending.infrastructure.persistence.jooq.Tables.INSTALMENT;
+import static com.paypalseed.lending.infrastructure.persistence.jooq.Tables.INSTALMENT_ALLOCATION;
 import static com.paypalseed.lending.infrastructure.persistence.jooq.Tables.LOAN;
 
 import com.paypalseed.engines.schedule.Bucket;
@@ -14,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -120,6 +123,29 @@ public class LoanRepository {
         Condition condition = LOAN.STATUS.eq(LoanStatus.ACTIVE.name())
                 .and(LOAN.LAST_CLOSED_ON.isNull().or(LOAN.LAST_CLOSED_ON.lt(date)))
                 .and(LOAN.SHARD.in(LoanRow.shardsOfGroup(shardGroup, shardCount)));
+        if (after != null) {
+            condition = condition.and(LOAN.ID.gt(after));
+        }
+        return dsl.select(LOAN.ID).from(LOAN).where(condition).orderBy(LOAN.ID).limit(limit).fetch(LOAN.ID);
+    }
+
+    /**
+     * F5 scan work list: active loans of one shard group whose oldest owed instalment of the current version
+     * is due between {@code from} and {@code to}, in id order after {@code after} (keyset paging).
+     */
+    public List<UUID> hardshipScanCandidates(LocalDate from, LocalDate to, int shardGroup, int shardCount, int limit, UUID after) {
+        var oldestOwedDue = DSL.select(DSL.min(INSTALMENT.DUE_DATE))
+                .from(INSTALMENT)
+                .leftJoin(INSTALMENT_ALLOCATION).on(INSTALMENT_ALLOCATION.LOAN_ID.eq(INSTALMENT.LOAN_ID)
+                        .and(INSTALMENT_ALLOCATION.VERSION.eq(INSTALMENT.VERSION))
+                        .and(INSTALMENT_ALLOCATION.SEQ.eq(INSTALMENT.SEQ)))
+                .where(INSTALMENT.LOAN_ID.eq(LOAN.ID)
+                        .and(INSTALMENT.VERSION.eq(LOAN.CURRENT_VERSION))
+                        .and(INSTALMENT.AMOUNT_CENTS.gt(DSL.coalesce(INSTALMENT_ALLOCATION.PAID_CENTS, 0L))))
+                .asField();
+        Condition condition = LOAN.STATUS.eq(LoanStatus.ACTIVE.name())
+                .and(LOAN.SHARD.in(LoanRow.shardsOfGroup(shardGroup, shardCount)))
+                .and(oldestOwedDue.between(from, to));
         if (after != null) {
             condition = condition.and(LOAN.ID.gt(after));
         }

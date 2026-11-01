@@ -58,6 +58,23 @@ public final class LendingDtos {
     public record ReschedulePreview(ScheduleView current, ScheduleView proposed, ScheduleDiffView diff) {
     }
 
+    public record OwedLine(int seq, LocalDate dueDate, long amountCents, long remainingCents) {
+    }
+
+    /**
+     * What F5's scorecard needs from lending, computed fresh for {@code asOf}. The target is the oldest
+     * instalment with money still owed; its fields are null when nothing is owed.
+     */
+    public record RiskFacts(UUID loanId, UUID memberId, String status, String bucket, int dpd, int scheduleVersion,
+                            int dueDay, long outstandingCents, Integer targetSeq, LocalDate targetDueDate,
+                            Long targetAmountCents, Long targetRemainingCents, int failedChargesLast14Days,
+                            boolean failedTwiceOnTarget, boolean lateWithin90Days, long pendingCents, boolean hardshipOpen,
+                            List<OwedLine> owed) {
+        public RiskFacts {
+            owed = List.copyOf(owed);
+        }
+    }
+
     public record LoanSummary(UUID loanId, UUID memberId, long principalCents, long outstandingCents, String status,
                               String collectionMode, String bucket, int dpd, int currentVersion) {
     }

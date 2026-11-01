@@ -56,4 +56,16 @@ class ModulithArchitectureTest {
                 .should().dependOnClassesThat().resideInAPackage("org.jooq..")
                 .check(CLASSES);
     }
+
+    /** The Guardian sees the platform only through the agent gateway and hardship's read API: no write path exists. */
+    @Test
+    void guardianReachesNothingButTheGatewayAndHardshipApis() {
+        noClasses().that().resideInAPackage("com.paypalseed.guardian..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.paypalseed.lending..", "com.paypalseed.governance..",
+                        "com.paypalseed.payments..", "com.paypalseed.ledger..", "com.paypalseed.underwriting..",
+                        "com.paypalseed.engagement..", "com.paypalseed.agentgateway.application..",
+                        "com.paypalseed.agentgateway.infrastructure..", "com.paypalseed.hardship.application..",
+                        "com.paypalseed.hardship.infrastructure..", "org.jooq..", "java.sql..")
+                .check(CLASSES);
+    }
 }
