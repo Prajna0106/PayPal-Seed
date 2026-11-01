@@ -2,6 +2,7 @@ package com.paypalseed;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.TimeZone;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.modulith.Modulithic;
@@ -21,7 +22,12 @@ public class SeedApplication {
 
     static final Set<String> ROLES = Set.of("api", "ingress", "worker");
 
+    static {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+    }
+
     public static void main(String[] args) {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
         String role = System.getenv().getOrDefault("SEED_ROLE", "api").toLowerCase(Locale.ROOT);
         if (!ROLES.contains(role)) {
             throw new IllegalArgumentException("SEED_ROLE must be one of " + ROLES + " but was " + role);
