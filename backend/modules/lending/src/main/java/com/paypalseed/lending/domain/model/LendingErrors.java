@@ -34,6 +34,20 @@ public final class LendingErrors {
     public static final ErrorCode HOLD_NOT_APPLICABLE =
             ErrorCode.validation("hold-not-applicable", "The instalment is not owed in the current schedule version");
 
+    // Feature 2: Savings-linked microloans
+    public static final ErrorCode APPLICATION_NOT_FOUND =
+            ErrorCode.notFound("application-not-found", "Loan application not found");
+    public static final ErrorCode INELIGIBLE_FOR_LOAN =
+            ErrorCode.validation("ineligible-for-loan", "Member is not currently eligible for a microloan");
+    public static final ErrorCode SIZING_RULE_VIOLATION =
+            ErrorCode.validation("sizing-rule-violation", "Requested loan exceeds safe affordability or tier limits");
+    public static final ErrorCode MAKER_CHECKER_SAME_OFFICER =
+            ErrorCode.conflict("maker-checker-same-officer", "Two different loan officers must approve a microloan");
+    public static final ErrorCode APPLICATION_INVALID_STATE =
+            ErrorCode.conflict("application-invalid-state", "Loan application is not in a valid state for this action");
+    public static final ErrorCode COOLING_OFF_EXPIRED =
+            ErrorCode.conflict("cooling-off-expired", "The 48-hour cooling-off return window has expired");
+
     private LendingErrors() {
     }
 }

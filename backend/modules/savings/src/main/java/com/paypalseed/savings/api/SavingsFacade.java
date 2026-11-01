@@ -1,10 +1,11 @@
 package com.paypalseed.savings.api;
 
 import com.paypalseed.platform.kernel.Money;
+import com.paypalseed.savings.api.dto.MemberSavingsSummary;
 
 /**
  * PUBLIC API facade for the savings bounded context.
- * Only this package may be imported by other modules (such as payments).
+ * Only this package may be imported by other modules (such as payments and lending).
  */
 public interface SavingsFacade {
 
@@ -23,4 +24,11 @@ public interface SavingsFacade {
      * @param subscriptionId PayPal subscription ID
      */
     void pauseGoalBySubscription(String subscriptionId);
+
+    /**
+     * Returns the savings consistency and balance summary for a member, used by lending eligibility (Feature 2).
+     */
+    default MemberSavingsSummary getMemberSavingsSummary(String memberId) {
+        return new MemberSavingsSummary(memberId, 0, 0, 0, 0L, 0L, false);
+    }
 }

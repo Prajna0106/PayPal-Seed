@@ -5,6 +5,10 @@ plugins {
 }
 dependencies {
     implementation(project(":engines:schedule"))
+    implementation(project(":engines:rules"))
     implementation(project(":modules:ledger"))
     implementation(project(":modules:payments"))
+    implementation(project(":modules:savings"))
+    implementation(project(":modules:underwriting"))
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
