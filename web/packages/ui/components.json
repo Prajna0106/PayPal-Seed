@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles/globals.css",
+    "baseColor": "stone",
+    "cssVariables": true
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@paypal-seed/ui/components",
+    "utils": "@paypal-seed/ui/lib/utils",
+    "hooks": "@paypal-seed/ui/hooks",
+    "lib": "@paypal-seed/ui/lib",
+    "ui": "@paypal-seed/ui/components"
+  }
+}

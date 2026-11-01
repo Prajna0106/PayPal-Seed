@@ -66,7 +66,20 @@ paths:
                 dueDay: { type: integer, minimum: 1, maximum: 31 }
                 disbursedOn: { type: string, format: date }
                 disbursementRef: { type: string, maxLength: 128 }
-      responses: { '201': { description: Loan summary } }
+      responses:
+        '201':
+          description: Loan summary (the same shape as LoanSummary in seed-api.yaml)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [loanId, memberId, principalCents, outstandingCents, status]
+                properties:
+                  loanId: { type: string, format: uuid }
+                  memberId: { type: string, format: uuid }
+                  principalCents: { type: integer, format: int64 }
+                  outstandingCents: { type: integer, format: int64 }
+                  status: { type: string }
   /internal/loans/{loanId}/reschedules:
     post:
       summary: Apply an approved hardship option as a new schedule version (F5 governance calls this)

@@ -1,5 +1,22 @@
 {
   "name": "@paypal-seed/config",
   "version": "1.0.0",
-  "main": "./src/index.ts"
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/nextjs.json": "./tsconfig/nextjs.json",
+    "./tsconfig/library.json": "./tsconfig/library.json",
+    "./eslint/library": "./eslint/library.js",
+    "./eslint/next": "./eslint/next.js"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint-config-next": "16.4.3",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.72.1"
+  },
+  "peerDependencies": {
+    "eslint": "^9.39.0"
+  }
 }

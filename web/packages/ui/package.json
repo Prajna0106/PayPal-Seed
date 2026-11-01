@@ -1,5 +1,47 @@
 {
   "name": "@paypal-seed/ui",
   "version": "1.0.0",
-  "main": "./src/index.ts"
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    "./styles.css": "./src/styles/globals.css",
+    "./components/*": "./src/components/*.tsx",
+    "./brand/*": "./src/brand/*.tsx",
+    "./lib/*": "./src/lib/*.ts",
+    "./hooks/*": "./src/hooks/*.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^1.66.0",
+    "radix-ui": "^1.8.1",
+    "recharts": "3.8.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@paypal-seed/config": "workspace:*",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.39.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
 }
