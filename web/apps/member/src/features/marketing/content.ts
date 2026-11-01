@@ -5,19 +5,69 @@
  */
 
 export const NAV_LINKS = [
+  { href: "#inclusion", label: "Who it is for" },
   { href: "#journey", label: "How it works" },
   { href: "#safety-net", label: "Safety net" },
   { href: "#trust", label: "Trust" },
-  { href: "#officers", label: "For officers" },
   { href: "#faq", label: "FAQ" },
 ] as const;
 
+export const HERO_CHECKS = ["No credit score", "0% interest", "$0 fees", "Starts at $5 a month"] as const;
+
+/** An example, not a quote: three months of $25 saving unlocking a first loan. */
+export const HERO_CARD = {
+  goal: "Emergency buffer",
+  saved: "$75",
+  cadence: "$25 a month, three months in a row",
+  months: ["Month 1", "Month 2", "Month 3"],
+  loan: "$300",
+  terms: "6 payments of $50. No fees, and no credit check.",
+} as const;
+
 export const PROOF_POINTS = [
+  { value: "$5", label: "a month is enough to start saving" },
+  { value: "0", label: "credit scores needed to qualify" },
   { value: "0%", label: "interest on every loan" },
   { value: "$0", label: "fees, including for paying early or late" },
   { value: "2", label: "different officers approve a pause or a new plan" },
-  { value: "12", label: "checks on every message the AI writes" },
-  { value: "270+", label: "automated tests on the money logic" },
+] as const;
+
+export const AUDIENCES = [
+  {
+    icon: "gig",
+    title: "Gig and freelance workers",
+    body: "Income that changes week to week, and lenders who only trust a steady paycheque.",
+  },
+  {
+    icon: "new",
+    title: "New to credit",
+    body: "No score and no history, so no one will lend. Seed looks at saving and PayPal activity instead.",
+  },
+  {
+    icon: "cash",
+    title: "People who save outside banks",
+    body: "Cash and wallet savers who never had a reason, or a way, to open an account.",
+  },
+  {
+    icon: "young",
+    title: "Young adults and newcomers",
+    body: "Real earnings, too little history. A first fair loan that builds a record.",
+  },
+] as const satisfies ReadonlyArray<{ icon: "gig" | "new" | "cash" | "young"; title: string; body: string }>;
+
+export const COMPARISON = [
+  { label: "Credit score", typical: "Usually required", seed: "Never needed" },
+  { label: "Cost of borrowing", typical: "Interest, plus fees", seed: "0% interest, $0 fees" },
+  {
+    label: "When a month goes wrong",
+    typical: "Late fees, then collections",
+    seed: "We reach out first, and a person approves a fix",
+  },
+  {
+    label: "Where it lives",
+    typical: "A branch or a separate app",
+    seed: "Inside the PayPal app you already use",
+  },
 ] as const;
 
 export type JourneyTone = "mint" | "peach" | "lavender" | "sky" | "rose";
@@ -181,6 +231,14 @@ export const BUILT_WITH = [
 ] as const;
 
 export const FAQS = [
+  {
+    q: "Who is Seed for?",
+    a: "People who are underbanked: no bank account, no credit score, or an income that moves around. If you earn and save but lenders keep saying no, Seed starts from what you already do in PayPal.",
+  },
+  {
+    q: "Do I need a credit score or a bank account?",
+    a: "No credit score. Seed looks at steady saving and, with your consent, your own PayPal income. In the demo everything runs on a PayPal account.",
+  },
   {
     q: "Is the loan really 0%?",
     a: "Yes. Loans carry 0% interest and no fees: not for paying early, not for paying late, and not for any hardship option.",

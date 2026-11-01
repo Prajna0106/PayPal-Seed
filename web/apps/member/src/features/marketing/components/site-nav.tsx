@@ -11,18 +11,21 @@ import { NAV_LINKS } from "../content";
  */
 export function SiteNav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-hairline/70 bg-canvas/80 backdrop-blur-md supports-[backdrop-filter]:bg-canvas/70">
-      <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-6">
-        <Link href="/" aria-label="PayPal Seed home" className="rounded-full">
-          <Wordmark />
+    <header className="sticky top-0 z-40 border-b border-hairline/70 bg-canvas/80 backdrop-blur-md supports-backdrop-filter:bg-canvas/70">
+      <nav
+        aria-label="Main"
+        className="mx-auto grid h-16 max-w-6xl grid-cols-[auto_1fr] items-center gap-6 px-6 lg:grid-cols-[1fr_auto_1fr]"
+      >
+        <Link href="/" aria-label="PayPal Seed home" className="justify-self-start rounded-full">
+          <Wordmark markClassName="size-8" />
         </Link>
 
-        <ul className="hidden items-center gap-1 lg:flex">
+        <ul className="hidden items-center gap-0.5 lg:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <a
                 href={link.href}
-                className="rounded-full px-3 py-2 text-[15px] font-medium text-body transition-colors hover:text-ink"
+                className="inline-flex h-10 items-center rounded-full px-3.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-strong hover:text-ink"
               >
                 {link.label}
               </a>
@@ -30,14 +33,14 @@ export function SiteNav() {
           ))}
         </ul>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-1.5">
           <a
             href={DESK_URL}
-            className="hidden rounded-full px-3 py-2 text-[15px] font-medium text-body transition-colors hover:text-ink sm:inline-flex"
+            className="hidden h-10 items-center rounded-full px-3.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-strong hover:text-ink sm:inline-flex"
           >
             Officer desk
           </a>
-          <Button asChild>
+          <Button asChild className="h-10 px-5 text-[15px]">
             <Link href="/login">Open the demo</Link>
           </Button>
 
