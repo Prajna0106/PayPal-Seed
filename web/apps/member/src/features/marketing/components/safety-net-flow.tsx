@@ -1,6 +1,8 @@
 import { GradientOrb } from "@paypal-seed/ui/brand/gradient-orb";
 import { Info } from "lucide-react";
 import { BRANCHES, FLOW_STEPS } from "../content";
+import { Reveal } from "./motion";
+import { OfferGlimpse } from "./offer-glimpse";
 import { Section } from "./section";
 
 /** The safety net as an ordered list plus the A–D branches: real markup, readable by screen readers in order. */
@@ -35,33 +37,36 @@ export function SafetyNetFlow() {
           ))}
         </ol>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_1.4fr] lg:items-start">
+        <div className="mt-12 grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
           <div>
             <h3 className="text-display-sm text-ink">Then the member chooses, and the right people approve.</h3>
             <p className="mt-3 text-[15px] leading-relaxed text-body">
               Small changes are approved by policy at once. Anything that reshapes the plan needs two different
               officers, and the database refuses a second signature from the same person.
             </p>
-          </div>
-          <ul className="grid gap-3 sm:grid-cols-2" aria-label="The four options and who approves them">
-            {BRANCHES.map((branch) => (
-              <li key={branch.label} className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-4">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-medium text-white"
-                >
-                  {branch.label}
-                </span>
-                <span>
-                  <span className="block text-[15px] font-medium text-ink">
-                    <span className="sr-only">Option {branch.label}: </span>
-                    {branch.title}
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2" aria-label="The four options and who approves them">
+              {BRANCHES.map((branch) => (
+                <li key={branch.label} className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-4">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-medium text-white"
+                  >
+                    {branch.label}
                   </span>
-                  <span className="mt-0.5 block text-sm text-body">{branch.outcome}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <span>
+                    <span className="block text-[15px] font-medium text-ink">
+                      <span className="sr-only">Option {branch.label}: </span>
+                      {branch.title}
+                    </span>
+                    <span className="mt-0.5 block text-sm text-body">{branch.outcome}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Reveal>
+            <OfferGlimpse className="mx-auto w-full max-w-md lg:max-w-none" />
+          </Reveal>
         </div>
 
         <p className="mt-8 flex items-start gap-3 rounded-xl border border-gradient-peach/70 bg-warning-soft/60 px-5 py-4 text-[15px] text-ink">
