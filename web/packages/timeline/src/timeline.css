@@ -1,0 +1,67 @@
+/*
+ * Bryntum Scheduler Pro dressed in the Seed tokens (web/DESIGN.md). Fallbacks keep it readable if a token is not
+ * emitted on the page.
+ */
+.seed-timeline {
+  margin: 0;
+}
+
+.seed-timeline__chart {
+  overflow: hidden;
+  border: 1px solid var(--color-hairline, #e7e5e4);
+  border-radius: var(--radius-xl, 16px);
+  background: var(--color-surface, #ffffff);
+}
+
+.seed-timeline .b-schedulerpro,
+.seed-timeline .b-grid-header,
+.seed-timeline .b-sch-event {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+.seed-timeline .b-grid-header-container,
+.seed-timeline .b-grid-headers {
+  background: var(--color-canvas-soft, #fafafa);
+}
+
+.seed-timeline .b-grid-cell {
+  color: var(--color-ink, #0c0a09);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* One-day instalments would be slivers on a monthly axis: give each chip room for its amount. */
+.seed-timeline .b-sch-event-wrap {
+  min-width: 3.25rem;
+}
+
+.seed-timeline .b-sch-event {
+  border-radius: var(--radius-pill, 9999px);
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: center;
+}
+
+.seed-timeline .b-sch-event-wrap.seed-ghost .b-sch-event {
+  opacity: 0.7;
+}
+
+.seed-timeline .b-timerange.seed-grace {
+  background: color-mix(in srgb, var(--color-gradient-peach, #f4c5a8) 22%, transparent);
+}
+
+.seed-timeline .b-timerange.seed-today {
+  border-inline-start: 2px solid var(--color-ink, #0c0a09);
+}
+
+.seed-timeline .b-sch-dependency.seed-shift {
+  stroke: var(--color-muted-ink, #777169);
+  stroke-dasharray: 4 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seed-timeline * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
