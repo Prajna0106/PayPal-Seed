@@ -3,19 +3,25 @@ package com.paypalseed.underwriting;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.ErrorCode;
 import com.paypalseed.platform.kernel.Money;
+import com.paypalseed.platform.security.ActorArgumentResolver;
+import com.paypalseed.platform.security.ActorAuthentication;
 import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
+import com.paypalseed.underwriting.api.UnderwritingFacade;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
 import com.paypalseed.underwriting.application.usecases.FairLoanCheckService;
 import com.paypalseed.underwriting.application.usecases.FairLoanCheckService.RunFairCheckCommand;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment.OfficerDecisionType;
 import com.paypalseed.underwriting.domain.model.UnderwritingErrors;
 import com.paypalseed.underwriting.infrastructure.persistence.UnderwritingRepository;
 import com.paypalseed.underwriting.infrastructure.web.UnderwritingController;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,6 +38,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,7 +46,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UnderwritingUnitTest {
 
     private static final UUID ANA_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID BOB_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID OFFICER_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final List<IncomeMonthDto> RECORDED_INCOME = List.of(
+        new IncomeMonthDto("2026-05", 165_000L),
+        new IncomeMonthDto("2026-06", 172_000L),
+        new IncomeMonthDto("2026-07", 118_000L),
+        new IncomeMonthDto("2026-08", 165_000L),
+        new IncomeMonthDto("2026-09", 170_000L),
+        new IncomeMonthDto("2026-10", 170_000L)
+    );
+    private static final String ASSESSMENT_JSON = """
+        {
+          "purpose": "Commercial stand mixer",
+          "requestedAmountCents": 120000,
+          "requestedTermMonths": 8,
+          "statedMonthlyIncomeCents": 160000,
+          "statedMonthlyExpensesCents": 90000
+        }
+        """;
 
     private UnderwritingRepository repository;
     private FairLoanCheckService service;
@@ -53,6 +79,7 @@ class UnderwritingUnitTest {
                 case NOT_FOUND -> HttpStatus.NOT_FOUND;
                 case CONFLICT -> HttpStatus.CONFLICT;
                 case FORBIDDEN -> HttpStatus.FORBIDDEN;
+                case UNAUTHENTICATED -> HttpStatus.UNAUTHORIZED;
                 case VALIDATION -> HttpStatus.UNPROCESSABLE_ENTITY;
                 case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
                 default -> HttpStatus.BAD_REQUEST;
@@ -81,10 +108,145 @@ class UnderwritingUnitTest {
         };
 
         service = new FairLoanCheckService(repository, savingsFacade);
-        UnderwritingController controller = new UnderwritingController(service);
+        UnderwritingFacade underwriting = new UnderwritingFacade() {
+            @Override
+            public Optional<IncomeSummary> incomeSummary(UUID memberId, LocalDate asOf) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<IncomeMonthDto> consentedMonthlyIncomes(UUID memberId) {
+                return RECORDED_INCOME;
+            }
+        };
+        UnderwritingController controller = new UnderwritingController(service, underwriting);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
+            .setCustomArgumentResolvers(new ActorArgumentResolver(new ActorAuthentication("", true)))
             .setControllerAdvice(new TestErrorAdvice())
             .build();
+    }
+
+    private static MockHttpServletRequestBuilder asMember(UUID memberId, MockHttpServletRequestBuilder request) {
+        return request.header("X-Seed-Member-Id", memberId.toString());
+    }
+
+    private static MockHttpServletRequestBuilder asStaff(String roles, MockHttpServletRequestBuilder request) {
+        return request.header("X-Seed-Staff-Id", OFFICER_ID.toString()).header("X-Seed-Staff-Roles", roles);
+    }
+
+    private String runAssessmentAs(UUID memberId) throws Exception {
+        mockMvc.perform(asMember(memberId, post("/api/v1/underwriting/consent"))).andExpect(status().isOk());
+        MvcResult result = mockMvc.perform(asMember(memberId, post("/api/v1/underwriting/assessments"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ASSESSMENT_JSON))
+            .andExpect(status().isCreated())
+            .andReturn();
+        return result.getResponse().getContentAsString().replaceAll(".*\"assessmentId\":\"([^\"]+)\".*", "$1");
+    }
+
+    @Test
+    void assessmentUsesRecordedIncome_notIncomeOrIdsFromTheRequest() throws Exception {
+        mockMvc.perform(asMember(ANA_ID, post("/api/v1/underwriting/consent"))).andExpect(status().isOk());
+
+        mockMvc.perform(asMember(ANA_ID, post("/api/v1/underwriting/assessments"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "%s",
+                      "purpose": "Fake riches",
+                      "requestedAmountCents": 120000,
+                      "requestedTermMonths": 8,
+                      "monthlyIncomes": [{"yearMonth": "2026-10", "amountCents": 99999999}],
+                      "statedMonthlyIncomeCents": 99999999,
+                      "statedMonthlyExpensesCents": 0,
+                      "completedLoansOnTime": 50
+                    }
+                    """.formatted(BOB_ID)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.memberId").value(ANA_ID.toString()))
+            .andExpect(jsonPath("$.averageMonthlyIncomeCents").value(160000))
+            .andExpect(jsonPath("$.usedFallbackStatedIncome").value(false));
+    }
+
+    @Test
+    void everyRouteRejectsAnonymousCallers() throws Exception {
+        String id = runAssessmentAs(ANA_ID);
+        List<MockHttpServletRequestBuilder> anonymous = List.of(
+            get("/api/v1/underwriting/consent").param("memberId", ANA_ID.toString()),
+            post("/api/v1/underwriting/consent").param("memberId", ANA_ID.toString()),
+            delete("/api/v1/underwriting/consent").param("memberId", ANA_ID.toString()),
+            post("/api/v1/underwriting/assessments").contentType(MediaType.APPLICATION_JSON).content(ASSESSMENT_JSON),
+            get("/api/v1/underwriting/assessments").param("memberId", ANA_ID.toString()),
+            get("/api/v1/underwriting/assessments/" + id),
+            post("/api/v1/underwriting/assessments/" + id + "/dispute").param("memberId", ANA_ID.toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"x\"}"),
+            get("/api/v1/desk/underwriting/assessments"),
+            post("/api/v1/desk/underwriting/assessments/" + id + "/decision")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"officerId\":\"" + OFFICER_ID + "\",\"decision\":\"APPROVED\",\"reason\":\"x\"}")
+        );
+
+        for (MockHttpServletRequestBuilder request : anonymous) {
+            mockMvc.perform(request).andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Test
+    void oldIdentityHeadersGrantNothing() throws Exception {
+        mockMvc.perform(post("/api/v1/underwriting/consent").header("X-Member-Id", ANA_ID.toString()))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/desk/underwriting/assessments").header("X-Staff-Id", OFFICER_ID.toString()))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anotherMembersAssessmentAndConsentAreOutOfReach() throws Exception {
+        String id = runAssessmentAs(ANA_ID);
+
+        mockMvc.perform(asMember(BOB_ID, get("/api/v1/underwriting/assessments/" + id)))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(asMember(BOB_ID, post("/api/v1/underwriting/assessments/" + id + "/dispute"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"x\"}"))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(asMember(BOB_ID, get("/api/v1/underwriting/assessments")).param("memberId", ANA_ID.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(asMember(BOB_ID, delete("/api/v1/underwriting/consent")).param("memberId", ANA_ID.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.memberId").value(BOB_ID.toString()));
+        mockMvc.perform(asMember(ANA_ID, get("/api/v1/underwriting/consent")))
+            .andExpect(jsonPath("$.consented").value(true));
+    }
+
+    @Test
+    void deskRoutesNeedTheRightRole() throws Exception {
+        String id = runAssessmentAs(ANA_ID);
+        String decision = "{\"decision\":\"APPROVED\",\"reason\":\"x\"}";
+
+        mockMvc.perform(asMember(ANA_ID, get("/api/v1/desk/underwriting/assessments")))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(asMember(ANA_ID, post("/api/v1/desk/underwriting/assessments/" + id + "/decision"))
+                .contentType(MediaType.APPLICATION_JSON).content(decision))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(asStaff("", get("/api/v1/underwriting/assessments/" + id)))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(asStaff("ADMIN", post("/api/v1/desk/underwriting/assessments/" + id + "/decision"))
+                .contentType(MediaType.APPLICATION_JSON).content(decision))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(asStaff("CHECKER", get("/api/v1/underwriting/assessments/" + id)))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void officerDecisionRecordsTheSignedInOfficer_notOneFromTheBody() throws Exception {
+        String id = runAssessmentAs(ANA_ID);
+
+        mockMvc.perform(asStaff("OFFICER", post("/api/v1/desk/underwriting/assessments/" + id + "/decision"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"officerId\":\"" + BOB_ID + "\",\"decision\":\"APPROVED\",\"reason\":\"steady\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.officerId").value(OFFICER_ID.toString()));
     }
 
     @Test
@@ -120,34 +282,14 @@ class UnderwritingUnitTest {
     @Test
     void memberDisputeAndOfficerDecision_areRecordedWithAuditReasonsOverHttp() throws Exception {
         // 1. Grant consent
-        mockMvc.perform(post("/api/v1/underwriting/consent")
-                .header("X-Member-Id", ANA_ID.toString()))
+        mockMvc.perform(asMember(ANA_ID, post("/api/v1/underwriting/consent")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.consented").value(true));
 
         // 2. Run Fair Loan Check
-        String assessmentJson = """
-        {
-          "purpose": "Commercial stand mixer",
-          "requestedAmountCents": 120000,
-          "requestedTermMonths": 8,
-          "monthlyIncomes": [
-            {"yearMonth": "2026-05", "amountCents": 165000},
-            {"yearMonth": "2026-06", "amountCents": 172000},
-            {"yearMonth": "2026-07", "amountCents": 118000},
-            {"yearMonth": "2026-08", "amountCents": 165000},
-            {"yearMonth": "2026-09", "amountCents": 170000},
-            {"yearMonth": "2026-10", "amountCents": 170000}
-          ],
-          "statedMonthlyIncomeCents": 160000,
-          "statedMonthlyExpensesCents": 90000
-        }
-        """;
-
-        MvcResult result = mockMvc.perform(post("/api/v1/underwriting/assessments")
-                .header("X-Member-Id", ANA_ID.toString())
+        MvcResult result = mockMvc.perform(asMember(ANA_ID, post("/api/v1/underwriting/assessments"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(assessmentJson))
+                .content(ASSESSMENT_JSON))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.recommended").value(true))
             .andExpect(jsonPath("$.averageMonthlyIncomeCents").value(160000))
@@ -161,8 +303,7 @@ class UnderwritingUnitTest {
         String assessmentId = body.replaceAll(".*\"assessmentId\":\"([^\"]+)\".*", "$1");
 
         // 3. Member flags a number dispute note
-        mockMvc.perform(post("/api/v1/underwriting/assessments/" + assessmentId + "/dispute")
-                .header("X-Member-Id", ANA_ID.toString())
+        mockMvc.perform(asMember(ANA_ID, post("/api/v1/underwriting/assessments/" + assessmentId + "/dispute"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"note\":\"July was a two-week vacation closure; catering invoice paid in August.\"}"))
             .andExpect(status().isOk())
@@ -170,8 +311,7 @@ class UnderwritingUnitTest {
             .andExpect(jsonPath("$.memberDisputeNote").value("July was a two-week vacation closure; catering invoice paid in August."));
 
         // 4. Loan officer reviews and records decision
-        mockMvc.perform(post("/api/v1/desk/underwriting/assessments/" + assessmentId + "/decision")
-                .header("X-Staff-Id", OFFICER_ID.toString())
+        mockMvc.perform(asStaff("OFFICER", post("/api/v1/desk/underwriting/assessments/" + assessmentId + "/decision"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"decision\":\"APPROVED\",\"reason\":\"4/4 months on-time saving and steady bakery sales support $150/month.\"}"))
             .andExpect(status().isOk())
@@ -180,8 +320,7 @@ class UnderwritingUnitTest {
             .andExpect(jsonPath("$.officerReason").value("4/4 months on-time saving and steady bakery sales support $150/month."));
 
         // 5. Revoke consent
-        mockMvc.perform(delete("/api/v1/underwriting/consent")
-                .header("X-Member-Id", ANA_ID.toString()))
+        mockMvc.perform(asMember(ANA_ID, delete("/api/v1/underwriting/consent")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.consented").value(false));
     }

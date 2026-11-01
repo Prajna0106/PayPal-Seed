@@ -1,6 +1,5 @@
-# Demo: shared business date that the demo clock moves, and developer header authentication.
+# Demo: shared business date that the demo clock moves. Dev headers stay off, so a public demo needs a real
+# sign-in; add the dev profile (demo,dev) only for a demo running on your own machine.
 seed:
   clock:
     mode: database
-  security:
-    dev-header-auth: true

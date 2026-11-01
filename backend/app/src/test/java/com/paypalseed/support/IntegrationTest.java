@@ -69,6 +69,12 @@ public abstract class IntegrationTest {
 
         @Bean
         @Primary
+        FakePayPalLogin fakePayPalLogin() {
+            return new FakePayPalLogin();
+        }
+
+        @Bean
+        @Primary
         FakeLlm fakeLlm() {
             return new FakeLlm();
         }

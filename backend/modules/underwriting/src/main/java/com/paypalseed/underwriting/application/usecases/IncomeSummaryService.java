@@ -88,10 +88,12 @@ public class IncomeSummaryService implements UnderwritingFacade {
     @Override
     @Transactional(readOnly = true)
     public OptionalLong verifiedMonthlyIncomeCents(UUID memberId, LocalDate asOf) {
-        if (fairLoanCheck != null) {
-            List<FairCheckCardView> existing = fairLoanCheck.listMemberAssessments(memberId);
-            if (!existing.isEmpty() && existing.get(0).averageMonthlyIncomeCents() > 0) {
-                return OptionalLong.of(existing.get(0).averageMonthlyIncomeCents());
+        if (fairLoanCheck != null && fairLoanCheck.getConsentStatus(memberId).consented()) {
+            Optional<FairCheckCardView> latest = fairLoanCheck.listMemberAssessments(memberId).stream()
+                .filter(card -> !card.usedFallbackStatedIncome())
+                .findFirst();
+            if (latest.isPresent() && latest.get().averageMonthlyIncomeCents() > 0) {
+                return OptionalLong.of(latest.get().averageMonthlyIncomeCents());
             }
         }
         LocalDate effectiveDate = asOf != null ? asOf : (clock != null ? clock.today() : LocalDate.now());
@@ -123,18 +125,8 @@ public class IncomeSummaryService implements UnderwritingFacade {
         fairLoanCheck.grantConsent(memberId);
 
         LocalDate today = clock != null ? clock.today() : LocalDate.now();
-        List<IncomeMonthDto> monthlyIncomes = new ArrayList<>();
-        Optional<IncomeSummary> summary = incomeSummary(memberId, today);
-        if (summary.isPresent() && summary.get().activeWeeks() > 0) {
-            List<Long> weeks = summary.get().weeklyInflowCents();
-            long m1 = weeks.subList(0, 4).stream().mapToLong(Long::longValue).sum();
-            long m2 = weeks.subList(4, 8).stream().mapToLong(Long::longValue).sum();
-            long m3 = weeks.subList(8, 13).stream().mapToLong(Long::longValue).sum() * 4L / 5L;
-            YearMonth ym = YearMonth.from(today);
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(3).toString(), m1));
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(2).toString(), m2));
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(1).toString(), m3));
-        } else if (statedMonthlyIncomeCents > 0) {
+        List<IncomeMonthDto> monthlyIncomes = new ArrayList<>(consentedMonthlyIncomes(memberId));
+        if (monthlyIncomes.isEmpty() && statedMonthlyIncomeCents > 0) {
             YearMonth ym = YearMonth.from(today);
             for (int i = 6; i >= 1; i--) {
                 monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(i).toString(), statedMonthlyIncomeCents));
@@ -156,6 +148,26 @@ public class IncomeSummaryService implements UnderwritingFacade {
             )
         );
         return Optional.of(card);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<IncomeMonthDto> consentedMonthlyIncomes(UUID memberId) {
+        LocalDate today = clock != null ? clock.today() : LocalDate.now();
+        Optional<IncomeSummary> summary = incomeSummary(memberId, today);
+        if (summary.isEmpty() || summary.get().activeWeeks() == 0) {
+            return List.of();
+        }
+        List<Long> weeks = summary.get().weeklyInflowCents();
+        long m1 = weeks.subList(0, 4).stream().mapToLong(Long::longValue).sum();
+        long m2 = weeks.subList(4, 8).stream().mapToLong(Long::longValue).sum();
+        long m3 = weeks.subList(8, 13).stream().mapToLong(Long::longValue).sum() * 4L / 5L;
+        YearMonth ym = YearMonth.from(today);
+        return List.of(
+            new IncomeMonthDto(ym.minusMonths(3).toString(), m1),
+            new IncomeMonthDto(ym.minusMonths(2).toString(), m2),
+            new IncomeMonthDto(ym.minusMonths(1).toString(), m3)
+        );
     }
 
     @Override

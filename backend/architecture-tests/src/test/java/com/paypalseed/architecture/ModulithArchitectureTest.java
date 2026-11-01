@@ -1,11 +1,18 @@
 package com.paypalseed.architecture;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.paypalseed.SeedApplication;
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.core.ApplicationModules;
 
@@ -28,6 +35,36 @@ class ModulithArchitectureTest {
         noClasses().that().resideInAPackage("com.paypalseed.engines..").and().doNotHaveSimpleName("package-info")
                 .should().dependOnClassesThat().resideInAnyPackage("org.springframework..", "java.sql..", "java.net..",
                         "javax.sql..", "com.paypalseed.modules..", "com.paypalseed.lending..", "com.paypalseed.payments..")
+                .check(CLASSES);
+    }
+
+    /**
+     * Every route asks for an Actor or a scoped agent token, so identity can't come from anything the caller types.
+     * The only exceptions are webhooks, which prove the caller with a signature.
+     */
+    @Test
+    void everyRouteAuthenticatesItsCaller() {
+        Set<String> provenAnotherWay = Set.of("PayPalWebhookController", "SmsInboundController");
+        Set<String> identities = Set.of("com.paypalseed.platform.security.Actor", "com.paypalseed.agentgateway.api.AgentPrincipal");
+        Set<String> mappings = Set.of("GetMapping", "PostMapping", "PutMapping", "PatchMapping", "DeleteMapping",
+                "RequestMapping");
+        ArchCondition<JavaMethod> takeAnIdentity = new ArchCondition<>("take an authenticated identity") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                boolean hasIdentity = method.getRawParameterTypes().stream()
+                        .anyMatch(type -> identities.contains(type.getFullName()));
+                events.add(new SimpleConditionEvent(method, hasIdentity, method.getFullName() + " takes no identity"));
+            }
+        };
+        methods().that(new DescribedPredicate<JavaMethod>("are routes") {
+                    @Override
+                    public boolean test(JavaMethod method) {
+                        return !provenAnotherWay.contains(method.getOwner().getSimpleName())
+                                && method.getAnnotations().stream()
+                                        .anyMatch(a -> mappings.contains(a.getRawType().getSimpleName()));
+                    }
+                })
+                .should(takeAnIdentity)
                 .check(CLASSES);
     }
 

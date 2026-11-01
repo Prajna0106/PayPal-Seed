@@ -68,6 +68,8 @@ seed:
     base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
     client-id: ${PAYPAL_CLIENT_ID:}
     client-secret: ${PAYPAL_CLIENT_SECRET:}
+    login-client-id: ${PAYPAL_LOGIN_CLIENT_ID:}          # Log in with PayPal; identity module only
+    login-client-secret: ${PAYPAL_LOGIN_CLIENT_SECRET:}
     webhook-id: ${PAYPAL_WEBHOOK_ID:}
     loan-plan-id: ${PAYPAL_LOAN_PLAN_ID:}
   zapier:

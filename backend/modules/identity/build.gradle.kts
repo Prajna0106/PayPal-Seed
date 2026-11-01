@@ -1,6 +1,7 @@
 // Module: identity (member, staff, consent (grant/revoke), wallet preference, language)
 plugins {
     `java-library`
+    id("jooq-module")
 }
 
 dependencies {

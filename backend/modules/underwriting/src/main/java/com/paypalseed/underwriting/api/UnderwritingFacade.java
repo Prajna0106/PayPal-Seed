@@ -2,6 +2,7 @@ package com.paypalseed.underwriting.api;
 
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
 import java.time.LocalDate;
 import java.util.List;
@@ -34,9 +35,15 @@ public interface UnderwritingFacade {
         return Optional.empty();
     }
 
+    /** Monthly totals of the member's consented income on record; empty without consent or history. */
+    default List<IncomeMonthDto> consentedMonthlyIncomes(UUID memberId) {
+        return List.of();
+    }
+
     /**
      * Resolves the member's verified monthly income in cents from their latest Fair Loan Check assessment
-     * or their 13-week consented PayPal income summary.
+     * built on recorded income, or their 13-week consented PayPal income summary. Empty once consent is revoked;
+     * income the member merely stated never counts as verified.
      */
     default OptionalLong verifiedMonthlyIncomeCents(UUID memberId, LocalDate asOf) {
         return OptionalLong.empty();

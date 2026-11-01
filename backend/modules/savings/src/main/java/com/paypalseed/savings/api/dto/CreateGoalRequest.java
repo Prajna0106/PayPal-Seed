@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record CreateGoalRequest(
-    String memberId,
     String name,
     BigDecimal targetAmount,
     BigDecimal monthlyAmount,
