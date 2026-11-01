@@ -4,17 +4,18 @@ import { CtaBand } from "@/features/marketing/components/cta-band";
 import { Faq } from "@/features/marketing/components/faq";
 import { Guardrails } from "@/features/marketing/components/guardrails";
 import { Hero } from "@/features/marketing/components/hero";
+import { Inclusion } from "@/features/marketing/components/inclusion";
 import { Journey } from "@/features/marketing/components/journey";
 import { OfficerGlimpse } from "@/features/marketing/components/officer-glimpse";
 import { ProofStrip } from "@/features/marketing/components/proof-strip";
 import { SafetyNetFlow } from "@/features/marketing/components/safety-net-flow";
 
 const DESCRIPTION =
-  "Savings and fair 0% microloans inside PayPal, with an AI safety net that offers help before a payment is missed. Numbers from code, words from AI, decisions from people.";
+  "Banking for the underbanked, inside PayPal. Save from $5 a month, unlock a 0% loan with no credit score and no fees, and get help before a payment is missed.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: { absolute: "PayPal Seed — save a little, borrow fairly, get help early" },
+  title: { absolute: "PayPal Seed — fair credit for people banks overlook" },
   description: DESCRIPTION,
   openGraph: {
     title: "PayPal Seed",
@@ -30,6 +31,7 @@ export default function LandingPage() {
     <>
       <Hero />
       <ProofStrip />
+      <Inclusion />
       <Journey />
       <SafetyNetFlow />
       <Guardrails />

@@ -12,6 +12,7 @@ const COLUMNS: ReadonlyArray<{ title: string; links: ReadonlyArray<FooterLink> }
   {
     title: "Product",
     links: [
+      { label: "Who it is for", href: "#inclusion" },
       { label: "How it works", href: "#journey" },
       { label: "Safety net", href: "#safety-net" },
       { label: "For officers", href: "#officers" },
