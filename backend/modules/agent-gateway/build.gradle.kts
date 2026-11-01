@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":platform:persistence"))
     implementation(project(":platform:messaging"))
     // Read tools are served from these modules' public APIs; proposals go to governance.
+    implementation(project(":modules:savings"))
     implementation(project(":modules:lending"))
     implementation(project(":modules:hardship"))
     implementation(project(":modules:underwriting"))

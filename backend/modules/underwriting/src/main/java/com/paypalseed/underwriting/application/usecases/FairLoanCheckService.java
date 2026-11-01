@@ -7,6 +7,9 @@ import com.paypalseed.engines.assessment.AssessmentEngine.MonthlyIncomePoint;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
+import com.paypalseed.underwriting.api.FairCheckNarrator;
+import com.paypalseed.underwriting.api.FairCheckNarrator.NarrationInput;
+import com.paypalseed.underwriting.api.FairCheckNarrator.NarrationResult;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
@@ -16,16 +19,19 @@ import com.paypalseed.underwriting.domain.model.UnderwritingErrors;
 import com.paypalseed.underwriting.infrastructure.persistence.UnderwritingRepository;
 import com.paypalseed.underwriting.infrastructure.persistence.UnderwritingRepository.ConsentRecord;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * Application service for Feature 3: The Fair Loan Check (Blueprint §6).
  * Enforces explicit member consent, reads savings consistency via {@link SavingsFacade},
  * computes deterministic income/volatility metrics via {@link AssessmentEngine},
+ * optionally narrates the explanation card via {@link FairCheckNarrator},
  * and persists auditable explanation cards and human officer decisions.
  */
 @Service
@@ -49,10 +55,21 @@ public class FairLoanCheckService {
 
     private final UnderwritingRepository repository;
     private final SavingsFacade savingsFacade;
+    private final FairCheckNarrator narrator;
 
     public FairLoanCheckService(UnderwritingRepository repository, SavingsFacade savingsFacade) {
+        this(repository, savingsFacade, null);
+    }
+
+    @Autowired
+    public FairLoanCheckService(
+        UnderwritingRepository repository,
+        SavingsFacade savingsFacade,
+        @Autowired(required = false) FairCheckNarrator narrator
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
+        this.narrator = narrator;
     }
 
     public ConsentStatusView grantConsent(UUID memberId) {
@@ -124,6 +141,7 @@ public class FairLoanCheckService {
             Instant.now()
         );
 
+        applyNarrationIfPresent(assessment, null);
         repository.saveAssessment(assessment);
         return toCardView(assessment);
     }
@@ -134,8 +152,53 @@ public class FairLoanCheckService {
             throw new DomainException(UnderwritingErrors.ASSESSMENT_NOT_FOUND, "Assessment not found");
         }
         assessment.flagMemberDispute(note, Instant.now());
+        applyNarrationIfPresent(assessment, assessment.getMemberDisputeNote());
         repository.saveAssessment(assessment);
         return toCardView(assessment);
+    }
+
+    private void applyNarrationIfPresent(FairLoanCheckAssessment assessment, String disputeNote) {
+        if (narrator == null) {
+            return;
+        }
+        FairCheckResult r = assessment.getResult();
+        NarrationResult narrated = narrator.narrate(new NarrationInput(
+            assessment.getId(),
+            assessment.getApplicationId(),
+            assessment.getPurpose(),
+            r.recommended(),
+            r.unlockedTier().name(),
+            r.usedFallbackStatedIncome(),
+            r.averageMonthlyIncomeCents(),
+            r.lowestMonthlyIncomeCents(),
+            r.lowestIncomeMonth(),
+            r.coefficientOfVariation(),
+            r.highIncomeVolatility(),
+            r.provenMonthlySavingCents(),
+            r.monthsSaved(),
+            r.targetMonthsWindow(),
+            r.instalmentCapCents(),
+            r.requestedAmountCents(),
+            r.requestedTermMonths(),
+            r.suggestedLoanCents(),
+            r.suggestedTermMonths(),
+            r.suggestedMonthlyInstalmentCents(),
+            disputeNote,
+            r.plainLanguageReasons(),
+            r.officerQuestions()
+        ));
+        if (narrated == null) {
+            return;
+        }
+        List<String> reasons = new ArrayList<>(narrated.plainLanguageReasons());
+        if (disputeNote != null && !disputeNote.isBlank()) {
+            String bannerPrefix = "Member disputed the figures:";
+            boolean hasBanner = reasons.stream().anyMatch(s -> s.startsWith(bannerPrefix));
+            if (!hasBanner) {
+                reasons.add(bannerPrefix + " \"" + disputeNote + "\" — flagged for manual loan-officer conversation.");
+            }
+        }
+        assessment.withGroundedNarration(reasons, narrated.officerQuestions());
     }
 
     public FairCheckCardView recordOfficerDecision(
