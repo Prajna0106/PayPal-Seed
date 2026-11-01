@@ -1,5 +1,7 @@
 package com.paypalseed.engines.rules;
 
+import com.paypalseed.engines.rules.record.RecordLevel;
+import com.paypalseed.engines.rules.record.RecordLimits;
 import com.paypalseed.platform.kernel.Money;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,15 +27,40 @@ public final class EligibilityEngine {
         long monthlySavingCents,
         OptionalLong verifiedMonthlyIncomeCents,
         int completedLoansOnTime,
-        boolean hasActiveLoan
+        boolean hasActiveLoan,
+        RecordLevel recordLevel
     ) {
         public EligibilityInput {
             if (verifiedMonthlyIncomeCents == null) {
                 verifiedMonthlyIncomeCents = OptionalLong.empty();
             }
+            if (recordLevel == null) {
+                recordLevel = RecordLevel.NEW;
+            }
+        }
+
+        /** An input with no credit record: the ladder alone decides, as before the record existed. */
+        public EligibilityInput(
+            int currentStreakMonths,
+            int totalOnTimeDeposits,
+            int missedDepositsInQuarter,
+            long monthlySavingCents,
+            OptionalLong verifiedMonthlyIncomeCents,
+            int completedLoansOnTime,
+            boolean hasActiveLoan
+        ) {
+            this(currentStreakMonths, totalOnTimeDeposits, missedDepositsInQuarter, monthlySavingCents,
+                verifiedMonthlyIncomeCents, completedLoansOnTime, hasActiveLoan, RecordLevel.NEW);
         }
     }
 
+    /**
+     * @param tier           the rung of the ladder that applies: the higher of what repaid loans earned and what the
+     *                       credit record unlocks
+     * @param tierLimitCents the loan ceiling that applies: the larger of the rung's and the record level's
+     * @param recordLevel    the level of the member's credit record that was taken into account
+     * @param limitReason    which limit applied and why, in plain words (no scores); empty when not eligible
+     */
     public record EligibilityEvaluation(
         boolean eligible,
         LoanTier tier,
@@ -42,11 +69,15 @@ public final class EligibilityEngine {
         long maxMonthlyInstalmentCents,
         int minTermMonths,
         int maxTermMonths,
-        List<String> reasons
+        List<String> reasons,
+        RecordLevel recordLevel,
+        String limitReason
     ) {
         public EligibilityEvaluation {
             Objects.requireNonNull(tier, "tier is required");
             reasons = List.copyOf(reasons);
+            Objects.requireNonNull(recordLevel, "recordLevel is required");
+            Objects.requireNonNull(limitReason, "limitReason is required");
         }
     }
 
@@ -98,11 +129,18 @@ public final class EligibilityEngine {
                 0L,
                 0,
                 0,
-                reasons
+                reasons,
+                input.recordLevel(),
+                ""
             );
         }
 
-        LoanTier tier = resolveTier(input.completedLoansOnTime());
+        // The record only ever raises what the ladder allows: the higher rung, the larger ceiling.
+        LoanTier ladderTier = resolveTier(input.completedLoansOnTime());
+        RecordLevel level = input.recordLevel();
+        LoanTier tier = level.ladderTier().level() > ladderTier.level() ? level.ladderTier() : ladderTier;
+        long limit = RecordLimits.limitCents(level, ladderTier.maxLoanCents());
+        String limitReason = limitReason(level, ladderTier.maxLoanCents(), limit);
         long maxMonthlyInstalment = SizingRule.maxMonthlyInstalmentCents(
             input.monthlySavingCents(),
             input.verifiedMonthlyIncomeCents()
@@ -113,12 +151,14 @@ public final class EligibilityEngine {
             return new EligibilityEvaluation(
                 false,
                 tier,
-                tier.maxLoanCents(),
+                limit,
                 0L,
                 maxMonthlyInstalment,
                 tier.minTermMonths(),
                 tier.maxTermMonths(),
-                reasons
+                reasons,
+                level,
+                limitReason
             );
         }
 
@@ -127,25 +167,27 @@ public final class EligibilityEngine {
             return new EligibilityEvaluation(
                 false,
                 tier,
-                tier.maxLoanCents(),
+                limit,
                 0L,
                 0L,
                 tier.minTermMonths(),
                 tier.maxTermMonths(),
-                reasons
+                reasons,
+                level,
+                limitReason
             );
         }
 
         long maxSafePrincipalAtMaxTerm = SizingRule.maxSafePrincipalCents(
             maxMonthlyInstalment,
             tier.maxTermMonths(),
-            tier.maxLoanCents()
+            limit
         );
 
         reasons.add(String.format(
             "Unlocked %s (%s limit) with %d months of consistent saving (%s/month).",
             tier.name(),
-            Money.ofCents(tier.maxLoanCents()),
+            Money.ofCents(limit),
             input.currentStreakMonths(),
             Money.ofCents(input.monthlySavingCents())
         ));
@@ -157,16 +199,42 @@ public final class EligibilityEngine {
                 : ""
         ));
 
+        reasons.add(limitReason);
+
         return new EligibilityEvaluation(
             true,
             tier,
-            tier.maxLoanCents(),
+            limit,
             maxSafePrincipalAtMaxTerm,
             maxMonthlyInstalment,
             tier.minTermMonths(),
             tier.maxTermMonths(),
-            reasons
+            reasons,
+            level,
+            limitReason
         );
+    }
+
+    /**
+     * Which ceiling applies and why, for the member to read: the level of the record by name, never a score, and the
+     * amounts as the member would say them.
+     */
+    static String limitReason(RecordLevel level, long ladderLimitCents, long limitCents) {
+        String name = displayName(level);
+        if (limitCents > ladderLimitCents) {
+            return String.format("Your record is at %s, which lifts your limit from %s to %s.", name,
+                Money.ofCents(ladderLimitCents), Money.ofCents(limitCents));
+        }
+        if (level == RecordLevel.NEW) {
+            return String.format("Your limit is %s. It grows as you save and repay on time.", Money.ofCents(limitCents));
+        }
+        return String.format("Your record is at %s and your limit is %s. It grows as you keep saving and repaying on time.", name,
+            Money.ofCents(limitCents));
+    }
+
+    private static String displayName(RecordLevel level) {
+        String lower = level.name().toLowerCase(java.util.Locale.ROOT);
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
     /**
@@ -196,13 +264,14 @@ public final class EligibilityEngine {
         }
 
         LoanTier tier = eval.tier();
+        long limit = eval.tierLimitCents(); // the rung's ceiling, or the record level's when that is higher
         long maxMonthly = eval.maxMonthlyInstalmentCents();
 
         // Validate positive & whole dollars
         if (requestedPrincipalCents < MIN_LOAN_CENTS || requestedPrincipalCents % 100L != 0) {
             reasons.add("Loan amount must be in whole dollars and at least " + Money.ofCents(MIN_LOAN_CENTS) + ".");
             int fallbackTerm = clampTerm(requestedTermMonths, tier);
-            long suggestedPrincipal = SizingRule.maxSafePrincipalCents(maxMonthly, fallbackTerm, tier.maxLoanCents());
+            long suggestedPrincipal = SizingRule.maxSafePrincipalCents(maxMonthly, fallbackTerm, limit);
             return new SizingDecision(
                 false,
                 requestedPrincipalCents,
@@ -220,7 +289,7 @@ public final class EligibilityEngine {
             int clampedTerm = clampTerm(requestedTermMonths, tier);
             long suggestedPrincipal = Math.min(
                 requestedPrincipalCents,
-                SizingRule.maxSafePrincipalCents(maxMonthly, clampedTerm, tier.maxLoanCents())
+                SizingRule.maxSafePrincipalCents(maxMonthly, clampedTerm, limit)
             );
             reasons.add(String.format(
                 "Requested term of %d months is outside %s allowed range (%d to %d months). Suggested term: %d months.",
@@ -239,13 +308,13 @@ public final class EligibilityEngine {
         }
 
         // Validate tier cap
-        if (requestedPrincipalCents > tier.maxLoanCents()) {
-            long suggestedPrincipal = SizingRule.maxSafePrincipalCents(maxMonthly, requestedTermMonths, tier.maxLoanCents());
+        if (requestedPrincipalCents > limit) {
+            long suggestedPrincipal = SizingRule.maxSafePrincipalCents(maxMonthly, requestedTermMonths, limit);
             int suggestedTerm = requestedTermMonths;
-            if (suggestedPrincipal < tier.maxLoanCents()) {
-                int minTermForTierMax = SizingRule.minimumSafeTermMonths(tier.maxLoanCents(), maxMonthly);
+            if (suggestedPrincipal < limit) {
+                int minTermForTierMax = SizingRule.minimumSafeTermMonths(limit, maxMonthly);
                 if (minTermForTierMax <= tier.maxTermMonths()) {
-                    suggestedPrincipal = tier.maxLoanCents();
+                    suggestedPrincipal = limit;
                     suggestedTerm = Math.max(tier.minTermMonths(), minTermForTierMax);
                 }
             }
@@ -253,7 +322,7 @@ public final class EligibilityEngine {
                 "Requested amount %s exceeds %s limit of %s. Largest safe amount is %s over %d months.",
                 Money.ofCents(requestedPrincipalCents),
                 tier.name(),
-                Money.ofCents(tier.maxLoanCents()),
+                Money.ofCents(limit),
                 Money.ofCents(suggestedPrincipal),
                 suggestedTerm
             ));
@@ -273,7 +342,7 @@ public final class EligibilityEngine {
         long requiredInstalment = SizingRule.requiredMonthlyInstalmentCents(requestedPrincipalCents, requestedTermMonths);
         if (requiredInstalment > maxMonthly) {
             int minTermNeeded = SizingRule.minimumSafeTermMonths(requestedPrincipalCents, maxMonthly);
-            long maxAmountAtRequestedTerm = SizingRule.maxSafePrincipalCents(maxMonthly, requestedTermMonths, tier.maxLoanCents());
+            long maxAmountAtRequestedTerm = SizingRule.maxSafePrincipalCents(maxMonthly, requestedTermMonths, limit);
 
             if (minTermNeeded <= tier.maxTermMonths()) {
                 int suggestedTerm = Math.max(tier.minTermMonths(), minTermNeeded);
@@ -297,7 +366,7 @@ public final class EligibilityEngine {
                     reasons
                 );
             } else {
-                long maxAtLongestTerm = SizingRule.maxSafePrincipalCents(maxMonthly, tier.maxTermMonths(), tier.maxLoanCents());
+                long maxAtLongestTerm = SizingRule.maxSafePrincipalCents(maxMonthly, tier.maxTermMonths(), limit);
                 reasons.add(String.format(
                     "Monthly instalment of %s exceeds your safe monthly cap of %s. Largest safe amount for %d months is %s (or %s over %d months).",
                     Money.ofCents(requiredInstalment),

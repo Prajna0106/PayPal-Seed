@@ -2,6 +2,7 @@ package com.paypalseed.payments.application.usecases;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.paypalseed.payments.application.ports.PayPalException;
 import com.paypalseed.payments.domain.model.PaymentsErrors;
 import com.paypalseed.payments.infrastructure.persistence.CommandRepository;
@@ -46,7 +47,7 @@ public class PayPalCommandExecutor {
 
     public <T> T run(String kind, UUID aggregateId, String key, Object request, Class<T> responseType,
                      Function<String, T> call) {
-        String hash = hash(kind + "|" + aggregateId + "|" + write(request));
+        String hash = hash(kind + "|" + aggregateId + "|" + fingerprint(request));
         Command existing = commands.byKey(key).orElse(null);
         if (existing != null) {
             if (!existing.requestHash().equals(hash)) {
@@ -71,6 +72,15 @@ public class PayPalCommandExecutor {
             }
             throw new DomainException(PaymentsErrors.PAYPAL_REJECTED, "PayPal refused the request",
                     e.paypalIssue() == null ? Map.of() : Map.of("paypalIssue", e.paypalIssue()));
+        }
+    }
+
+    /** Map entries sorted by key: a request built from a map must hash the same however the map iterates. */
+    String fingerprint(Object request) {
+        try {
+            return json.writer(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsString(request);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("cannot serialise " + request.getClass(), e);
         }
     }
 

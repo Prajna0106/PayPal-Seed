@@ -1,12 +1,16 @@
 package com.paypalseed.lending;
 
 import com.paypalseed.lending.api.LendingFacade;
+import com.paypalseed.lending.api.dto.LendingDtos.CoverResult;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
+import com.paypalseed.lending.api.dto.LendingDtos.MemberApplicationView;
+import com.paypalseed.lending.api.dto.LendingDtos.MemberLoanView;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
 import com.paypalseed.lending.api.dto.LendingDtos.ReschedulePreview;
 import com.paypalseed.lending.api.dto.LendingDtos.RescheduleRequest;
+import com.paypalseed.lending.api.dto.LendingDtos.ReserveCover;
 import com.paypalseed.lending.api.dto.LendingDtos.RiskFacts;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
 import com.paypalseed.lending.api.dto.LendingDtos.Slot;
@@ -224,5 +228,17 @@ class MicroloanApplicationServiceTest {
 
         @Override
         public List<UUID> hardshipScanCandidates(LocalDate asOf, int leadDays, int graceDays, int shardGroup, int shardCount, UUID after, int limit) { return List.of(); }
+
+        @Override
+        public EligibilityView eligibilityOf(UUID memberId) { return null; }
+
+        @Override
+        public List<MemberLoanView> loansOfMember(UUID memberId) { return List.of(); }
+
+        @Override
+        public List<MemberApplicationView> applicationsOfMember(UUID memberId) { return List.of(); }
+
+        @Override
+        public CoverResult applyReserveCover(ReserveCover cover) { return null; }
     }
 }

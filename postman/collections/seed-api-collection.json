@@ -1,18 +1,97 @@
 {
   "info": {
-    "name": "PayPal Seed API (F1 Savings, F2 Microloans, F3 Fair Loan Check, F4 Schedule)",
-    "description": "End-to-end Postman collection for PayPal Seed. Run requests 1 -> 12 in order; IDs (goalId, assessmentId, applicationId, loanId) are saved automatically to collection variables.",
+    "name": "PayPal Seed API",
+    "description": "Postman collection for PayPal Seed: savings (F1), microloans (F2), the fair loan check (F3), the repayment schedule (F4), the credit record (F6), identity, the PayPal catalog bootstrap, the desk queues, the reserve, fraud flags and the member home call.\n\nRun the folders in order. Ids (goalId, assessmentId, applicationId, loanId, shareId, flagId, coverRequestId) are saved to collection variables.\n\nAuthentication: against a dev, test or demo backend the requests send X-Seed-Member-Id, X-Seed-Staff-Id and X-Seed-Staff-Roles. Against a deployed backend set the variables actorToken (member) and staffToken (staff): the pre-request script then sends Authorization: Bearer instead of the X-Seed headers. /internal/** routes always use internalToken (SEED_INTERNAL_TOKEN).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Signed actor tokens when provided; otherwise the dev headers on each request stay as they are.",
+          "const isStaff = pm.request.headers.has('X-Seed-Staff-Id');",
+          "const isMember = pm.request.headers.has('X-Seed-Member-Id');",
+          "const token = isStaff ? pm.variables.get('staffToken') : (isMember ? pm.variables.get('actorToken') : '');",
+          "if (token) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "  ['X-Seed-Member-Id', 'X-Seed-Staff-Id', 'X-Seed-Staff-Roles'].forEach(h => pm.request.headers.remove(h));",
+          "}"
+        ]
+      }
+    }
+  ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "memberId", "value": "11111111-1111-1111-1111-111111111111" },
-    { "key": "officer1Id", "value": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
-    { "key": "officer2Id", "value": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" },
-    { "key": "goalId", "value": "" },
-    { "key": "assessmentId", "value": "" },
-    { "key": "applicationId", "value": "" },
-    { "key": "loanId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "memberId",
+      "value": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "key": "makerId",
+      "value": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "description": "Staff id with role OFFICER"
+    },
+    {
+      "key": "checkerId",
+      "value": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "description": "Staff id with role CHECKER"
+    },
+    {
+      "key": "actorToken",
+      "value": "",
+      "description": "Signed member actor token (deployed backends)"
+    },
+    {
+      "key": "staffToken",
+      "value": "",
+      "description": "Signed staff actor token (deployed backends)"
+    },
+    {
+      "key": "internalToken",
+      "value": "local-dev-internal-token",
+      "description": "SEED_INTERNAL_TOKEN for /internal/**"
+    },
+    {
+      "key": "goalId",
+      "value": ""
+    },
+    {
+      "key": "assessmentId",
+      "value": ""
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "loanId",
+      "value": ""
+    },
+    {
+      "key": "shareId",
+      "value": ""
+    },
+    {
+      "key": "shareToken",
+      "value": ""
+    },
+    {
+      "key": "flagId",
+      "value": ""
+    },
+    {
+      "key": "coverRequestId",
+      "value": ""
+    },
+    {
+      "key": "deskCursor",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -22,13 +101,36 @@
           "name": "0. AI Coach: Suggest Monthly Saving & Loan Term",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"goalName\": \"Commercial Stand Mixer\",\n  \"targetAmount\": 1200.00,\n  \"statedMonthlyIncome\": 1600.00,\n  \"statedMonthlyExpenses\": 850.00,\n  \"currency\": \"USD\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/savings/coach/suggest"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Has suggestedMonthlySaving, unlockedTier, messageEn, messageEs, modelGenerated', () => ['suggestedMonthlySaving', 'unlockedTier', 'messageEn', 'messageEs', 'modelGenerated'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "1. Create Savings Goal ($1,200 Mixer, $75/mo)",
@@ -47,7 +149,22 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"name\": \"Commercial Stand Mixer\",\n  \"targetAmount\": 1200.00,\n  \"monthlyAmount\": 75.00,\n  \"currency\": \"USD\",\n  \"targetDate\": \"2027-06-01\",\n  \"payPalSubscriptionId\": \"I-ANA-SUB-01\"\n}"
@@ -59,57 +176,178 @@
           "name": "2. Record Deposit #1 ($75)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-1\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "3. Record Deposit #2 ($75)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-2\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "4. Record Deposit #3 ($75)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-3\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "5. Record Deposit #4 ($75 -> 4-Month Streak Unlocked)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": 75.00,\n  \"currency\": \"USD\",\n  \"payPalCaptureId\": \"CAP-ANA-4\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/savings/goals/{{goalId}}/topup"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "6. List Member Savings Goals",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/savings/members/{{memberId}}/goals"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -120,9 +358,26 @@
           "name": "7. Grant Member Consent",
           "request": {
             "method": "POST",
-            "header": [{ "key": "X-Member-Id", "value": "{{memberId}}" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/underwriting/consent"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "8. Run Fair Loan Check ($1,200 over 8 Months)",
@@ -142,8 +397,15 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Member-Id", "value": "{{memberId}}" }
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -157,30 +419,70 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Member-Id", "value": "{{memberId}}" }
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"note\": \"July was a two-week vacation closure; catering invoice paid in August.\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/underwriting/assessments/{{assessmentId}}/dispute"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "10. Officer Approves Fair Loan Check Card",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Staff-Id", "value": "{{officer1Id}}" }
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"decision\": \"APPROVED\",\n  \"reason\": \"4/4 months on-time saving and steady bakery sales support $150/month.\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/desk/underwriting/assessments/{{assessmentId}}/decision"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -191,9 +493,26 @@
           "name": "11. Check Loan Ladder Eligibility",
           "request": {
             "method": "GET",
-            "header": [{ "key": "X-Member-Id", "value": "{{memberId}}" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/loans/eligibility"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "12. Submit $1,200 / 8-Month Loan Application",
@@ -213,8 +532,15 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Member-Id", "value": "{{memberId}}" }
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -227,46 +553,1583 @@
           "name": "13. Officer 1 Approves (Maker -> PENDING_SECOND_APPROVAL)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "X-Staff-Id", "value": "{{officer1Id}}" }],
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/approve"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "14. Officer 2 Countersigns (Checker -> APPROVED)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "X-Staff-Id", "value": "{{officer2Id}}" }],
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{checkerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "CHECKER"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/approve"
-          }
-        },
-        {
-          "name": "15. Disburse Loan (Registers Loan & Schedule Version 1)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Disburse Loan (asks PayPal to pay the member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
                   "if (res && res.loanId) { pm.collectionVariables.set('loanId', res.loanId); }",
-                  "pm.test('Loan disbursed (200)', () => pm.response.to.have.status(200));"
-                ],
-                "type": "text/javascript"
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Application moved on', () => pm.expect(['DISBURSING', 'DISBURSED', 'APPROVED']).to.include(res.status));",
+                  "pm.test('Application keys', () => ['id', 'memberId', 'status', 'requestedAmountCents', 'termMonths'].forEach(k => pm.expect(res).to.have.property(k)));"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [],
-            "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/disburse"
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/loans/applications/{{applicationId}}/disburse",
+            "description": "ADR 0017: the application becomes DISBURSING and the loan is registered when the payout succeeds. Without PayPal sandbox credentials the payout fails and the application returns to APPROVED with payoutIssue; use request 15b to register the loan directly in a dev or demo run."
           }
+        },
+        {
+          "name": "15b. Demo only: register the loan directly (no PayPal payout)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{internalToken}}",
+                "description": "SEED_INTERNAL_TOKEN (service role)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/internal/loans/disbursed",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"principalCents\": 120000,\n  \"instalmentCount\": 8,\n  \"dueDay\": 15,\n  \"disbursedOn\": \"2026-11-10\",\n  \"disbursementRef\": \"postman-{{$guid}}\"\n}"
+            },
+            "description": "Skip when request 15 returned a loanId. Idempotent on disbursementRef; this one is new each run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.loanId) { pm.collectionVariables.set('loanId', res.loanId); }",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const loan = pm.response.json();",
+                  "pm.test('Has loanId, memberId, principalCents, outstandingCents, status', () => ['loanId', 'memberId', 'principalCents', 'outstandingCents', 'status'].forEach(k => pm.expect(loan).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "16. View Generated 8-Month 0% Repayment Schedule (F4)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "X-Seed-Member-Id", "value": "{{memberId}}" }],
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/loans/{{loanId}}/schedule"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Succeeded (2xx)', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Identity (ADR 0012)",
+      "description": "Log in with PayPal creates the member through a service-token call; everything else is the member's own profile and consents.",
+      "item": [
+        {
+          "name": "I1. Login with PayPal (web server call, creates the member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{internalToken}}",
+                "description": "SEED_INTERNAL_TOKEN (service role)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/internal/members/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paypalPayerId\": \"PAYER-POSTMAN-1\",\n  \"email\": \"ana@example.com\",\n  \"name\": \"Ana Postman\",\n  \"verified\": true,\n  \"locale\": \"es-MX\"\n}"
+            },
+            "description": "Idempotent by payer id: a second run returns created=false and the same memberId. Sets {{memberId}} for the rest of the run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has created, member', () => ['created', 'member'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "const member = pm.response.json().member;",
+                  "pm.collectionVariables.set('memberId', member.memberId);",
+                  "pm.test('Member keys', () => ['memberId', 'language', 'walletPreference', 'paypalVerified', 'createdAt', 'lastLoginAt'].forEach(k => pm.expect(member).to.have.property(k)));",
+                  "pm.test('Spanish is kept', () => pm.expect(member.language).to.eql('es'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I2. Login with an actor token instead of a service token is refused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not-the-service-token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/internal/members/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paypalPayerId\": \"PAYER-POSTMAN-1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refused', () => pm.expect([401, 403]).to.include(pm.response.code));",
+                  "pm.test('Problem body', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I3. My profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has memberId, language, walletPreference, paypalVerified, createdAt, lastLoginAt', () => ['memberId', 'language', 'walletPreference', 'paypalVerified', 'createdAt', 'lastLoginAt'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I4. Change language and wallet",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": \"en\",\n  \"walletPreference\": \"PAYPAL\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Language changed', () => pm.expect(pm.response.json().language).to.eql('en'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I5. Grant the terms consent (current version)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/consents",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TERMS\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created or already active', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has consentId, type, version, active, grantedAt', () => ['consentId', 'type', 'version', 'active', 'grantedAt'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I6. Grant a consent version that is not current",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/consents",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"PRIVACY\",\n  \"version\": \"1999-01\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Problem type is consent-version-stale', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/consent-version-stale');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I7. My consents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/consents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('A list', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I8. Revoke the terms consent",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/consents/TERMS"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I9. Staff sign-in upsert (desk server call)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{internalToken}}",
+                "description": "SEED_INTERNAL_TOKEN (service role)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/internal/staff/{{makerId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Maker Officer\",\n  \"email\": \"maker@example.com\",\n  \"roles\": [\n    \"OFFICER\"\n  ],\n  \"active\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has staffId, displayName, roles, active', () => ['staffId', 'displayName', 'roles', 'active'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I10. Staff directory (desk)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/staff"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('A list', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "I11. Staff directory as a member is forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/staff"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Problem type is forbidden', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/forbidden');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PayPal catalog bootstrap (ADR 0013)",
+      "item": [
+        {
+          "name": "C1. Find or create the Seed product and its two plans",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{internalToken}}",
+                "description": "SEED_INTERNAL_TOKEN (service role)"
+              }
+            ],
+            "url": "{{baseUrl}}/internal/paypal/catalog/bootstrap",
+            "description": "Needs PayPal sandbox credentials on the server. Safe to repeat: ids already known are returned, not created again. Copy the ids to SEED_PAYPAL_PRODUCT_ID, SEED_PAYPAL_SAVINGS_PLAN_ID and PAYPAL_LOAN_PLAN_ID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created or found (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has productId, savingsPlanId, loanPlanId, createdProduct, createdSavingsPlan, createdLoanPlan', () => ['productId', 'savingsPlanId', 'loanPlanId', 'createdProduct', 'createdSavingsPlan', 'createdLoanPlan'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C2. Without the service token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/internal/paypal/catalog/bootstrap"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refused', () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Credit record (F6, ADR 0014)",
+      "item": [
+        {
+          "name": "R1. My record (a new member is level NEW, not 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/record"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has level, levelRank, loanLimitCents, ladderTier, savings, loans, instalments, hardshipPlansOnPlan, defaults, onTimeBps, policyVersion', () => ['level', 'levelRank', 'loanLimitCents', 'ladderTier', 'savings', 'loans', 'instalments', 'hardshipPlansOnPlan', 'defaults', 'onTimeBps', 'policyVersion'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Level is a published level', () => pm.expect(['NEW', 'BUILDING', 'STEADY', 'TRUSTED', 'EXEMPLARY']).to.include(body.level));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R2. My record history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/record/history?limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has items', () => ['items'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R3. Create a share link (summary detail, 14 days)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/record/shares",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expiresInDays\": 14,\n  \"detail\": \"SUMMARY\"\n}"
+            },
+            "description": "A member with no history has nothing to share (409 record-nothing-to-share); run the savings and loan folders first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created, or nothing to share yet', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "if (pm.response.code === 201) {",
+                  "  const share = pm.response.json();",
+                  "  pm.collectionVariables.set('shareId', share.shareId);",
+                  "  pm.collectionVariables.set('shareToken', share.token);",
+                  "  pm.test('Share keys', () => ['shareId', 'token', 'verifyPath', 'detail', 'issuedAt', 'expiresAt'].forEach(k => pm.expect(share).to.have.property(k)));",
+                  "} else {",
+                  "  pm.test('Problem type', () => pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/record-nothing-to-share'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R4. My share links (never include the token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/record/shares"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('No token in the list', () => pm.response.json().forEach(s => pm.expect(s).to.not.have.property('token')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R5. Partner verifies the shared record (public, no sign-in)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/records/verify/{{shareToken}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('shareToken')) {",
+                  "  pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Verified keys', () => ['valid', 'level', 'issuedAt', 'expiresAt'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "  pm.test('No person in the answer', () => ['memberId', 'email', 'name', 'paypalPayerId'].forEach(k => pm.expect(body).to.not.have.property(k)));",
+                  "  pm.test('Cacheable for 5 s', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('max-age=5'));",
+                  "} else { pm.test('Skipped: no share token (run R3 first)', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R6. A tampered token looks the same as an unknown one",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/records/verify/v1.k1.tampered.token",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Problem type is record-not-found', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/record-not-found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R7. Revoke the share",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/record/shares/{{shareId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('shareId')) { pm.test('Revoked (204)', () => pm.response.to.have.status(204)); }",
+                  "else { pm.test('Skipped: no share (run R3 first)', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R8. Desk reads a member's record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/members/{{memberId}}/record"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has memberId, record, recent', () => ['memberId', 'record', 'recent'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Desk queues (ADR 0015)",
+      "description": "Keyset read models for the officer desk. Roles OFFICER, CHECKER or ADMIN.",
+      "item": [
+        {
+          "name": "D1. Loan application queue (oldest deadline first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/applications?limit=25&sort=slaDueAt:asc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Page keys', () => ['rows', 'asOf'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Rows is a list', () => pm.expect(body.rows).to.be.an('array'));",
+                  "pm.test('Not cached', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'));",
+                  "if (body.nextCursor) { pm.collectionVariables.set('deskCursor', body.nextCursor); }",
+                  "if (body.rows.length) { pm.test('Row keys', () => ['applicationId', 'memberRef', 'status', 'requestedAmountCents', 'slaDueAt', 'slaState'].forEach(k => pm.expect(body.rows[0]).to.have.property(k))); }",
+                  "pm.test('No member name or email', () => body.rows.forEach(r => ['name', 'email', 'phone'].forEach(k => pm.expect(r).to.not.have.property(k))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D2. Next page with the cursor (same sort)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/applications?limit=25&sort=slaDueAt:asc&cursor={{deskCursor}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('deskCursor')) { pm.test('Status is 200', () => pm.response.to.have.status(200)); }",
+                  "else { pm.test('Skipped: only one page', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D3. A column that is not allowed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/applications?sort=memberEmail:asc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Problem type is desk-query-invalid-sort', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/desk-query-invalid-sort');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D4. Fair-check decisions queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/assessments?status=PENDING"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Page keys', () => ['rows', 'asOf'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Rows is a list', () => pm.expect(body.rows).to.be.an('array'));",
+                  "pm.test('Not cached', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D5. Loan portfolio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/portfolio/loans?sort=daysLate:desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Page keys', () => ['rows', 'asOf'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Rows is a list', () => pm.expect(body.rows).to.be.an('array'));",
+                  "pm.test('Not cached', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D6. Portfolio summary and inclusion impact",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/portfolio/summary"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has asOf, loans, outstandingCents, byStatus, byAgingBucket, onTimeRepayment, openHardshipCases, impact', () => ['asOf', 'loans', 'outstandingCents', 'byStatus', 'byAgingBucket', 'onTimeRepayment', 'openHardshipCases', 'impact'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('All five aging buckets', () => pm.expect(body.byAgingBucket).to.have.lengthOf(5));",
+                  "pm.test('No credit score used', () => pm.expect(body.impact.membersLoanedWithoutCreditScore).to.eql(body.impact.membersWithLoan));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D7. Approvals workload",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/workload"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has asOf, items, byRole', () => ['asOf', 'items', 'byRole'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D8. A member cannot read the desk",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/applications"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Problem type is forbidden', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/forbidden');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reserve (ADR 0019)",
+      "item": [
+        {
+          "name": "V1. Public fund summary (no sign-in)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reserve/summary",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has balanceCents, totalDonatedCents, donationCount, totalPaidOutCents, membersCovered, openExposureCents, supporters, asOf', () => ['balanceCents', 'totalDonatedCents', 'donationCount', 'totalPaidOutCents', 'membersCovered', 'openExposureCents', 'supporters', 'asOf'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Cacheable for 30 s', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('max-age=30'));",
+                  "pm.test('Supporters are names only', () => body.supporters.forEach(s => pm.expect(s).to.be.a('string')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "V2. Start a donation (public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/reserve/donations/intent",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"anonymous\": false,\n  \"displayName\": \"Maria\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Intent keys', () => ['intentId', 'customId'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Custom id form', () => pm.expect(body.customId).to.match(/^reserve-donation:[0-9a-f-]{36}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "V3. Raise a cover request (officer, needs {{loanId}})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/reserve/cover-requests",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"loanId\": \"{{loanId}}\",\n  \"amountCents\": 5000,\n  \"reasonCode\": \"INCOME_DROP_VERIFIED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created, or refused by a rule', () => pm.expect([201, 404, 409, 422]).to.include(pm.response.code));",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('coverRequestId', body.id);",
+                  "  pm.test('Waiting for approval', () => pm.expect(body.status).to.eql('PENDING_APPROVAL'));",
+                  "} else {",
+                  "  pm.test('Problem body', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "V4. Cover requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/reserve/cover-requests?status=PENDING_APPROVAL"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rows', () => ['rows'].forEach(k => pm.expect(body).to.have.property(k)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "V5. Maker decision on the cover request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/reserve/cover-requests/{{coverRequestId}}/decision",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVE\",\n  \"reasonCode\": \"INCOME_DROP_VERIFIED\",\n  \"evidenceViewedMs\": 30000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('coverRequestId')) {",
+                  "  pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Decision keys', () => ['requestId', 'requestStatus', 'role', 'coverStatus'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "  pm.test('First decision is the maker\\'s', () => pm.expect(body.role).to.eql('MAKER'));",
+                  "} else { pm.test('Skipped: no cover request (run V3 first)', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "V6. Same person as checker is refused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "CHECKER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/reserve/cover-requests/{{coverRequestId}}/decision",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVE\",\n  \"reasonCode\": \"INCOME_DROP_VERIFIED\",\n  \"evidenceViewedMs\": 30000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('coverRequestId')) {",
+                  "  pm.test('Refused (403 sod-violation)', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/sod-violation'); });",
+                  "} else { pm.test('Skipped: no cover request', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Fraud flags (ADR 0019)",
+      "description": "A flag is advice for an officer. It never blocks or prices anything.",
+      "item": [
+        {
+          "name": "F1. Flags (newest first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/fraud/flags?status=OPEN&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rows', () => ['rows'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "if (body.rows.length) {",
+                  "  pm.collectionVariables.set('flagId', body.rows[0].flagId);",
+                  "  pm.test('Flag keys', () => ['flagId', 'memberId', 'status', 'score', 'signalCodes', 'raisedAt'].forEach(k => pm.expect(body.rows[0]).to.have.property(k)));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "F2. One flag with its signals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/fraud/flags/{{flagId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('flagId')) {",
+                  "  pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Detail keys', () => ['flag', 'signals', 'policyVersion', 'flagThreshold'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "} else { pm.test('Skipped: no open flag', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "F3. Dispute evidence pack",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/fraud/flags/{{flagId}}/evidence"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('flagId')) {",
+                  "  pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Evidence keys', () => ['flagId', 'score', 'policyVersion', 'signals'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "  pm.test('Facts carry a tag, never the identifier', () => body.signals.forEach(s => s.facts.forEach(f => pm.expect(f).to.not.have.property('paypalPayerId'))));",
+                  "} else { pm.test('Skipped: no open flag', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "F4. Confirming without a note is refused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/fraud/flags/{{flagId}}/review",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"CONFIRM\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('flagId')) {",
+                  "  pm.test('Refused (422 fraud-note-required)', () => { pm.response.to.have.status(422); pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/fraud-note-required'); });",
+                  "} else { pm.test('Skipped: no open flag', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "F5. Clear the flag",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "One key per action; reuse it only to replay the same request."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/desk/fraud/flags/{{flagId}}/review",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"CLEAR\",\n  \"note\": \"Two goals for two children; the payer is the household's shared PayPal.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('flagId')) {",
+                  "  pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('Reviewed clear', () => pm.expect(pm.response.json().status).to.eql('REVIEWED_CLEAR'));",
+                  "} else { pm.test('Skipped: no open flag', () => pm.expect(true).to.be.true); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Member home (ADR 0018)",
+      "item": [
+        {
+          "name": "H1. One call for the Home page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Member-Id",
+                "value": "{{memberId}}",
+                "description": "Dev, test and demo profiles. Use actorToken for a signed token."
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/home"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has generatedOn, sectionErrors', () => ['generatedOn', 'sectionErrors'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('Never cached by shared caches', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'));",
+                  "pm.test('A missing section is named, not a failure', () => body.sectionErrors.forEach(e => { pm.expect(e).to.have.keys('section', 'code'); pm.expect(['no-data', 'unavailable']).to.include(e.code); }));",
+                  "pm.test('No risk level or score on the page', () => { const text = JSON.stringify(body); ['riskLevel', 'score', 'points', 'signals'].forEach(k => pm.expect(text).to.not.include('\"' + k + '\"')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "H2. Staff cannot use the member home call",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Seed-Staff-Id",
+                "value": "{{makerId}}",
+                "description": "Dev, test and demo profiles. Use staffToken for a signed token."
+              },
+              {
+                "key": "X-Seed-Staff-Roles",
+                "value": "OFFICER"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/me/home"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Problem type is forbidden', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/forbidden');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

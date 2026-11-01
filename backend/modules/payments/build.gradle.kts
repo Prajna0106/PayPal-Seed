@@ -5,7 +5,6 @@ plugins {
 }
 dependencies {
     implementation(project(":engines:schedule"))
-    implementation(project(":modules:savings"))
     implementation(project(":platform:messaging"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
     testImplementation("org.springframework.boot:spring-boot-starter-test")

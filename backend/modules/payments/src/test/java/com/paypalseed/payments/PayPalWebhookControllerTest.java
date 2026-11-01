@@ -5,8 +5,6 @@ import com.paypalseed.payments.application.ports.PayPalGateway;
 import com.paypalseed.payments.infrastructure.persistence.InboxRepository;
 import com.paypalseed.payments.infrastructure.web.PayPalWebhookController;
 import com.paypalseed.platform.kernel.DomainException;
-import com.paypalseed.platform.kernel.Money;
-import com.paypalseed.savings.api.SavingsFacade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -18,7 +16,6 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.lang.reflect.Proxy;
-import java.math.BigDecimal;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,11 +26,11 @@ class PayPalWebhookControllerTest {
 
     private MockMvc mockMvc;
     private TestInboxRepository inbox;
-    private RecordingSavingsFacade savingsFacade;
     private ObjectMapper objectMapper;
 
     static class TestInboxRepository extends InboxRepository {
         final Set<String> insertedIds = new HashSet<>();
+        final Map<String, String> typesById = new HashMap<>();
 
         TestInboxRepository() {
             super(null);
@@ -41,6 +38,7 @@ class PayPalWebhookControllerTest {
 
         @Override
         public boolean insert(String paypalEventId, String eventType, String payloadJson) {
+            typesById.putIfAbsent(paypalEventId, eventType);
             return insertedIds.add(paypalEventId);
         }
     }
@@ -56,7 +54,6 @@ class PayPalWebhookControllerTest {
     @BeforeEach
     void setUp() {
         inbox = new TestInboxRepository();
-        savingsFacade = new RecordingSavingsFacade();
         objectMapper = new ObjectMapper();
 
         PayPalGateway paypal = (PayPalGateway) Proxy.newProxyInstance(
@@ -76,8 +73,7 @@ class PayPalWebhookControllerTest {
         PayPalWebhookController controller = new PayPalWebhookController(
             paypal,
             inbox,
-            objectMapper,
-            savingsFacade
+            objectMapper
         );
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -110,13 +106,9 @@ class PayPalWebhookControllerTest {
             .andExpect(jsonPath("$.status").value("accepted"))
             .andExpect(jsonPath("$.eventId").value("WH-SALE-001"));
 
-        assertEquals(1, savingsFacade.deposits.size());
-        RecordingSavingsFacade.DepositRecord deposit = savingsFacade.deposits.get(0);
-        assertEquals("I-ANA-BAKER-SUB", deposit.subscriptionId());
-        assertEquals(Money.usd(BigDecimal.valueOf(75.00)), deposit.amount());
-        assertEquals("CAPTURE-123", deposit.captureId());
-
+        // Ingress only stores the verified event; the inbox processor turns it into a savings deposit event.
         assertTrue(inbox.insertedIds.contains("WH-SALE-001"));
+        assertEquals("PAYMENT.SALE.COMPLETED", inbox.typesById.get("WH-SALE-001"));
     }
 
     @Test
@@ -144,9 +136,9 @@ class PayPalWebhookControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("accepted"));
 
-        assertEquals(1, savingsFacade.deposits.size());
+        assertEquals(1, inbox.insertedIds.size());
 
-        // Second delivery (duplicate retry from PayPal): returns duplicate and does NOT call facade
+        // Second delivery (duplicate retry from PayPal): reported as a duplicate, stored once
         mockMvc.perform(post("/api/v1/payments/webhooks")
                 .header("paypal-transmission-id", "TRANS-002")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -155,7 +147,7 @@ class PayPalWebhookControllerTest {
             .andExpect(jsonPath("$.status").value("duplicate"))
             .andExpect(jsonPath("$.eventId").value("WH-DUPLICATE-002"));
 
-        assertEquals(1, savingsFacade.deposits.size(), "Duplicate webhook must not double-record deposit");
+        assertEquals(1, inbox.insertedIds.size(), "Duplicate webhook must be stored once");
     }
 
     @Test
@@ -177,8 +169,7 @@ class PayPalWebhookControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("accepted"));
 
-        assertEquals(1, savingsFacade.pausedSubscriptions.size());
-        assertEquals("I-CANCEL-SUB-999", savingsFacade.pausedSubscriptions.get(0));
+        assertEquals("BILLING.SUBSCRIPTION.CANCELLED", inbox.typesById.get("WH-CANCEL-003"));
     }
 
     @Test
@@ -195,23 +186,6 @@ class PayPalWebhookControllerTest {
                 .content(payload))
             .andExpect(status().isUnprocessableEntity());
 
-        assertEquals(0, savingsFacade.deposits.size());
-    }
-
-    static class RecordingSavingsFacade implements SavingsFacade {
-        record DepositRecord(String subscriptionId, Money amount, String captureId) {}
-
-        final List<DepositRecord> deposits = new ArrayList<>();
-        final List<String> pausedSubscriptions = new ArrayList<>();
-
-        @Override
-        public void recordDepositBySubscription(String subscriptionId, Money amount, String payPalCaptureId) {
-            deposits.add(new DepositRecord(subscriptionId, amount, payPalCaptureId));
-        }
-
-        @Override
-        public void pauseGoalBySubscription(String subscriptionId) {
-            pausedSubscriptions.add(subscriptionId);
-        }
+        assertEquals(0, inbox.insertedIds.size());
     }
 }

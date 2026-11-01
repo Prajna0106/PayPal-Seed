@@ -5,6 +5,7 @@ import com.paypalseed.savings.domain.model.SavingsGoal;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 public class PauseResumeGoalUseCase {
 
@@ -14,16 +15,18 @@ public class PauseResumeGoalUseCase {
         this.repository = Objects.requireNonNull(repository);
     }
 
+    @Transactional
     public SavingsGoal pause(UUID goalId) {
-        SavingsGoal goal = repository.findById(goalId)
+        SavingsGoal goal = repository.findByIdForUpdate(goalId)
             .orElseThrow(() -> new IllegalArgumentException("Savings goal not found: " + goalId));
 
         goal.pause();
         return repository.save(goal);
     }
 
+    @Transactional
     public SavingsGoal resume(UUID goalId) {
-        SavingsGoal goal = repository.findById(goalId)
+        SavingsGoal goal = repository.findByIdForUpdate(goalId)
             .orElseThrow(() -> new IllegalArgumentException("Savings goal not found: " + goalId));
 
         goal.resume();

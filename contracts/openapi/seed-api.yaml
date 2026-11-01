@@ -1,11 +1,18 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Public and Desk API
-  version: 1.2.0
+  version: 2.0.0
   description: |
-    Member, desk and webhook endpoints. Feature 4 (repayment schedule and autopay) and Feature 5 (hardship
-    safety net) are described here; see docs/features/f4-repayment-autopay/02-design.md §6 and
-    docs/features/f5-hardship-safety-net/02-design.md §6.
+    Every member, desk and public endpoint of the backend, plus the PayPal and SMS webhooks. Agent tools are in
+    `agent-tools.yaml`; service-token routes under `/internal/**` are in `internal-jobs.yaml`.
+
+    Authentication: `/api/**` takes a signed actor token (ADR 0016) in `Authorization: Bearer`; the dev, test and demo
+    profiles also accept `X-Seed-Member-Id` or `X-Seed-Staff-Id` and `X-Seed-Staff-Roles`. Two routes are public and
+    declare `security: []`: `GET /api/v1/reserve/summary` and `GET /api/v1/records/verify/{token}` (plus
+    `POST /api/v1/reserve/donations/intent` and the webhooks). Put an edge rate limit in front of the public routes.
+
+    Features: F1 savings, F2 microloans, F3 fair loan check, F4 repayment and autopay, F5 hardship safety net,
+    F6 credit record, plus identity, the reserve, fraud flags, desk read models and the member home call.
 
     Errors are RFC 9457 `application/problem+json` with a stable `type`
     (`https://problems.paypal-seed.dev/{code}`) and the same `code` property. Money is integer cents (USD).
@@ -22,12 +29,43 @@ tags:
     description: Member side of the hardship safety net (F5)
   - name: hardship-desk
     description: Officer and checker desk for hardship cases, and the agent kill switch (F5)
+  - name: identity
+    description: Member profile and consents (ADR 0012)
+  - name: identity-desk
+    description: Staff directory for the desk
+  - name: savings
+    description: Goals, deposits, withdrawals and the coach (F1)
+  - name: lending
+    description: Eligibility and loan applications (F2)
+  - name: lending-desk
+    description: Application review, approval and payout (F2)
+  - name: underwriting
+    description: Income consent and the fair loan check (F3)
+  - name: underwriting-desk
+    description: Officer decisions on fair checks (F3)
+  - name: record
+    description: The member's credit record and share links (F6)
+  - name: record-public
+    description: Partner verification of a shared record, no sign-in (F6)
+  - name: record-desk
+    description: Officer read of a member's record (F6)
+  - name: desk-query
+    description: Keyset read models for the desk grids (ADR 0015)
+  - name: reserve
+    description: Public fund transparency and donations (ADR 0019)
+  - name: reserve-desk
+    description: Cover requests (ADR 0019)
+  - name: fraud-desk
+    description: Fraud flags and evidence (ADR 0019)
+  - name: home
+    description: One call for the member Home page (ADR 0018)
 security:
   - memberSession: []
 
 paths:
   /api/v1/loans:
     get:
+      operationId: listMyLoans
       tags: [schedule]
       summary: The signed-in member's loans
       responses:
@@ -36,6 +74,7 @@ paths:
 
   /api/v1/loans/{loanId}/schedule:
     get:
+      operationId: getLoanSchedule
       tags: [schedule]
       summary: Current (or a given) schedule version with derived instalment status
       parameters:
@@ -52,6 +91,7 @@ paths:
 
   /api/v1/loans/{loanId}/schedule/versions:
     get:
+      operationId: listScheduleVersions
       tags: [schedule]
       summary: Every schedule version, with the diff from the previous one
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -60,6 +100,7 @@ paths:
 
   /api/v1/loans/{loanId}/timeline:
     get:
+      operationId: getLoanTimeline
       tags: [schedule]
       summary: Bryntum Scheduler Pro payload (instalments, previous plan as ghost events, grace windows)
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -68,6 +109,7 @@ paths:
 
   /api/v1/loans/{loanId}/transactions:
     get:
+      operationId: listLoanTransactions
       tags: [payments]
       summary: Money events of the loan (receipts, reversals, overpayment refunds)
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -76,6 +118,7 @@ paths:
 
   /api/v1/loans/{loanId}/payoff-quote:
     get:
+      operationId: getPayoffQuote
       tags: [payments]
       summary: Outstanding balance (0% loan, valid until the next money event)
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -87,6 +130,7 @@ paths:
 
   /api/v1/loans/{loanId}/payments/preview:
     post:
+      operationId: previewPayment
       tags: [payments]
       summary: What paying an amount today would do. Pure engine call; writes nothing
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -96,6 +140,7 @@ paths:
 
   /api/v1/loans/{loanId}/schedule/preview:
     post:
+      operationId: previewReschedule
       tags: [schedule]
       summary: What a hardship option would do. Pure engine call; writes nothing
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -106,6 +151,7 @@ paths:
 
   /api/v1/loans/{loanId}/payments:
     post:
+      operationId: createLoanPayment
       tags: [payments]
       summary: Create a PayPal order for a catch-up, early, payoff or pay-what-you-can payment
       parameters:
@@ -129,6 +175,7 @@ paths:
 
   /api/v1/loans/{loanId}/payments/{orderId}/capture:
     post:
+      operationId: captureLoanPayment
       tags: [payments]
       summary: Capture an approved order. The repayment itself is recorded from the payment event
       parameters:
@@ -140,6 +187,7 @@ paths:
 
   /api/v1/loans/{loanId}/overpayment-refunds:
     post:
+      operationId: refundOverpayment
       tags: [payments]
       summary: Refund money held as overpayment (newest captures first)
       parameters:
@@ -154,6 +202,7 @@ paths:
 
   /api/v1/loans/{loanId}/autopay:
     post:
+      operationId: startAutopay
       tags: [autopay]
       summary: Start autopay (PayPal subscription, $1 x quantity). Idempotent while approval is pending
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -164,6 +213,7 @@ paths:
         '201': { description: Mandate with approve URL, content: { application/json: { schema: { $ref: '#/components/schemas/MandateView' } } } }
         '409': { $ref: '#/components/responses/Problem' }
     delete:
+      operationId: stopAutopay
       tags: [autopay]
       summary: Stop autopay; the loan returns to manual payments
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -172,6 +222,7 @@ paths:
 
   /api/v1/loans/{loanId}/autopay/confirm:
     post:
+      operationId: confirmAutopay
       tags: [autopay]
       summary: Return-URL confirmation; safe to race with the activation webhook
       parameters: [ { $ref: '#/components/parameters/LoanId' } ]
@@ -181,6 +232,7 @@ paths:
 
   /api/v1/members/me/due-day-suggestion:
     get:
+      operationId: getDueDaySuggestion
       tags: [schedule]
       summary: Suggested due day (day after money usually arrives; falls back to stated payday)
       parameters: [ { name: statedPayday, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 31 } } ]
@@ -191,6 +243,7 @@ paths:
 
   /api/v1/desk/loans/{loanId}/schedule:
     get:
+      operationId: getDeskLoanSchedule
       tags: [desk]
       security: [ { staffSession: [] } ]
       parameters: [ { $ref: '#/components/parameters/LoanId' }, { name: version, in: query, schema: { type: integer } } ]
@@ -200,6 +253,7 @@ paths:
 
   /api/v1/desk/loans/{loanId}/integrity:
     get:
+      operationId: getLoanIntegrity
       tags: [desk]
       summary: INV-2 check for one loan (allocation, cached state and ledger agree)
       security: [ { staffSession: [] } ]
@@ -222,6 +276,7 @@ paths:
 
   /api/v1/desk/cob-runs:
     get:
+      operationId: listCobRuns
       tags: [desk]
       security: [ { staffSession: [] } ]
       parameters:
@@ -232,6 +287,7 @@ paths:
 
   /api/v1/webhooks/paypal:
     post:
+      operationId: receivePayPalWebhook
       tags: [webhooks]
       summary: PayPal webhook ingress (verify signature, store in inbox, fast 200)
       security: []
@@ -242,6 +298,7 @@ paths:
 
   /api/v1/webhooks/zapier/sms:
     post:
+      operationId: receiveZapierSms
       tags: [webhooks]
       summary: Member SMS replies via Zapier (HMAC-SHA256 over "timestamp.body"); A to D, NO and HELP go to the hardship case of that member
       security: []
@@ -255,6 +312,7 @@ paths:
 
   /api/v1/loans/{loanId}/hardship:
     get:
+      operationId: getHardshipOffer
       tags: [hardship]
       summary: The member's open hardship case and its active offer (F5)
       description: |
@@ -300,6 +358,7 @@ paths:
 
   /api/v1/hardship/cases:
     post:
+      operationId: openHardshipCase
       tags: [hardship]
       summary: Ask for help (opens a case at once, never gated by the score)
       description: |
@@ -325,6 +384,7 @@ paths:
 
   /api/v1/hardship/cases/{caseId}/choice:
     post:
+      operationId: chooseHardshipOption
       tags: [hardship]
       summary: The member chooses one option of the active offer (recorded consent)
       description: |
@@ -358,6 +418,7 @@ paths:
 
   /api/v1/hardship/cases/{caseId}/decline:
     post:
+      operationId: declineHardshipOffer
       tags: [hardship]
       summary: One-tap decline; no reason needed
       parameters:
@@ -370,6 +431,7 @@ paths:
 
   /api/v1/desk/hardship/cases:
     get:
+      operationId: listHardshipCases
       tags: [hardship-desk]
       summary: Hardship queue (keyset paged, newest first; filters are an allowlist)
       security: [ { staffSession: [] } ]
@@ -395,6 +457,7 @@ paths:
 
   /api/v1/desk/hardship/cases/{caseId}:
     get:
+      operationId: getHardshipCase
       tags: [hardship-desk]
       summary: Evidence panel (signals with numbers, options, member choice, narratives with their source, approval, agent run)
       security: [ { staffSession: [] } ]
@@ -406,6 +469,7 @@ paths:
 
   /api/v1/desk/hardship/cases/{caseId}/decision:
     post:
+      operationId: decideHardshipCase
       tags: [hardship-desk]
       summary: Maker or checker decision (which one follows from the approval request)
       description: |
@@ -448,6 +512,7 @@ paths:
 
   /api/v1/desk/hardship/cases/{caseId}/retry:
     post:
+      operationId: retryHardshipExecution
       tags: [hardship-desk]
       summary: Retry an approved case whose execution ran out of attempts (roles OFFICER or ADMIN)
       security: [ { staffSession: [] } ]
@@ -459,6 +524,7 @@ paths:
 
   /api/v1/desk/agents/kill-switch:
     get:
+      operationId: getKillSwitch
       tags: [hardship-desk]
       summary: Effective agent mode and circuit state (roles OFFICER, CHECKER or ADMIN)
       security: [ { staffSession: [] } ]
@@ -467,6 +533,7 @@ paths:
         '200': { description: State, content: { application/json: { schema: { $ref: '#/components/schemas/KillSwitchState' } } } }
         '403': { $ref: '#/components/responses/Problem' }
     post:
+      operationId: setKillSwitch
       tags: [hardship-desk]
       summary: Change an agent mode (audited, append-only history)
       description: |
@@ -490,14 +557,1028 @@ paths:
         '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/KillSwitchState' } } } }
         '403': { $ref: '#/components/responses/Problem' }
 
+  # ---------------------------------------------------------------- Identity (ADR 0012)
+  /api/v1/members/me:
+    get:
+      tags: [identity]
+      operationId: getMyProfile
+      summary: The signed-in member's profile
+      responses:
+        '200':
+          description: Profile
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemberProfile' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      tags: [identity]
+      operationId: updateMyProfile
+      summary: Change language, wallet preference or display name (only the fields present change)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProfileUpdate' } } }
+      responses:
+        '200':
+          description: Updated profile
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemberProfile' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/consents:
+    get:
+      tags: [identity]
+      operationId: listMyConsents
+      summary: Everything the member has agreed to, newest first, revoked entries included
+      responses:
+        '200':
+          description: Consent ledger
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ConsentRecord' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [identity]
+      operationId: grantConsent
+      summary: Record a consent (idempotent for the same type and version)
+      description: |
+        `version` defaults to the current version of the text. A version that is not current is refused with
+        `consent-version-stale` so the member never agrees to text they did not see. Granting a newer version closes the
+        older entry and appends a new one.
+        `INCOME_READ` here is the member-facing record; the fair loan check keeps enforcing its own consent in
+        underwriting (ADR 0012).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConsentGrant' } } }
+      responses:
+        '201':
+          description: The consent was recorded
+          content: { application/json: { schema: { $ref: '#/components/schemas/ConsentRecord' } } }
+        '200':
+          description: Already active at this version
+          content: { application/json: { schema: { $ref: '#/components/schemas/ConsentRecord' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/consents/{type}:
+    delete:
+      tags: [identity]
+      operationId: revokeConsent
+      summary: Revoke a consent now. Always allowed; revoking something not granted is a no-op
+      parameters:
+        - { name: type, in: path, required: true, schema: { $ref: '#/components/schemas/ConsentType' } }
+      responses:
+        '204': { description: No active consent of this type remains }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/staff:
+    get:
+      tags: [identity-desk]
+      operationId: listStaff
+      summary: Staff directory (names for maker and checker columns). Officers, checkers and admins
+      parameters:
+        - { name: includeInactive, in: query, required: false, schema: { type: boolean, default: false } }
+      security: [ { staffSession: [] } ]
+      responses:
+        '200':
+          description: Staff
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StaffRecord' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+
+  # ---------------------------------------------------------------- Credit record (ADR 0014)
+  /api/v1/members/me/record:
+    get:
+      tags: [record]
+      operationId: getMyRecord
+      summary: The signed-in member's credit record
+      description: |
+        A member with no history yet gets level `NEW` with empty counts, not a 404. `next` says what is still
+        missing for the next level and is absent at the top level. Hardship plans are shown as `hardshipPlansOnPlan`
+        and never reduce a level.
+      responses:
+        '200':
+          description: Record
+          content: { application/json: { schema: { $ref: '#/components/schemas/RecordView' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/record/history:
+    get:
+      tags: [record]
+      operationId: getMyRecordHistory
+      summary: The facts behind the record, newest first, keyset paginated
+      parameters:
+        - { name: before, in: query, required: false, schema: { type: integer, format: int64, minimum: 1 }, description: 'The nextBefore of the previous page' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: One page
+          content: { application/json: { schema: { $ref: '#/components/schemas/HistoryPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/record/shares:
+    post:
+      tags: [record]
+      operationId: createRecordShare
+      summary: Create a share link for the current record
+      description: |
+        Freezes the record as a snapshot and returns a signed token. The token is shown only in this response (and
+        in an idempotent replay of it); the list never returns it. `expiresInDays` is 1 to 30. `detail` chooses what
+        a partner sees: `LEVEL` (level only), `SUMMARY` (also since date and loans repaid on plan) or `FULL` (also
+        the on-time band). The same `Idempotency-Key` with the same body returns the same share; with a different
+        body, 409 `idempotency-key-reused`. A member can hold 25 active shares.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateShareRequest' }
+            example: { expiresInDays: 14, detail: SUMMARY }
+      responses:
+        '201':
+          description: Share created
+          content: { application/json: { schema: { $ref: '#/components/schemas/ShareCreated' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'idempotency-key-reused | record-nothing-to-share | share-limit-reached', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: dependency-unavailable (no signing key is configured), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    get:
+      tags: [record]
+      operationId: listRecordShares
+      summary: The member's share links, newest first, without tokens
+      responses:
+        '200':
+          description: Shares
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ShareView' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/record/shares/{shareId}:
+    delete:
+      tags: [record]
+      operationId: revokeRecordShare
+      summary: Revoke a share link
+      description: Takes effect for the next verification (partners may hold a cached answer for up to 5 seconds). Revoking twice is fine.
+      parameters:
+        - { name: shareId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Revoked }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { description: share-not-found (no such share, or not this member's), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/records/verify/{token}:
+    get:
+      tags: [record-public]
+      operationId: verifyRecord
+      summary: Verify a shared record (public, no sign-in)
+      description: |
+        Returns only what the member chose to share: level, since date, loans repaid on plan, an on-time band, when
+        the link was issued and when it expires, and a `valid` flag. `valid` is false when the member has had a
+        default since the snapshot was taken, so a partner does not rely on an out-of-date answer.
+
+        Unknown, expired, revoked and tampered tokens all return the same generic 404 `record-not-found`; nothing
+        says which. The response never contains a name, an email, a payer id, a loan amount or a member id. It may
+        be cached for 5 seconds. Put a rate limit in front of this route.
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, maxLength: 400 } }
+      responses:
+        '200':
+          description: Verified
+          headers:
+            Cache-Control: { schema: { type: string }, description: 'public, max-age=5' }
+          content: { application/json: { schema: { $ref: '#/components/schemas/VerifiedRecord' } } }
+        '404': { description: record-not-found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: dependency-unavailable (no signing key is configured), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/members/{memberId}/record:
+    get:
+      tags: [record-desk]
+      operationId: getMemberRecordForDesk
+      summary: A member's record with the last facts (roles OFFICER, CHECKER or ADMIN)
+      parameters:
+        - { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Record
+          content: { application/json: { schema: { $ref: '#/components/schemas/DeskRecordView' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+
+  # ---------------------------------------------------------------- Member home (ADR 0018)
+  /api/v1/members/me/home:
+    get:
+      tags: [home]
+      operationId: getMyHome
+      summary: One call for the member Home page
+      description: |
+        Member role only. Staff and the service get `403`; no credential gets `401`. A member with no data in a
+        module gets that section as `null` with a `sectionErrors` entry (`code: no-data`), and a module that failed
+        gets `code: unavailable`. The response is never cached by shared caches.
+      responses:
+        '200':
+          description: The home summary, possibly with some sections missing
+          headers:
+            Cache-Control: { schema: { type: string, examples: ['no-store, private'] } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/HomeView' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+
+  # ---------------------------------------------------------------- Desk read models (ADR 0015)
+  /api/v1/desk/applications:
+    get:
+      tags: [desk-query]
+      operationId: listDeskApplications
+      summary: Loan application queue
+      description: |
+        Default order is `slaDueAt` ascending, so the application closest to its deadline comes first. `slaBreached=true`
+        returns open applications (SUBMITTED, PENDING_SECOND_APPROVAL) whose deadline has passed.
+      parameters:
+        - { name: sort, in: query, required: false, description: 'Allowed columns: submittedAt, slaDueAt, requestedAmountCents, termMonths, savingStreakMonths, status, assessmentOutcome, assignedOfficer', schema: { type: string, examples: ['slaDueAt:asc'] } }
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/ApplicationStatus' } }, style: form, explode: false }
+        - { name: slaBreached, in: query, required: false, schema: { type: boolean } }
+        - { name: assessmentOutcome, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/AssessmentOutcome' } }, style: form, explode: false }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page
+          headers: { Cache-Control: { schema: { type: string, const: no-store } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPage' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/assessments:
+    get:
+      tags: [desk-query]
+      operationId: listDeskAssessments
+      summary: Fair-check decisions queue
+      description: Default order is newest first (`createdAt` descending).
+      parameters:
+        - { name: sort, in: query, required: false, description: 'Allowed columns: createdAt, recommendedAmountCents, status', schema: { type: string, examples: ['createdAt:desc'] } }
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/AssessmentStatus' } }, style: form, explode: false }
+        - { name: disputed, in: query, required: false, schema: { type: boolean } }
+        - { name: recommended, in: query, required: false, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page
+          headers: { Cache-Control: { schema: { type: string, const: no-store } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/AssessmentPage' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/portfolio/loans:
+    get:
+      tags: [desk-query]
+      operationId: listDeskPortfolioLoans
+      summary: Loan portfolio
+      description: |
+        Default order is newest disbursement first. `agingBucket` as a sort column orders by severity (CURRENT first),
+        not by name. A loan is listed once its schedule has been seen.
+      parameters:
+        - { name: sort, in: query, required: false, description: 'Allowed columns: disbursedOn, principalCents, outstandingCents, nextDueDate, daysLate, agingBucket, status', schema: { type: string, examples: ['daysLate:desc'] } }
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/LoanStatus' } }, style: form, explode: false }
+        - { name: agingBucket, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/AgingBucket' } }, style: form, explode: false }
+        - { name: autopay, in: query, required: false, schema: { type: boolean } }
+        - { name: hardship, in: query, required: false, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page
+          headers: { Cache-Control: { schema: { type: string, const: no-store } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/LoanPage' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/portfolio/summary:
+    get:
+      tags: [desk-query]
+      operationId: getDeskPortfolioSummary
+      summary: Portfolio totals and inclusion impact
+      description: |
+        Counts and cents by status and aging bucket (every bucket is listed, in severity order), the on-time repayment
+        rate, open hardship cases and the inclusion figures. The figures come from one snapshot. `rateBasisPoints` is
+        null while no instalment has fallen due.
+      responses:
+        '200':
+          description: Summary
+          headers: { Cache-Control: { schema: { type: string, const: no-store } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/PortfolioSummary' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/workload:
+    get:
+      tags: [desk-query]
+      operationId: getDeskWorkload
+      summary: Approvals waiting per officer role and SLA bucket
+      description: |
+        One cell per kind of work, role and SLA bucket, for the Bryntum workload view. Loan applications wait for an
+        OFFICER until the first approval and for a CHECKER after it; hardship decisions the same by stage.
+      responses:
+        '200':
+          description: Workload
+          headers: { Cache-Control: { schema: { type: string, const: no-store } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Workload' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+
+  # ---------------------------------------------------------------- Reserve (ADR 0019)
+  /api/v1/reserve/summary:
+    get:
+      tags: [reserve]
+      operationId: getReserveSummary
+      summary: Fund balance, donations, payouts and coverage (public, no sign-in)
+      description: |
+        Exposure is the sum of outstanding balances of loans, kept up to date from lending events. The coverage
+        ratio is `balanceCents / openExposureCents` in basis points (10000 means the fund could repay every open
+        loan once); it is null when there is no exposure. The response may be cached for 30 seconds.
+      security: []
+      responses:
+        '200':
+          description: Summary
+          headers:
+            Cache-Control: { schema: { type: string }, description: 'public, max-age=30' }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ReserveSummary' } } }
+
+  /api/v1/reserve/donations/intent:
+    post:
+      tags: [reserve]
+      operationId: createDonationIntent
+      summary: Start a donation. Returns the custom id the web page puts on the PayPal order or Donate button
+      description: |
+        Public. The server remembers whether the donor wants their display name shown (default: anonymous) and
+        returns a `customId` of the form `reserve-donation:{uuid}`. The web page passes it to PayPal as
+        `custom_id`; the capture webhook carries it back. No PayPal credential is returned. The same
+        `Idempotency-Key` with the same body returns the same `customId`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationIntentRequest' }
+            example: { anonymous: false, displayName: Maria }
+      responses:
+        '201':
+          description: Intent
+          content: { application/json: { schema: { $ref: '#/components/schemas/DonationIntent' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { description: idempotency-key-reused, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/reserve/cover-requests:
+    post:
+      tags: [reserve-desk]
+      operationId: createCoverRequest
+      summary: Raise a cover request for a member's loan (roles OFFICER or ADMIN)
+      description: |
+        The amount is capped per request and per member per calendar year (`seed.reserve.cover.*`). The fund must
+        hold at least the amount, the loan must be the member's and active, and the amount cannot exceed what is
+        outstanding. The request then waits for a maker (OFFICER) and a different checker (CHECKER). The same
+        `Idempotency-Key` with the same body returns the stored request.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateCoverRequest' } } }
+      responses:
+        '201':
+          description: Created, waiting for approval
+          content: { application/json: { schema: { $ref: '#/components/schemas/CoverRequest' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { description: cover-loan-not-found (no such loan, or not this member's), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'idempotency-key-reused | reserve-insufficient-funds | cover-request-open', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: 'cover-amount-exceeds-request-cap | cover-member-cap-exceeded | cover-loan-not-active | cover-exceeds-outstanding', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    get:
+      tags: [reserve-desk]
+      operationId: listCoverRequests
+      summary: Cover requests, newest first, keyset paginated (roles OFFICER, CHECKER or ADMIN)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/CoverStatus' } }, style: form, explode: true }
+        - { name: before, in: query, required: false, schema: { type: string, format: uuid }, description: 'The nextBefore of the previous page' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: One page
+          content: { application/json: { schema: { $ref: '#/components/schemas/CoverRequestPage' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/reserve/cover-requests/{coverRequestId}/decision:
+    post:
+      tags: [reserve-desk]
+      operationId: decideCoverRequest
+      summary: Maker or checker decision (roles OFFICER, then a different CHECKER)
+      description: |
+        The first decision is the maker's, the second the checker's, by a different person. The second approval
+        posts the ledger entry (fund to the loan's receivable) and publishes `CoverApproved`. An approval is refused
+        with 409 `reserve-insufficient-funds` when the fund no longer holds the amount.
+      parameters:
+        - { name: coverRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CoverDecision' } } }
+      responses:
+        '200':
+          description: Decision recorded
+          content: { application/json: { schema: { $ref: '#/components/schemas/CoverDecisionResult' } } }
+        '403': { description: 'sod-violation (the checker is the maker) or missing role', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '404': { description: cover-request-not-found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'cover-not-awaiting-decision | reserve-insufficient-funds | approval-request-closed', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: reason-code-required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+
+  # ---------------------------------------------------------------- Fraud (ADR 0019)
+  /api/v1/desk/fraud/flags:
+    get:
+      tags: [fraud-desk]
+      operationId: listFraudFlags
+      summary: Flags, newest first, keyset paginated (roles OFFICER, CHECKER or ADMIN)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: array, items: { $ref: '#/components/schemas/FlagStatus' } }, style: form, explode: true }
+        - { name: before, in: query, required: false, schema: { type: string, format: uuid }, description: 'The nextBefore of the previous page' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: One page
+          content: { application/json: { schema: { $ref: '#/components/schemas/FlagPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/fraud/flags/{flagId}:
+    get:
+      tags: [fraud-desk]
+      operationId: getFraudFlag
+      summary: One flag with its signals and review (roles OFFICER, CHECKER or ADMIN)
+      parameters: [ { $ref: '#/components/parameters/FlagId' } ]
+      responses:
+        '200':
+          description: Flag
+          content: { application/json: { schema: { $ref: '#/components/schemas/FlagDetail' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/fraud/flags/{flagId}/review:
+    post:
+      tags: [fraud-desk]
+      operationId: reviewFraudFlag
+      summary: Clear or confirm a flag (roles OFFICER or ADMIN)
+      description: |
+        Writes an entry to the audit log. Confirming needs a note. A flag is reviewed once; new evidence later opens a
+        new flag. The same `Idempotency-Key` with the same body returns the stored result.
+      parameters:
+        - $ref: '#/components/parameters/FlagId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReviewRequest' } } }
+      responses:
+        '200':
+          description: Reviewed
+          content: { application/json: { schema: { $ref: '#/components/schemas/FlagView' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'fraud-flag-already-reviewed | idempotency-key-reused', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: fraud-note-required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/fraud/flags/{flagId}/evidence:
+    get:
+      tags: [fraud-desk]
+      operationId: getFraudFlagEvidence
+      summary: Dispute evidence pack - every signal with the facts behind it (roles OFFICER, CHECKER or ADMIN)
+      parameters: [ { $ref: '#/components/parameters/FlagId' } ]
+      responses:
+        '200':
+          description: Evidence
+          content: { application/json: { schema: { $ref: '#/components/schemas/FlagEvidence' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+
+  # ---------------------------------------------------------------- Savings and microloan payouts (ADR 0017)
+  /api/v1/savings/goals:
+    post:
+      tags: [savings]
+      operationId: createSavingsGoal
+      summary: Start a savings goal (and its PayPal subscription)
+      description: |
+        Needs an `Idempotency-Key`; the same key returns the same goal (`200`) and one PayPal subscription, a different
+        body under it is `409 idempotency-key-reused`. `wallet` PAYPAL (default) saves by monthly subscription and the
+        monthly amount must be whole dollars; VENMO has no subscription and the goal is `ACTIVE` at once.
+        `payPalSubscriptionId` is legacy: accepted only in the dev, test and demo profiles (the goal is then `ACTIVE`
+        with no approval step) and `422 legacy-id-not-allowed` anywhere else.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGoalRequest' }
+      responses:
+        '201': { description: "Created; for a PayPal wallet `status` is PENDING_APPROVAL and `approvalUrl` is where the member agrees", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '200': { description: "Replay of the same Idempotency-Key", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { description: "idempotency-key-reused, or the limit of three open goals", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: "idempotency-key-required, amount-not-whole-dollars, legacy-id-not-allowed", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (PayPal unreachable; nothing was created, retry with the same Idempotency-Key)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}:
+    get:
+      tags: [savings]
+      operationId: getSavingsGoal
+      summary: One of the member's goals
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      responses:
+        '200': { description: "The goal", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/savings/members/{memberId}/goals:
+    get:
+      tags: [savings]
+      operationId: listSavingsGoals
+      summary: The member's goals, oldest first (only the signed-in member's own id is allowed)
+      parameters: [ { name: memberId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: "Goals", content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SavingsGoal' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/savings/goals/{goalId}/pause:
+    post:
+      tags: [savings]
+      operationId: pauseSavingsGoal
+      summary: Pause saving; suspends the PayPal subscription
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      responses:
+        '200': { description: "The paused goal", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "The goal cannot be paused in its state (not yet approved, cancelled, expired)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}/resume:
+    post:
+      tags: [savings]
+      operationId: resumeSavingsGoal
+      summary: Resume saving; activates the subscription, or starts a new one to approve when PayPal ended it
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      responses:
+        '200': { description: "The goal; PENDING_APPROVAL with a new `approvalUrl` when the old subscription was cancelled at PayPal", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "The goal cannot be resumed in its state", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}/amount:
+    post:
+      tags: [savings]
+      operationId: changeSavingsAmount
+      summary: Change the monthly amount; revises the PayPal subscription
+      description: PayPal may ask the member to agree to the change; the goal then carries an `approvalUrl`.
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ChangeAmountRequest' } } }
+      responses:
+        '200': { description: "The goal", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "The goal is pending approval, cancelled or expired", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: "amount-not-whole-dollars", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}/withdraw:
+    post:
+      tags: [savings]
+      operationId: withdrawFromSavingsGoal
+      summary: Take money out of a goal through a PayPal payout
+      description: |
+        Reserves the amount (it leaves `currentBalance` at once and cannot be spent twice), asks PayPal to pay it out, and
+        answers `202` with status `REQUESTED` while the payout is in flight. A payout PayPal answers at once is `200`.
+        The ledger moves when the payout succeeds. On a failed payout the money returns to the goal and the member is
+        told; if PayPal takes a delivered payout back, the booking is reversed and the money returns to the goal.
+        `wallet` defaults to the member's saved wallet. `payPalPayoutId` is legacy (dev, test and demo only: books
+        the withdrawal at once without calling PayPal) and answers the goal.
+      parameters:
+        - $ref: '#/components/parameters/GoalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WithdrawRequest' } } }
+      responses:
+        '202': { description: "Reserved and sent to PayPal", content: { application/json: { schema: { $ref: '#/components/schemas/Withdrawal' } } } }
+        '200': { description: "Replay, or a payout PayPal finished at once", content: { application/json: { schema: { $ref: '#/components/schemas/Withdrawal' } } } }
+        '400': { description: "Insufficient available balance" }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "idempotency-key-reused, or payout-recipient-missing (no PayPal account on file)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: "idempotency-key-required", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (nothing was reserved; retry with the same Idempotency-Key)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}/withdrawals:
+    get:
+      tags: [savings]
+      operationId: listSavingsWithdrawals
+      summary: The goal's withdrawals, newest first
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      responses:
+        '200': { description: "Withdrawals", content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Withdrawal' } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/savings/goals/{goalId}/topup:
+    post:
+      tags: [savings]
+      operationId: startSavingsTopUp
+      summary: Start a one-off deposit (PayPal or Venmo); the only way to save from Venmo
+      description: |
+        Moves no money. The member approves the order at `approvalUrl` (the PayPal JS SDK with Venmo enabled) and the
+        client then calls the capture route. The goal is credited when PayPal confirms the money, once. The same
+        `Idempotency-Key` returns the same order. `payPalCaptureId` is legacy (dev, test and demo only: credits the goal
+        at once) and answers the goal.
+      parameters:
+        - $ref: '#/components/parameters/GoalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TopUpRequest' } } }
+      responses:
+        '201': { description: "The order to approve", content: { application/json: { schema: { $ref: '#/components/schemas/TopUpOrder' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "topup-not-allowed (the goal is pending approval, cancelled or expired)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: "idempotency-key-required", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/savings/goals/{goalId}/topup/{orderId}/capture:
+    post:
+      tags: [savings]
+      operationId: captureSavingsTopUp
+      summary: Capture an approved top-up order
+      description: The goal is credited by the capture event (whichever of this call or PayPal's webhook reports it first), so read the goal again for the new balance.
+      parameters:
+        - $ref: '#/components/parameters/GoalId'
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: "Capture asked of PayPal", content: { application/json: { schema: { $ref: '#/components/schemas/TopUpCapture' } } } }
+        '404': { description: "Not the member's goal, or no such top-up", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/loans/applications/{applicationId}/disburse:
+    post:
+      tags: [lending-desk]
+      operationId: disburseLoanApplication
+      summary: Pay an approved application out through PayPal
+      description: |
+        Moves the application to `DISBURSING` and asks PayPal to pay the member (payout reference = the application id;
+        a retry after a payout PayPal refused uses a new reference). The loan, Schedule Version 1 and the ledger
+        postings are created only when the payout succeeds, exactly as `/internal/loans/disbursed` does, and once. A
+        payout PayPal answers at once is completed in this call (`DISBURSED`). Calling again while `DISBURSING` asks
+        PayPal for the same payout; calling for a `DISBURSED` application returns it.
+      security:
+        - staffSession: []
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      responses:
+        '200': { description: "The application (DISBURSING, DISBURSED, or APPROVED again with `payoutIssue` when PayPal refused at once)", content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "application-invalid-state (not approved by two officers), or payout-recipient-missing (the member has no PayPal account on file)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (the application stays APPROVED; call again)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+
+  # ---------------------------------------------------------------- Lending, underwriting and the coach (ADR 0020)
+  /api/v1/loans/eligibility:
+    get:
+      tags: [lending]
+      operationId: getLoanEligibility
+      summary: What the signed-in member can borrow, and why
+      description: |
+        Member role only. `memberId` is optional and must be the caller's own, otherwise `404`.
+        `tierLimitCents` is the ceiling that applies: the larger of the ladder rung's and the credit record level's.
+        `recordLevel` and `limitReason` say which and why in plain words; there is no score. A NEW record gives the
+        same limit the ladder always gave.
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+        - { name: verifiedMonthlyIncomeCents, in: query, required: false, schema: { type: integer, format: int64, minimum: 0 } }
+      responses:
+        '200': { description: Eligibility, content: { application/json: { schema: { $ref: '#/components/schemas/Eligibility' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/applications:
+    get:
+      tags: [lending]
+      operationId: listMyLoanApplications
+      summary: The signed-in member's applications
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Applications, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LoanApplication' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [lending]
+      operationId: submitLoanApplication
+      summary: Apply for a microloan as the signed-in member
+      description: '`memberId` in the body is optional and must be the caller''s own, otherwise `404`.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SubmitLoanApplicationRequest' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { description: 'dependency-unavailable (Transaction Search could not be read in time; nothing was stored)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/loans/applications/{applicationId}:
+    get:
+      tags: [lending]
+      operationId: getLoanApplication
+      summary: One application
+      description: A member sees only their own (another member's application is `404`). An officer, checker or admin sees any.
+      security:
+        - memberSession: []
+        - staffSession: []
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      responses:
+        '200': { description: The application, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/loans/applications/{applicationId}/cooling-off-cancel:
+    post:
+      tags: [lending]
+      operationId: cancelLoanInCoolingOff
+      summary: Return a disbursed loan within 48 hours
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Cancelled, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'application-invalid-state (including while the money is on its way: status DISBURSING), or cooling-off-expired', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/loans/applications:
+    get:
+      tags: [lending-desk]
+      operationId: listDeskLoanApplications
+      summary: Every application (roles OFFICER, CHECKER or ADMIN; the keyset grid is `/api/v1/desk/applications`)
+      security: [ { staffSession: [] } ]
+      responses:
+        '200': { description: Applications, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LoanApplication' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/loans/applications/{applicationId}/approve:
+    post:
+      tags: [lending-desk]
+      operationId: approveLoanApplication
+      summary: First or second approval
+      description: |
+        Roles OFFICER, CHECKER or ADMIN. The approver is the actor. The second approval must come from a different
+        person (`409 maker-checker-same-officer`).
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      responses:
+        '200': { description: The application, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/loans/applications/{applicationId}/reject:
+    post:
+      tags: [lending-desk]
+      operationId: rejectLoanApplication
+      summary: Reject an application (the officer is the actor; `officerId` in a body is ignored)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: '#/components/schemas/RejectApplicationRequest' } } }
+      responses:
+        '200': { description: The application, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/loans/{loanId}/schedule/versions:
+    get:
+      tags: [desk]
+      operationId: getDeskScheduleVersions
+      summary: Every schedule version of any loan, with the diff from the previous one (roles OFFICER, CHECKER or ADMIN)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200': { description: Versions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/VersionView' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/loans/{loanId}/transactions:
+    get:
+      tags: [desk]
+      operationId: getDeskLoanTransactions
+      summary: Money events of any loan (roles OFFICER, CHECKER or ADMIN)
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/LoanId' } ]
+      responses:
+        '200': { description: Transactions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TransactionView' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/underwriting/consent:
+    get:
+      tags: [underwriting]
+      operationId: getIncomeConsent
+      summary: The signed-in member's consent to read income, and what it covers
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Consent, content: { application/json: { schema: { $ref: '#/components/schemas/ConsentStatus' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [underwriting]
+      operationId: grantIncomeConsent
+      summary: Grant income consent (idempotent)
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Consent, content: { application/json: { schema: { $ref: '#/components/schemas/ConsentStatus' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [underwriting]
+      operationId: revokeIncomeConsent
+      summary: Withdraw income consent. Always allowed
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Consent, content: { application/json: { schema: { $ref: '#/components/schemas/ConsentStatus' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/underwriting/assessments:
+    get:
+      tags: [underwriting]
+      operationId: listMyAssessments
+      summary: The signed-in member's fair checks
+      parameters:
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Fair checks, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FairCheckCard' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [underwriting]
+      operationId: runFairLoanCheck
+      summary: Run the fair loan check for the signed-in member
+      description: |
+        `memberId` in the body is optional and must be the caller's own, otherwise `404`. The check reads income only
+        with the member's consent; without it the stated figures are used and the card says so
+        (`usedFallbackStatedIncome`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RunAssessmentRequest' } } }
+      responses:
+        '201': { description: The fair check card, content: { application/json: { schema: { $ref: '#/components/schemas/FairCheckCard' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/underwriting/assessments/{assessmentId}:
+    get:
+      tags: [underwriting]
+      operationId: getAssessment
+      summary: One fair check
+      description: A member sees only their own (another member's is `404`). An officer, checker or admin sees any.
+      security:
+        - memberSession: []
+        - staffSession: []
+      parameters: [ { $ref: '#/components/parameters/AssessmentId' } ]
+      responses:
+        '200': { description: The fair check card, content: { application/json: { schema: { $ref: '#/components/schemas/FairCheckCard' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/underwriting/assessments/{assessmentId}/dispute:
+    post:
+      tags: [underwriting]
+      operationId: disputeAssessment
+      summary: Say a number in the fair check is wrong
+      parameters:
+        - $ref: '#/components/parameters/AssessmentId'
+        - { name: memberId, in: query, required: false, deprecated: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DisputeAssessmentRequest' } } }
+      responses:
+        '200': { description: The fair check card, content: { application/json: { schema: { $ref: '#/components/schemas/FairCheckCard' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/underwriting/assessments:
+    get:
+      tags: [underwriting-desk]
+      operationId: listDeskFairChecks
+      summary: Every fair check (roles OFFICER, CHECKER or ADMIN; the keyset grid is `/api/v1/desk/assessments`)
+      security: [ { staffSession: [] } ]
+      responses:
+        '200': { description: Fair checks, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FairCheckCard' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/underwriting/assessments/{assessmentId}/decision:
+    post:
+      tags: [underwriting-desk]
+      operationId: recordOfficerDecision
+      summary: The officer's decision on a fair check
+      description: Roles OFFICER, CHECKER or ADMIN. The decider is the actor; `officerId` in the body is ignored.
+      security: [ { staffSession: [] } ]
+      parameters: [ { $ref: '#/components/parameters/AssessmentId' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OfficerDecisionRequest' } } }
+      responses:
+        '200': { description: The fair check card, content: { application/json: { schema: { $ref: '#/components/schemas/FairCheckCard' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/savings/coach/suggest:
+    post:
+      tags: [savings]
+      operationId: suggestSavingsPlan
+      summary: A savings plan and the loan it would unlock, from stated income and expenses
+      description: |
+        The numbers are computed by code from the stated figures. `messageEn` and `messageEs` are the only model-written
+        fields; `modelGenerated` says whether a model or the fixed template wrote them. Writes nothing. Amounts are
+        decimal dollars like the rest of the savings routes.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CoachSuggestionRequest' } } }
+      responses:
+        '200': { description: The plan, content: { application/json: { schema: { $ref: '#/components/schemas/CoachSuggestion' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/payments/webhooks:
+    post:
+      tags: [webhooks]
+      operationId: receivePayPalWebhookLegacyPath
+      deprecated: true
+      summary: Older path of `/api/v1/webhooks/paypal`; same handler and the same answers
+      security: []
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [id, event_type, resource] } } } }
+      responses:
+        '200': { description: accepted | duplicate, content: { application/json: { schema: { type: object, properties: { status: { type: string, enum: [accepted, duplicate] } } } } } }
+        '422': { description: invalid-webhook (signature failed; never stored), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+
 components:
   securitySchemes:
-    memberSession: { type: http, scheme: bearer, description: PayPal login session (dev profile accepts X-Seed-Member-Id) }
-    staffSession: { type: http, scheme: bearer, description: Staff passkey session (dev profile accepts X-Seed-Staff-Id and X-Seed-Staff-Roles) }
+    memberSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of a member (ADR 0016). Dev, test and demo profiles accept X-Seed-Member-Id instead' }
+    staffSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of staff with roles OFFICER, CHECKER or ADMIN (ADR 0016). Dev, test and demo profiles accept X-Seed-Staff-Id and X-Seed-Staff-Roles instead' }
   parameters:
     LoanId: { name: loanId, in: path, required: true, schema: { type: string, format: uuid } }
     CaseId: { name: caseId, in: path, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 128 } }
+    Cursor: { name: cursor, in: query, required: false, description: '`nextCursor` of the previous page; valid only for the same list, sort and filters', schema: { type: string } }
+    Limit: { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    FlagId: { name: flagId, in: path, required: true, schema: { type: string, format: uuid } }
+    GoalId: { name: goalId, in: path, required: true, schema: { type: string, format: uuid } }
+    ApplicationId: { name: applicationId, in: path, required: true, schema: { type: string, format: uuid } }
+    AssessmentId: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
   responses:
     Problem:
       description: RFC 9457 problem
@@ -587,7 +1668,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         type: { type: string, enum: [RECEIPT, REVERSAL, OVERPAYMENT_REFUND] }
-        source: { type: string, enum: [AUTOPAY, AUTOPAY_RETRY, CHECKOUT, PAYMENT_LINK, RECONCILER, PAYPAL, SEED] }
+        source: { type: string, enum: [AUTOPAY, AUTOPAY_RETRY, CHECKOUT, PAYMENT_LINK, RECONCILER, PAYPAL, SEED, RESERVE], description: 'RESERVE: money from the community fund paid the loan, not the member; paypalTxnId is reserve-cover:<coverRequestId>' }
         paypalTxnId: { type: string }
         amountCents: { type: integer }
         feeCents: { type: integer }
@@ -767,3 +1848,904 @@ components:
         reason: { type: string }
         trippedBy: { type: string, enum: [OFFICER, AUTO_VALIDATOR_REJECTIONS, AUTO_GROUNDING_FAILURES, AUTO_BUDGET, AUTO_INJECTION_CANARY] }
         circuits: { type: object, additionalProperties: { type: string }, description: Model id to breaker state }
+
+    # ---- module schemas (ADRs 0012 to 0021)
+    Language: { type: string, enum: [en, es] }
+    WalletPreference: { type: string, enum: [PAYPAL, VENMO] }
+    ConsentType: { type: string, enum: [TERMS, PRIVACY, INCOME_READ, RECORD_SHARING] }
+    StaffRole: { type: string, enum: [OFFICER, CHECKER, ADMIN] }
+    MemberProfile:
+      type: object
+      required: [memberId, language, walletPreference, paypalVerified, createdAt, lastLoginAt]
+      properties:
+        memberId: { type: string, format: uuid }
+        email: { type: [string, 'null'] }
+        displayName: { type: [string, 'null'] }
+        language: { $ref: '#/components/schemas/Language' }
+        walletPreference: { $ref: '#/components/schemas/WalletPreference' }
+        paypalVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time }
+    ProfileUpdate:
+      type: object
+      properties:
+        language: { $ref: '#/components/schemas/Language' }
+        walletPreference: { $ref: '#/components/schemas/WalletPreference' }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+    ConsentGrant:
+      type: object
+      required: [type]
+      properties:
+        type: { $ref: '#/components/schemas/ConsentType' }
+        version: { type: string, maxLength: 32, description: Defaults to the current version }
+    ConsentRecord:
+      type: object
+      required: [consentId, type, version, active, grantedAt]
+      properties:
+        consentId: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/ConsentType' }
+        version: { type: string }
+        active: { type: boolean }
+        grantedAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    StaffRecord:
+      type: object
+      required: [staffId, displayName, roles, active]
+      properties:
+        staffId: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: [string, 'null'] }
+        roles: { type: array, items: { $ref: '#/components/schemas/StaffRole' } }
+        active: { type: boolean }
+    RecordLevel: { type: string, enum: [NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY] }
+    OnTimeBand:
+      type: string
+      enum: ['below 70%', '70-84%', '85-94%', '95-100%']
+      description: The on-time share of saving months and instalments, as a band
+    ShareDetail: { type: string, enum: [LEVEL, SUMMARY, FULL] }
+    FactKind:
+      type: string
+      enum: [SAVINGS_DEPOSIT, SAVING_MONTHS_CLOSED, LOAN_DISBURSED, INSTALMENT_PAID, INSTALMENT_MISSED, LOAN_REPAID, LOAN_DEFAULTED, HARDSHIP_PLAN_APPLIED]
+    RecordView:
+      type: object
+      required: [level, levelRank, loanLimitCents, ladderTier, savings, loans, instalments, hardshipPlansOnPlan, defaults, onTimeBps, policyVersion]
+      properties:
+        level: { $ref: '#/components/schemas/RecordLevel' }
+        levelRank: { type: integer, minimum: 0, maximum: 4 }
+        loanLimitCents: { type: integer, format: int64, minimum: 0, description: 'The loan ceiling this level unlocks; lending takes the larger of this and the ladder tier limit' }
+        ladderTier: { type: integer, minimum: 0, maximum: 3, description: 'The microloan ladder rung this level corresponds to (0 means none)' }
+        since: { type: [string, 'null'], format: date, description: 'Date of the first fact' }
+        levelSince: { type: [string, 'null'], format: date }
+        onTimeBps: { type: integer, minimum: 0, maximum: 10000 }
+        onTimeBand: { oneOf: [{ $ref: '#/components/schemas/OnTimeBand' }, { type: 'null' }], description: 'Null until there is a first fact' }
+        savings:
+          type: object
+          required: [onTimeMonths, missedMonths]
+          properties:
+            onTimeMonths: { type: integer, minimum: 0 }
+            missedMonths: { type: integer, minimum: 0 }
+        loans:
+          type: object
+          required: [disbursed, repaidOnPlan, repaidOffPlan]
+          properties:
+            disbursed: { type: integer, minimum: 0 }
+            repaidOnPlan: { type: integer, minimum: 0 }
+            repaidOffPlan: { type: integer, minimum: 0 }
+        instalments:
+          type: object
+          required: [onTime, late, openLate]
+          properties:
+            onTime: { type: integer, minimum: 0 }
+            late: { type: integer, minimum: 0, description: 'Paid after the grace period' }
+            openLate: { type: integer, minimum: 0, description: 'Missed and still unpaid' }
+        hardshipPlansOnPlan: { type: integer, minimum: 0, description: 'Approved hardship plans; counted as on plan, never as a miss' }
+        defaults: { type: integer, minimum: 0 }
+        next: { oneOf: [{ $ref: '#/components/schemas/NextStep' }, { type: 'null' }] }
+        policyVersion: { type: string, examples: ['record-v1'] }
+    NextStep:
+      type: object
+      required: [level, onTimeSavingMonthsToGo, loansRepaidOnPlanToGo, requiredOnTimeBps, onTimeShareTooLow, latePaymentOpen]
+      properties:
+        level: { $ref: '#/components/schemas/RecordLevel' }
+        onTimeSavingMonthsToGo: { type: integer, minimum: 0 }
+        loansRepaidOnPlanToGo: { type: integer, minimum: 0 }
+        requiredOnTimeBps: { type: integer }
+        onTimeShareTooLow: { type: boolean }
+        latePaymentOpen: { type: boolean }
+    HistoryItem:
+      type: object
+      required: [seq, kind, occurredOn]
+      properties:
+        seq: { type: integer, format: int64 }
+        kind: { $ref: '#/components/schemas/FactKind' }
+        occurredOn: { type: string, format: date }
+        daysLate: { type: integer, minimum: 0, description: 'For INSTALMENT_PAID only' }
+    HistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/HistoryItem' } }
+        nextBefore: { type: [integer, 'null'], format: int64, description: 'Pass as `before` for the next page; null on the last page' }
+    CreateShareRequest:
+      type: object
+      properties:
+        expiresInDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
+        detail: { $ref: '#/components/schemas/ShareDetail' }
+    ShareCreated:
+      type: object
+      required: [shareId, token, verifyPath, detail, issuedAt, expiresAt]
+      properties:
+        shareId: { type: string, format: uuid }
+        token: { type: string, description: 'Compact signed token: v1.{keyId}.{payload}.{signature}. Treat as a secret link.' }
+        verifyPath: { type: string, examples: ['/api/v1/records/verify/v1.k1.AAAA.BBBB'] }
+        detail: { $ref: '#/components/schemas/ShareDetail' }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    ShareView:
+      type: object
+      required: [shareId, detail, status, issuedAt, expiresAt]
+      properties:
+        shareId: { type: string, format: uuid }
+        detail: { $ref: '#/components/schemas/ShareDetail' }
+        status: { type: string, enum: [ACTIVE, EXPIRED, REVOKED] }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    VerifiedRecord:
+      type: object
+      required: [valid, level, issuedAt, expiresAt]
+      description: Fields beyond `level` appear only when the member chose a wider `detail`.
+      properties:
+        valid: { type: boolean }
+        level: { $ref: '#/components/schemas/RecordLevel' }
+        since: { type: string, format: date, description: 'First day of the month the record began (SUMMARY and FULL)' }
+        loansRepaidOnPlan: { type: integer, minimum: 0, description: 'SUMMARY and FULL' }
+        onTimeBand: { $ref: '#/components/schemas/OnTimeBand' }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    DeskRecordView:
+      type: object
+      required: [memberId, record, recent]
+      properties:
+        memberId: { type: string, format: uuid }
+        record: { $ref: '#/components/schemas/RecordView' }
+        recent: { type: array, items: { $ref: '#/components/schemas/HistoryItem' }, description: 'The last 20 facts' }
+    Money:
+      type: object
+      required: [cents, currency]
+      properties:
+        cents: { type: integer, format: int64 }
+        currency: { type: string, examples: [USD] }
+    HomeSectionName:
+      type: string
+      enum: [profile, savings, lending, underwriting, creditRecord, hardship]
+    HomeSectionErrorCode:
+      type: string
+      enum: [no-data, unavailable]
+      description: "`no-data`: the module has nothing for this member yet. `unavailable`: the module failed; try again."
+    SectionError:
+      type: object
+      required: [section, code]
+      properties:
+        section: { $ref: '#/components/schemas/HomeSectionName' }
+        code: { $ref: '#/components/schemas/HomeSectionErrorCode' }
+    HomeView:
+      type: object
+      required: [generatedOn, sectionErrors]
+      properties:
+        generatedOn: { type: string, format: date, description: The business date the page was built for }
+        profile:
+          oneOf: [{ $ref: '#/components/schemas/ProfileSection' }, { type: 'null' }]
+        savings:
+          oneOf: [{ $ref: '#/components/schemas/SavingsSection' }, { type: 'null' }]
+        lending:
+          oneOf: [{ $ref: '#/components/schemas/LendingSection' }, { type: 'null' }]
+        underwriting:
+          oneOf: [{ $ref: '#/components/schemas/UnderwritingSection' }, { type: 'null' }]
+        creditRecord:
+          oneOf: [{ $ref: '#/components/schemas/CreditRecordSection' }, { type: 'null' }]
+        hardship:
+          oneOf: [{ $ref: '#/components/schemas/HardshipSection' }, { type: 'null' }]
+        sectionErrors:
+          type: array
+          items: { $ref: '#/components/schemas/SectionError' }
+    ProfileSection:
+      type: object
+      required: [language, walletPreference]
+      properties:
+        displayName: { type: [string, 'null'] }
+        language: { type: string, enum: [en, es] }
+        walletPreference: { type: string, enum: [PAYPAL, VENMO] }
+    SavingsSection:
+      type: object
+      required: [currentStreakMonths, monthlySaving, totalSaved, missedDepositsInQuarter, microloanEligible]
+      properties:
+        currentStreakMonths: { type: integer }
+        monthlySaving: { $ref: '#/components/schemas/Money' }
+        totalSaved: { $ref: '#/components/schemas/Money' }
+        missedDepositsInQuarter: { type: integer }
+        microloanEligible: { type: boolean }
+        goals:
+          type: array
+          items: { $ref: '#/components/schemas/GoalCard' }
+          description: Omitted while the goal list is not available; an empty list means the member has no goals
+    GoalCard:
+      type: object
+      required: [goalId, name, status, target, saved, monthly]
+      properties:
+        goalId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string }
+        target: { $ref: '#/components/schemas/Money' }
+        saved: { $ref: '#/components/schemas/Money' }
+        monthly: { $ref: '#/components/schemas/Money' }
+        targetDate: { type: [string, 'null'], format: date }
+    LendingSection:
+      type: object
+      required: [eligibility]
+      properties:
+        eligibility: { $ref: '#/components/schemas/EligibilityCard' }
+        activeLoan:
+          oneOf: [{ $ref: '#/components/schemas/ActiveLoanCard' }, { type: 'null' }]
+        openApplication:
+          oneOf: [{ $ref: '#/components/schemas/OpenApplicationCard' }, { type: 'null' }]
+    EligibilityCard:
+      type: object
+      required: [eligible, maxLoan, maxMonthlyInstalment, minTermMonths, maxTermMonths, reasons]
+      properties:
+        eligible: { type: boolean }
+        maxLoan: { $ref: '#/components/schemas/Money' }
+        maxMonthlyInstalment: { $ref: '#/components/schemas/Money' }
+        minTermMonths: { type: integer }
+        maxTermMonths: { type: integer }
+        reasons: { type: array, items: { type: string }, description: Plain-language reasons computed by lending }
+    ActiveLoanCard:
+      type: object
+      required: [loanId, status, outstanding]
+      properties:
+        loanId: { type: string, format: uuid }
+        status: { type: string }
+        outstanding: { $ref: '#/components/schemas/Money' }
+        nextPayment:
+          oneOf: [{ $ref: '#/components/schemas/NextPayment' }, { type: 'null' }]
+        autopay:
+          oneOf: [{ $ref: '#/components/schemas/AutopayCard' }, { type: 'null' }]
+    NextPayment:
+      type: object
+      required: [seq, dueDate, amount, remaining]
+      properties:
+        seq: { type: integer }
+        dueDate: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        remaining: { $ref: '#/components/schemas/Money' }
+    AutopayCard:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, description: The mandate state as payments reports it }
+        nextBillingDate: { type: [string, 'null'], format: date }
+    OpenApplicationCard:
+      type: object
+      required: [applicationId, status, requested, termMonths]
+      properties:
+        applicationId: { type: string, format: uuid }
+        status: { type: string }
+        requested: { $ref: '#/components/schemas/Money' }
+        termMonths: { type: integer }
+        coolingOffExpiresAt: { type: [string, 'null'], format: date-time }
+        payoutIssue: { type: [string, 'null'], description: A PayPal reason name when the last payout did not complete; the web maps it to plain words }
+    UnderwritingSection:
+      type: object
+      required: [incomeConsent]
+      properties:
+        incomeConsent: { type: boolean, description: The member agreed to Seed reading their income for the fair loan check }
+        latestAssessment:
+          oneOf: [{ $ref: '#/components/schemas/HomeAssessment' }, { type: 'null' }]
+    HomeAssessment:
+      type: object
+      required: [assessmentId, decision, memberDisputed, createdAt]
+      description: Where the latest fair loan check stands. No score, no tier, no reasons.
+      properties:
+        assessmentId: { type: string, format: uuid }
+        decision: { type: string, enum: [PENDING, APPROVED, ADJUSTED, DECLINED] }
+        memberDisputed: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    CreditRecordSection:
+      type: object
+      required: [level, nextStep]
+      properties:
+        level: { type: string, enum: [NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY] }
+        since: { type: [string, 'null'], format: date, description: The month the record began; null for a member with no history }
+        nextStep:
+          oneOf: [{ $ref: '#/components/schemas/HomeNextStep' }, { type: 'null' }]
+    HomeNextStep:
+      type: object
+      required: [nextLevel, hint]
+      description: What is missing for the next level, in the member's language. Absent at the top level.
+      properties:
+        nextLevel: { type: string }
+        onTimeSavingMonthsToGo: { type: integer }
+        loansRepaidOnPlanToGo: { type: integer }
+        hint: { type: string, description: One short, pressure-free sentence built by code from the counts above }
+    HardshipSection:
+      type: object
+      required: [offerWaiting]
+      properties:
+        offerWaiting: { type: boolean, description: Seed has options ready for the member to look at }
+        caseId: { type: [string, 'null'], format: uuid }
+        loanId: { type: [string, 'null'], format: uuid }
+        status: { type: [string, 'null'], description: Where the case stands; never a risk level }
+        dueDate: { type: [string, 'null'], format: date, description: The business date of the payment the case is about }
+        amountAtStake:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+    ApplicationStatus: { type: string, enum: [SUBMITTED, PENDING_SECOND_APPROVAL, APPROVED, DISBURSING, DISBURSED, REJECTED, CANCELLED_COOLING_OFF] }
+    AssessmentOutcome: { type: string, enum: [RECOMMENDED, NOT_RECOMMENDED, APPROVED, ADJUSTED, DECLINED] }
+    AssessmentStatus: { type: string, enum: [PENDING, APPROVED, ADJUSTED, DECLINED] }
+    LoanStatus: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+    AgingBucket: { type: string, enum: [CURRENT, DPD_1_7, DPD_8_30, DPD_31_60, DPD_60_PLUS] }
+    SlaState: { type: string, enum: [OVERDUE, DUE_SOON, ON_TRACK, NO_SLA] }
+    Total:
+      type: object
+      required: [value, exact]
+      properties:
+        value: { type: integer, format: int64 }
+        exact: { type: boolean, description: False once the list is larger than the count cap and `value` is the planner's estimate }
+    PageEnvelope:
+      type: object
+      required: [rows, asOf]
+      properties:
+        nextCursor: { type: string, description: Absent on the last page }
+        total: { $ref: '#/components/schemas/Total', description: First page only }
+        asOf: { type: string, format: date-time }
+    ApplicationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageEnvelope'
+        - type: object
+          properties:
+            rows: { type: array, items: { $ref: '#/components/schemas/DeskApplicationRow' } }
+    AssessmentPage:
+      allOf:
+        - $ref: '#/components/schemas/PageEnvelope'
+        - type: object
+          properties:
+            rows: { type: array, items: { $ref: '#/components/schemas/DeskAssessmentRow' } }
+    LoanPage:
+      allOf:
+        - $ref: '#/components/schemas/PageEnvelope'
+        - type: object
+          properties:
+            rows: { type: array, items: { $ref: '#/components/schemas/DeskLoanRow' } }
+    DeskApplicationRow:
+      type: object
+      required: [applicationId, memberRef, status, requestedAmountCents, termMonths, savingStreakMonths, submittedAt, ageDays, slaDueAt, slaState, slaBreached]
+      properties:
+        applicationId: { type: string, format: uuid }
+        memberRef: { type: string, format: uuid, description: Opaque member reference }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        requestedAmountCents: { type: integer, format: int64 }
+        termMonths: { type: integer }
+        savingStreakMonths: { type: integer, description: Consecutive months with a deposit, ending at the latest deposit }
+        assessmentOutcome: { $ref: '#/components/schemas/AssessmentOutcome' }
+        submittedAt: { type: string, format: date-time }
+        ageDays: { type: integer, format: int64 }
+        slaDueAt: { type: string, format: date-time }
+        slaState: { $ref: '#/components/schemas/SlaState' }
+        slaBreached: { type: boolean }
+        assignedOfficerRef: { type: string, description: Pseudonymous reference of the officer who acted last }
+    DeskAssessmentRow:
+      type: object
+      required: [assessmentId, memberRef, recommended, recommendedAmountCents, status, disputed, createdAt, ageDays]
+      properties:
+        assessmentId: { type: string, format: uuid }
+        memberRef: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        recommended: { type: boolean }
+        recommendedAmountCents: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/AssessmentStatus' }
+        disputed: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        ageDays: { type: integer, format: int64 }
+    DeskLoanRow:
+      type: object
+      required: [loanId, memberRef, status, principalCents, outstandingCents, daysLate, agingBucket, autopay, hardship, disbursedOn]
+      properties:
+        loanId: { type: string, format: uuid }
+        memberRef: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/LoanStatus' }
+        principalCents: { type: integer, format: int64 }
+        outstandingCents: { type: integer, format: int64 }
+        nextDueDate: { type: string, format: date, description: Absent when nothing is owing }
+        nextDueCents: { type: integer, format: int64 }
+        daysLate: { type: integer }
+        agingBucket: { $ref: '#/components/schemas/AgingBucket' }
+        autopay: { type: boolean }
+        hardship: { type: boolean, description: A hardship case is open on the loan }
+        disbursedOn: { type: string, format: date }
+    PortfolioSummary:
+      type: object
+      required: [asOf, loans, outstandingCents, byStatus, byAgingBucket, onTimeRepayment, openHardshipCases, hardshipOutcomes, impact]
+      properties:
+        asOf: { type: string, format: date-time }
+        loans: { type: integer, format: int64 }
+        outstandingCents: { type: integer, format: int64 }
+        byStatus:
+          type: array
+          items: { type: object, required: [status, loans, outstandingCents], properties: { status: { $ref: '#/components/schemas/LoanStatus' }, loans: { type: integer, format: int64 }, outstandingCents: { type: integer, format: int64 } } }
+        byAgingBucket:
+          type: array
+          description: Loans still owed, all five buckets in severity order
+          items: { type: object, required: [bucket, loans, outstandingCents], properties: { bucket: { $ref: '#/components/schemas/AgingBucket' }, loans: { type: integer, format: int64 }, outstandingCents: { type: integer, format: int64 } } }
+        onTimeRepayment:
+          type: object
+          required: [instalmentsDue, instalmentsMissed]
+          properties:
+            instalmentsDue: { type: integer, format: int64 }
+            instalmentsMissed: { type: integer, format: int64, description: Missed instalments are append-only facts; a cured late payment still counts }
+            rateBasisPoints: { type: integer, minimum: 0, maximum: 10000, description: 'Absent while nothing has fallen due' }
+        openHardshipCases: { type: integer, format: int64 }
+        hardshipOutcomes:
+          type: array
+          items: { type: object, required: [outcome, cases], properties: { outcome: { type: string, description: Close reason of the case }, cases: { type: integer, format: int64 } } }
+        impact:
+          type: object
+          required: [membersServed, membersWithLoan, membersLoanedWithoutCreditScore, loansIssued, averageLoanSizeCents, firstLoansRepaid, firstLoansRepaidOnPlan]
+          properties:
+            membersServed: { type: integer, format: int64, description: Members who saved or borrowed }
+            membersWithLoan: { type: integer, format: int64 }
+            membersLoanedWithoutCreditScore: { type: integer, format: int64, description: Equals membersWithLoan, by design; no decision uses a credit score }
+            loansIssued: { type: integer, format: int64 }
+            averageLoanSizeCents: { type: integer, format: int64 }
+            firstLoansRepaid: { type: integer, format: int64 }
+            firstLoansRepaidOnPlan: { type: integer, format: int64, description: Members whose first loan was repaid with no missed instalment }
+            firstLoanOnPlanRateBasisPoints: { type: integer, minimum: 0, maximum: 10000 }
+    Workload:
+      type: object
+      required: [asOf, items, byRole]
+      properties:
+        asOf: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            required: [kind, role, slaBucket, waiting]
+            properties:
+              kind: { type: string, enum: [LOAN_APPLICATION, HARDSHIP_DECISION] }
+              role: { type: string, enum: [OFFICER, CHECKER] }
+              slaBucket: { $ref: '#/components/schemas/SlaState' }
+              waiting: { type: integer, format: int64 }
+              earliestSlaDueAt: { type: string, format: date-time }
+        byRole:
+          type: array
+          items: { type: object, required: [role, waiting, overdue], properties: { role: { type: string, enum: [OFFICER, CHECKER] }, waiting: { type: integer, format: int64 }, overdue: { type: integer, format: int64 } } }
+    ReserveSummary:
+      type: object
+      required: [balanceCents, totalDonatedCents, donationCount, totalPaidOutCents, membersCovered, openExposureCents, coverageRatioBps, supporters, asOf]
+      properties:
+        balanceCents: { type: integer, minimum: 0 }
+        totalDonatedCents: { type: integer, minimum: 0 }
+        donationCount: { type: integer, minimum: 0, description: 'Gifts received, one per PayPal capture. A repeat donor counts each time: Seed keeps no donor identity to deduplicate on.' }
+        totalPaidOutCents: { type: integer, minimum: 0, description: Paid to loans on behalf of members }
+        membersCovered: { type: integer, minimum: 0 }
+        openExposureCents: { type: integer, minimum: 0, description: Outstanding balance of all open loans }
+        coverageRatioBps: { type: [integer, 'null'], minimum: 0, description: 'balance over exposure in basis points; null without exposure' }
+        supporters: { type: array, maxItems: 10, items: { type: string }, description: Display names of the latest donors who opted in; never an email or amount }
+        asOf: { type: string, format: date }
+      example: { balanceCents: 125000, totalDonatedCents: 175000, donationCount: 31, totalPaidOutCents: 50000, membersCovered: 3, openExposureCents: 900000, coverageRatioBps: 1388, supporters: [Maria, Tom], asOf: '2026-11-10' }
+    DonationIntentRequest:
+      type: object
+      properties:
+        anonymous: { type: boolean, default: true }
+        displayName: { type: string, maxLength: 40, description: Shown on the public summary only when anonymous is false }
+    DonationIntent:
+      type: object
+      required: [intentId, customId]
+      properties:
+        intentId: { type: string, format: uuid }
+        customId: { type: string, pattern: '^reserve-donation:[0-9a-f-]{36}$', description: Pass to PayPal as custom_id }
+    CoverStatus: { type: string, enum: [PENDING_APPROVAL, APPROVED, REJECTED, FAILED] }
+    CreateCoverRequest:
+      type: object
+      required: [memberId, loanId, amountCents, reasonCode]
+      properties:
+        memberId: { type: string, format: uuid }
+        loanId: { type: string, format: uuid }
+        amountCents: { type: integer, minimum: 1 }
+        reasonCode: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        hardshipCaseId: { type: string, format: uuid, description: The hardship case that needs the bridge, when there is one }
+        note: { type: string, maxLength: 500 }
+      example: { memberId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10, loanId: 0197f3a4-2c3d-7e4f-9051-6b7c8d9e0f21, amountCents: 5000, reasonCode: INCOME_DROP_VERIFIED }
+    CoverRequest:
+      type: object
+      required: [id, memberId, loanId, amountCents, reasonCode, status, requestedOn]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        loanId: { type: string, format: uuid }
+        amountCents: { type: integer }
+        reasonCode: { type: string }
+        hardshipCaseId: { type: [string, 'null'], format: uuid }
+        status: { $ref: '#/components/schemas/CoverStatus' }
+        approvalRequestId: { type: [string, 'null'], format: uuid }
+        requestedOn: { type: string, format: date }
+        closedReason: { type: [string, 'null'] }
+        journalEntryId: { type: [string, 'null'], format: uuid }
+    CoverRequestPage:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { $ref: '#/components/schemas/CoverRequest' } }
+        nextBefore: { type: [string, 'null'], format: uuid }
+    CoverDecision:
+      type: object
+      required: [decision, reasonCode, evidenceViewedMs]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        reasonCode: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        note: { type: string, maxLength: 500 }
+        evidenceViewedMs: { type: integer, minimum: 0 }
+    CoverDecisionResult:
+      type: object
+      required: [requestId, requestStatus, role, coverStatus]
+      properties:
+        requestId: { type: string, format: uuid }
+        requestStatus: { type: string, enum: [OPEN, APPROVED, REJECTED, VOIDED] }
+        role: { type: string, enum: [MAKER, CHECKER] }
+        next: { type: [string, 'null'], enum: [CHECKER, null] }
+        auditSeq: { type: integer }
+        coverStatus: { $ref: '#/components/schemas/CoverStatus' }
+    FlagStatus: { type: string, enum: [OPEN, REVIEWED_CLEAR, CONFIRMED] }
+    ReviewDecision: { type: string, enum: [CLEAR, CONFIRM] }
+    FraudFactKind:
+      type: string
+      enum: [ACCOUNT_CREATED, GOAL_CREATED, DEPOSIT, WITHDRAWAL, APPLICATION_SUBMITTED, LOAN_DISBURSED, PAYMENT_FAILED, PAYER_SEEN, PAYOUT_RECIPIENT_CHANGED]
+    SignalCode:
+      type: string
+      enum: [GOAL_VELOCITY, APPLICATION_VELOCITY, SHARED_PAYER, DEPOSIT_CHURN, NEW_ACCOUNT_LOAN, REPEATED_FAILED_PAYMENTS, PAYOUT_RECIPIENT_CHANGE]
+    FlagView:
+      type: object
+      required: [flagId, memberId, status, score, signalCodes, raisedAt]
+      properties:
+        flagId: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/FlagStatus' }
+        score: { type: integer, minimum: 0, description: 'Sum over rules of the heaviest signal of that rule' }
+        signalCodes: { type: array, items: { $ref: '#/components/schemas/SignalCode' } }
+        raisedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+    FlagPage:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { $ref: '#/components/schemas/FlagView' } }
+        nextBefore: { type: [string, 'null'], format: uuid }
+    SignalView:
+      type: object
+      required: [code, weight, explanation, detectedAt, evidence]
+      properties:
+        code: { $ref: '#/components/schemas/SignalCode' }
+        weight: { type: integer }
+        explanation: { type: string }
+        detectedAt: { type: string, format: date-time }
+        evidence: { type: object, additionalProperties: true, description: Counts, windows and fact ids the rule used }
+    ReviewView:
+      type: object
+      required: [decision, reviewedAt]
+      properties:
+        decision: { $ref: '#/components/schemas/ReviewDecision' }
+        note: { type: [string, 'null'] }
+        reviewedAt: { type: string, format: date-time }
+    FlagDetail:
+      type: object
+      required: [flag, signals, policyVersion, flagThreshold]
+      properties:
+        flag: { $ref: '#/components/schemas/FlagView' }
+        signals: { type: array, items: { $ref: '#/components/schemas/SignalView' } }
+        review: { oneOf: [ { $ref: '#/components/schemas/ReviewView' }, { type: 'null' } ] }
+        policyVersion: { type: string, examples: [fraud-rules-v1] }
+        flagThreshold: { type: integer, description: A flag is raised when the score reaches this value }
+    FactView:
+      type: object
+      required: [factId, kind, occurredAt]
+      properties:
+        factId: { type: integer, format: int64 }
+        kind: { $ref: '#/components/schemas/FraudFactKind' }
+        occurredAt: { type: string, format: date-time }
+        amountCents: { type: [integer, 'null'] }
+        referenceTag: { type: [string, 'null'], description: 'First 8 characters of the salted hash; matches two facts, reveals nothing' }
+        attributes: { type: object, additionalProperties: { type: string } }
+    SignalEvidence:
+      type: object
+      required: [signal, facts]
+      properties:
+        signal: { $ref: '#/components/schemas/SignalView' }
+        facts: { type: array, items: { $ref: '#/components/schemas/FactView' } }
+    FlagEvidence:
+      type: object
+      required: [flagId, memberId, status, score, policyVersion, flagThreshold, generatedAt, signals]
+      properties:
+        flagId: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/FlagStatus' }
+        score: { type: integer }
+        policyVersion: { type: string }
+        flagThreshold: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        signals: { type: array, items: { $ref: '#/components/schemas/SignalEvidence' } }
+        review: { oneOf: [ { $ref: '#/components/schemas/ReviewView' }, { type: 'null' } ] }
+    ReviewRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { $ref: '#/components/schemas/ReviewDecision' }
+        note: { type: string, maxLength: 1000, description: Required when confirming }
+      example: { decision: CLEAR, note: "Two goals for two children; payer is the household's shared PayPal." }
+    Wallet: { type: string, enum: [PAYPAL, VENMO] }
+    GoalStatus:
+      type: string
+      enum: [PENDING_APPROVAL, ACTIVE, PAUSED, COMPLETED, CANCELLED, EXPIRED]
+      description: PENDING_APPROVAL waits for the member to agree at PayPal; EXPIRED means they never did within the window
+    CreateGoalRequest:
+      type: object
+      required: [name, targetAmount, monthlyAmount]
+      properties:
+        memberId: { type: string, description: "Ignored for a signed-in member" }
+        name: { type: string }
+        targetAmount: { type: number }
+        monthlyAmount: { type: number, minimum: 5, description: "Whole dollars for a PayPal wallet" }
+        currency: { type: string, default: USD }
+        targetDate: { type: string, format: date }
+        wallet: { $ref: '#/components/schemas/Wallet' }
+        payPalSubscriptionId: { type: string, deprecated: true, description: "Legacy; dev, test and demo only" }
+    SavingsGoal:
+      type: object
+      required: [id, memberId, name, targetAmount, monthlyAmount, currentBalance, currency, status, wallet, reservedAmount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string }
+        name: { type: string }
+        targetAmount: { type: number }
+        monthlyAmount: { type: number }
+        currentBalance: { type: number, description: "Money available; money in a withdrawal in flight is in reservedAmount" }
+        reservedAmount: { type: number }
+        currency: { type: string }
+        status: { $ref: '#/components/schemas/GoalStatus' }
+        targetDate: { type: [string, 'null'], format: date }
+        wallet: { $ref: '#/components/schemas/Wallet' }
+        payPalSubscriptionId: { type: [string, 'null'] }
+        approvalUrl: { type: [string, 'null'], format: uri, description: "Where the member agrees at PayPal; set while PENDING_APPROVAL, and after an amount change PayPal wants agreed" }
+        approvalExpiresAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ChangeAmountRequest:
+      type: object
+      required: [monthlyAmount]
+      properties:
+        monthlyAmount: { type: number }
+        currency: { type: string, default: USD }
+    WithdrawRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number }
+        currency: { type: string, default: USD }
+        wallet: { $ref: '#/components/schemas/Wallet' }
+        payPalPayoutId: { type: string, deprecated: true, description: "Legacy; dev, test and demo only" }
+    Withdrawal:
+      type: object
+      required: [id, goalId, status, amount, currency, wallet, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid, description: "Also the payout reference at PayPal" }
+        goalId: { type: string, format: uuid }
+        status: { type: string, enum: [REQUESTED, SUCCEEDED, FAILED, RETURNED] }
+        amount: { type: number }
+        currency: { type: string }
+        wallet: { $ref: '#/components/schemas/Wallet' }
+        failureReason: { type: [string, 'null'], description: "PayPal's reason name" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TopUpRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number }
+        currency: { type: string, default: USD }
+        payPalCaptureId: { type: string, deprecated: true, description: "Legacy; dev, test and demo only" }
+    TopUpOrder:
+      type: object
+      required: [goalId, orderId, status, amount, currency]
+      properties:
+        goalId: { type: string, format: uuid }
+        orderId: { type: string }
+        status: { type: string }
+        approvalUrl: { type: [string, 'null'], format: uri }
+        amount: { type: number }
+        currency: { type: string }
+    TopUpCapture:
+      type: object
+      required: [goalId, orderId, status, amount, currency]
+      properties:
+        goalId: { type: string, format: uuid }
+        orderId: { type: string }
+        status: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+    SubmitLoanApplicationRequest:
+      type: object
+      required: [purpose, requestedAmountCents, termMonths, fairCheckConsented]
+      properties:
+        memberId: { type: string, format: uuid, description: Ignored for a signed-in member; any other member's id is a 404 }
+        purpose: { type: string, minLength: 1 }
+        requestedAmountCents: { type: integer, format: int64, minimum: 1 }
+        termMonths: { type: integer, minimum: 3, maximum: 18 }
+        preferredDueDay: { type: integer, minimum: 1, maximum: 28 }
+        payoutWallet: { $ref: '#/components/schemas/Wallet' }
+        fairCheckConsented: { type: boolean, description: The member agreed to the fair loan check for this application }
+        verifiedMonthlyIncomeCents: { type: integer, format: int64, minimum: 0 }
+    RejectApplicationRequest:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 500 }
+    LoanApplication:
+      type: object
+      required: [id, memberId, purpose, requestedAmountCents, termMonths, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        purpose: { type: string }
+        requestedAmountCents: { type: integer, format: int64 }
+        termMonths: { type: integer, minimum: 3, maximum: 18 }
+        preferredDueDay: { type: integer }
+        payoutWallet: { $ref: '#/components/schemas/Wallet' }
+        fairCheckConsented: { type: boolean }
+        unlockedTier: { type: string }
+        maxMonthlyInstalmentCents: { type: integer, format: int64 }
+        monthlyInstalmentCents: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        firstApproverId: { type: [string, 'null'], format: uuid }
+        secondApproverId: { type: [string, 'null'], format: uuid }
+        rejectionReason: { type: [string, 'null'] }
+        loanId: { type: [string, 'null'], format: uuid }
+        disbursementRef: { type: [string, 'null'] }
+        coolingOffExpiresAt: { type: [string, 'null'], format: date-time }
+        sizingReasons: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        payoutIssue: { type: [string, 'null'], description: 'Why the last payout did not complete the disbursement (a PayPal reason name such as RECEIVER_UNREGISTERED); an officer reads it on an APPROVED application' }
+    Eligibility:
+      type: object
+      required: [memberId, eligible, tier, tierLevel, tierLimitCents, maxLoanCents, maxMonthlyInstalmentCents, minTermMonths, maxTermMonths, hasActiveLoan, completedLoansOnTime, reasons, recordLevel, limitReason]
+      properties:
+        memberId: { type: string, format: uuid }
+        eligible: { type: boolean }
+        tier: { type: string }
+        tierLevel: { type: integer }
+        tierLimitCents: { type: integer, format: int64, description: The ceiling that applies, the larger of the ladder rung and the record level }
+        maxLoanCents: { type: integer, format: int64 }
+        maxMonthlyInstalmentCents: { type: integer, format: int64 }
+        minTermMonths: { type: integer }
+        maxTermMonths: { type: integer }
+        currentSavingStreakMonths: { type: integer }
+        monthlySavingCents: { type: integer, format: int64 }
+        hasActiveLoan: { type: boolean }
+        completedLoansOnTime: { type: integer }
+        reasons: { type: array, items: { type: string } }
+        recordLevel: { $ref: '#/components/schemas/RecordLevel' }
+        limitReason: { type: string, description: Which limit applied and why, in plain words; never a score }
+    ConsentStatus:
+      type: object
+      required: [memberId, consented, usedData, neverUsedData]
+      properties:
+        memberId: { type: string, format: uuid }
+        consented: { type: boolean }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        usedData: { type: array, items: { type: string }, description: What the check reads, in plain words }
+        neverUsedData: { type: array, items: { type: string }, description: What the check never reads, in plain words }
+    IncomeMonth:
+      type: object
+      required: [yearMonth, amountCents]
+      properties:
+        yearMonth: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$', examples: ['2026-10'] }
+        amountCents: { type: integer, format: int64, minimum: 0 }
+    RunAssessmentRequest:
+      type: object
+      required: [purpose, requestedAmountCents, requestedTermMonths]
+      properties:
+        memberId: { type: string, format: uuid, description: Ignored for a signed-in member; any other member's id is a 404 }
+        applicationId: { type: string, format: uuid }
+        purpose: { type: string, minLength: 1 }
+        requestedAmountCents: { type: integer, format: int64, minimum: 1 }
+        requestedTermMonths: { type: integer, minimum: 3, maximum: 18 }
+        monthlyIncomes: { type: array, items: { $ref: '#/components/schemas/IncomeMonth' }, description: Member-entered months, used when no consented income is available }
+        statedMonthlyIncomeCents: { type: integer, format: int64, minimum: 0 }
+        statedMonthlyExpensesCents: { type: integer, format: int64, minimum: 0 }
+        completedLoansOnTime: { type: integer, minimum: 0 }
+        hasActiveLoan: { type: boolean }
+    OfficerDecisionType: { type: string, enum: [PENDING, APPROVED, ADJUSTED, DECLINED] }
+    FairCheckCard:
+      type: object
+      description: |
+        The fair loan check as the member and the officer read it. Every figure is computed by the engine; the
+        sentences in `plainLanguageReasons` and `officerQuestions` come from fixed templates over those figures.
+        There is no credit score on the card.
+      required: [assessmentId, memberId, purpose, recommended, requestedAmountCents, requestedTermMonths, suggestedLoanCents, suggestedTermMonths, suggestedMonthlyInstalmentCents, plainLanguageReasons, usedData, neverUsedData, memberDisputed, officerDecision, createdAt]
+      properties:
+        assessmentId: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        applicationId: { type: [string, 'null'], format: uuid }
+        purpose: { type: string }
+        recommended: { type: boolean }
+        unlockedTier: { type: string }
+        usedFallbackStatedIncome: { type: boolean, description: True when no consented income was available and the stated figures were used }
+        averageMonthlyIncomeCents: { type: integer, format: int64 }
+        lowestMonthlyIncomeCents: { type: integer, format: int64 }
+        lowestIncomeMonth: { type: [string, 'null'] }
+        coefficientOfVariation: { type: number, format: double }
+        highIncomeVolatility: { type: boolean }
+        provenMonthlySavingCents: { type: integer, format: int64 }
+        monthsSaved: { type: integer }
+        targetMonthsWindow: { type: integer }
+        instalmentCapCents: { type: integer, format: int64 }
+        requestedAmountCents: { type: integer, format: int64 }
+        requestedTermMonths: { type: integer }
+        suggestedLoanCents: { type: integer, format: int64 }
+        suggestedTermMonths: { type: integer }
+        suggestedMonthlyInstalmentCents: { type: integer, format: int64 }
+        inputsHash: { type: string }
+        modelVersion: { type: string }
+        plainLanguageReasons: { type: array, items: { type: string } }
+        officerQuestions: { type: array, items: { type: string } }
+        usedData: { type: array, items: { type: string } }
+        neverUsedData: { type: array, items: { type: string } }
+        memberDisputed: { type: boolean }
+        memberDisputeNote: { type: [string, 'null'] }
+        officerDecision: { $ref: '#/components/schemas/OfficerDecisionType' }
+        officerId: { type: [string, 'null'], format: uuid }
+        decidedLoanCents: { type: integer, format: int64 }
+        decidedTermMonths: { type: integer }
+        officerReason: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+    DisputeAssessmentRequest:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 1, maxLength: 1000 }
+    OfficerDecisionRequest:
+      type: object
+      required: [decision, reason]
+      properties:
+        decision: { $ref: '#/components/schemas/OfficerDecisionType' }
+        adjustedLoanCents: { type: integer, format: int64, minimum: 1, description: Needed for ADJUSTED }
+        adjustedTermMonths: { type: integer, minimum: 3, maximum: 18 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CoachSuggestionRequest:
+      type: object
+      properties:
+        memberId: { type: string }
+        goalName: { type: string }
+        targetAmount: { type: number, description: Decimal dollars }
+        statedMonthlyIncome: { type: number }
+        statedMonthlyExpenses: { type: number }
+        currency: { type: string, default: USD }
+    CoachSuggestion:
+      type: object
+      required: [goalName, currency, targetAmount, suggestedMonthlySaving, streakMonthsToUnlock, unlockedTier, suggestedLoanTermMonths, messageEn, messageEs, modelGenerated]
+      properties:
+        memberId: { type: string }
+        goalName: { type: string }
+        currency: { type: string }
+        targetAmount: { type: number }
+        statedMonthlyIncome: { type: number }
+        statedMonthlyExpenses: { type: number }
+        disposableMonthlyIncome: { type: number }
+        suggestedMonthlySaving: { type: number }
+        streakMonthsToUnlock: { type: integer }
+        totalSavedAfterStreak: { type: number }
+        unlockedTier: { type: string }
+        unlockedLoanAmount: { type: number }
+        maxMonthlyInstalment: { type: number }
+        suggestedLoanTermMonths: { type: integer }
+        suggestedMonthlyInstalment: { type: number }
+        messageEn: { type: string, description: 'AI-written when modelGenerated, otherwise a fixed template' }
+        messageEs: { type: string }
+        modelGenerated: { type: boolean }

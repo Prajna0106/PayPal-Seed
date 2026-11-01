@@ -34,7 +34,9 @@ public record LoanTransaction(
         PAYMENT_LINK,
         RECONCILER,
         PAYPAL,
-        SEED
+        SEED,
+        /** Money the loss reserve paid; the ledger entry was posted by reserve, not by lending. */
+        RESERVE
     }
 
     public MoneyEvent toMoneyEvent() {

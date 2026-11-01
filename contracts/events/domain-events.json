@@ -1,16 +1,1090 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "PayPal Seed Domain Events",
+  "description": "Events published by the modules (ADRs 0012 to 0021). Delivery is at least once, so every consumer is idempotent on eventId or on the business key named in the event. No event carries a name, an email, a raw payer id or free text typed by a member.",
   "definitions": {
     "SavingsDepositedEvent": {
       "type": "object",
       "properties": {
-        "eventId": { "type": "string" },
-        "memberId": { "type": "string" },
-        "amount": { "type": "number" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "eventId": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["eventId", "memberId", "amount", "timestamp"]
+      "required": [
+        "eventId",
+        "memberId",
+        "amount",
+        "timestamp"
+      ]
+    },
+    "MemberRegistered": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "es"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "language",
+        "occurredAt"
+      ]
+    },
+    "MemberProfileChanged": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "es"
+          ]
+        },
+        "walletPreference": {
+          "type": "string",
+          "enum": [
+            "PAYPAL",
+            "VENMO"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "language",
+        "walletPreference",
+        "occurredAt"
+      ]
+    },
+    "ConsentGranted": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "consentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "TERMS",
+            "PRIVACY",
+            "INCOME_READ",
+            "RECORD_SHARING"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "consentId",
+        "type",
+        "version",
+        "occurredAt"
+      ]
+    },
+    "ConsentRevoked": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "consentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "TERMS",
+            "PRIVACY",
+            "INCOME_READ",
+            "RECORD_SHARING"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "consentId",
+        "type",
+        "version",
+        "occurredAt"
+      ]
+    },
+    "PayoutSucceeded": {
+      "type": "object",
+      "description": "The money reached the recipient.",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payoutId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "referenceId": {
+          "type": "string",
+          "maxLength": 56,
+          "description": "The caller's idempotency key given to sendPayout"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "wallet": {
+          "type": "string",
+          "enum": [
+            "PAYPAL",
+            "VENMO"
+          ]
+        },
+        "paypalTransactionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "feeCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string",
+          "description": "paypal-event:<id> or payout-api:<referenceId>"
+        }
+      },
+      "required": [
+        "eventId",
+        "payoutId",
+        "referenceId",
+        "amountCents",
+        "wallet",
+        "feeCents",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "PayoutFailed": {
+      "type": "object",
+      "description": "The money did not reach the recipient. terminal is false only for UNCLAIMED, where PayPal holds the money: a PayoutSucceeded (claimed) or PayoutReturned (expired) follows.",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payoutId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reasonCode": {
+          "type": "string",
+          "description": "PayPal's error name (for example RECEIVER_UNREGISTERED, INSUFFICIENT_FUNDS), or FAILED, BLOCKED, UNCLAIMED, BATCH_DENIED"
+        },
+        "terminal": {
+          "type": "boolean"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "payoutId",
+        "referenceId",
+        "amountCents",
+        "reasonCode",
+        "terminal",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "PayoutReturned": {
+      "type": "object",
+      "description": "The money is back in the program account (unclaimed for 30 days, or returned by PayPal).",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payoutId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reasonCode": {
+          "type": "string",
+          "description": "UNCLAIMED_EXPIRED when it was unclaimed first, otherwise RETURNED or PayPal's name"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "payoutId",
+        "referenceId",
+        "amountCents",
+        "reasonCode",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "SavingsTopUpCaptured": {
+      "type": "object",
+      "description": "A one-off top-up into a goal was captured (PayPal or Venmo funding). Published once per capture.",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paypalCaptureId": {
+          "type": "string"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "funding": {
+          "type": "string",
+          "enum": [
+            "PAYPAL",
+            "VENMO"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string",
+          "description": "order:<orderId> or paypal-event:<id>"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "goalId",
+        "paypalCaptureId",
+        "amountCents",
+        "funding",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "RecordLevelChanged": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fromLevel": {
+          "type": "string",
+          "enum": [
+            "NEW",
+            "BUILDING",
+            "STEADY",
+            "TRUSTED",
+            "EXEMPLARY"
+          ]
+        },
+        "toLevel": {
+          "type": "string",
+          "enum": [
+            "NEW",
+            "BUILDING",
+            "STEADY",
+            "TRUSTED",
+            "EXEMPLARY"
+          ]
+        },
+        "toLevelRank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "loanLimitCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "PROMOTION",
+            "DEFAULT"
+          ]
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "fromLevel",
+        "toLevel",
+        "toLevelRank",
+        "loanLimitCents",
+        "cause",
+        "businessDate"
+      ]
+    },
+    "LoanApplicationChanged": {
+      "description": "Published by lending inside the transaction of every change to a loan application: submitted (fair check linked), first approval, second approval, rejected, payout asked of PayPal (DISBURSING), payout failed (back to APPROVED), disbursed, cancelled in the cooling-off window. A whole-state snapshot, not a delta: keep the one with the newest changedAt.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUBMITTED",
+            "PENDING_SECOND_APPROVAL",
+            "APPROVED",
+            "DISBURSING",
+            "DISBURSED",
+            "REJECTED",
+            "CANCELLED_COOLING_OFF"
+          ]
+        },
+        "requestedAmountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "termMonths": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Never changes for an application"
+        },
+        "assignedOfficerRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Pseudonymous reference of the officer who acted last: staff: and 16 hex digits (the form governance gives the same person); never the staff id"
+        },
+        "changedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "applicationId",
+        "memberId",
+        "status",
+        "requestedAmountCents",
+        "termMonths",
+        "submittedAt",
+        "changedAt"
+      ]
+    },
+    "AssessmentChanged": {
+      "description": "Published by underwriting when a fair-check assessment is created, disputed by the member, or decided by an officer.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assessmentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "applicationId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "recommended": {
+          "type": "boolean"
+        },
+        "recommendedAmountCents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The engine's suggested loan amount"
+        },
+        "officerDecision": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "ADJUSTED",
+            "DECLINED"
+          ]
+        },
+        "memberDisputed": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "changedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Decision time when decided, otherwise creation time; a dispute alone keeps the creation time and is sticky in the projection"
+        }
+      },
+      "required": [
+        "eventId",
+        "assessmentId",
+        "memberId",
+        "recommended",
+        "recommendedAmountCents",
+        "officerDecision",
+        "memberDisputed",
+        "createdAt",
+        "changedAt"
+      ]
+    },
+    "SavingsDepositReceived": {
+      "description": "Published by payments for a PAYMENT.SALE.COMPLETED on a savings subscription Seed created. Savings credits the goal once per paypalTxnId. A deposit for a goal that is not yet approved is refused and the event is delivered again later.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "paypalTxnId": {
+          "type": "string",
+          "description": "The money identity; the key savings dedupes on"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "feeCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string",
+          "description": "paypal-event:<webhook id>"
+        }
+      },
+      "required": [
+        "eventId",
+        "goalId",
+        "memberId",
+        "subscriptionId",
+        "paypalTxnId",
+        "amountCents",
+        "feeCents",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "SavingsSubscriptionStateChanged": {
+      "description": "Published by payments for a BILLING.SUBSCRIPTION.ACTIVATED, RE-ACTIVATED, SUSPENDED, CANCELLED or EXPIRED webhook of a savings subscription (CREATED and UPDATED change nothing the goal cares about and publish nothing). ACTIVE activates a goal waiting for approval; the other states pause an active goal. Only the goal's current subscription counts.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "SUSPENDED",
+            "CANCELLED",
+            "EXPIRED"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "causedBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "goalId",
+        "memberId",
+        "subscriptionId",
+        "state",
+        "occurredAt",
+        "causedBy"
+      ]
+    },
+    "DonationCaptured": {
+      "description": "Published by payments for a PAYMENT.CAPTURE.COMPLETED whose custom_id starts with reserve-donation: (before this event such captures were ignored as not for a Seed loan). Reserve credits the fund once per paypalTxnId. Loan captures are unchanged.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paypalTxnId": {
+          "type": "string"
+        },
+        "customId": {
+          "type": "string",
+          "pattern": "^reserve-donation:[0-9a-f-]{36}$"
+        },
+        "grossCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "feeCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "paypalTxnId",
+        "customId",
+        "grossCents",
+        "feeCents",
+        "occurredAt"
+      ]
+    },
+    "WithdrawalFailedEvent": {
+      "description": "Published by savings when a withdrawal's payout failed for good (a terminal PayoutFailed): the reserved money is back in the goal and the member should be told. Engagement can listen; nothing else is needed from savings.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "withdrawalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "object",
+          "description": "Money in cents"
+        },
+        "reasonCode": {
+          "type": "string",
+          "description": "PayPal's reason name, for example RECEIVER_UNREGISTERED"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "goalId",
+        "withdrawalId",
+        "amount",
+        "reasonCode",
+        "timestamp"
+      ]
+    },
+    "WithdrawalReturnedEvent": {
+      "description": "Published by savings when PayPal took a withdrawal back (an unclaimed payout expired, or a delivered one was reversed). The money is in the goal again and the booking, if there was one, is reversed.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "withdrawalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "object",
+          "description": "Money in cents"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "memberId",
+        "goalId",
+        "withdrawalId",
+        "amount",
+        "reasonCode",
+        "timestamp"
+      ]
+    },
+    "InstalmentMissed": {
+      "description": "Published by lending when an instalment is missed. attribution is new and optional: existing consumers ignore it. app/RecordFeed forwards it to the credit record so a miss attributed to SLA_BREACH is not counted against the member (ADR 0011, ADR 0014).",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dueDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "attribution": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "MEMBER",
+            "SLA_BREACH",
+            null
+          ],
+          "description": "null when no grace hold was involved; MEMBER when a hold ended and the member still had not paid; SLA_BREACH when Seed's own decision on a hardship case ran late"
+        }
+      },
+      "required": [
+        "eventId",
+        "loanId",
+        "memberId",
+        "businessDate",
+        "version",
+        "seq",
+        "dueDate"
+      ]
+    },
+    "DonationReceived": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "donationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "captureId": {
+          "type": "string"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "donationId",
+        "captureId",
+        "amountCents",
+        "businessDate"
+      ]
+    },
+    "CoverRequested": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "coverRequestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "coverRequestId",
+        "memberId",
+        "loanId",
+        "amountCents",
+        "businessDate"
+      ]
+    },
+    "CoverApproved": {
+      "description": "Published by reserve inside the transaction that posted the cover to the ledger (debit LOSS_RESERVE, credit LOANS_RECEIVABLE). Lending applies amountCents to the schedule as a repayment with source RESERVE, once per approvalRef, and posts nothing to the ledger again. The amount is capped at what the loan still owes when it is applied; a loan that is already paid takes nothing. The ledger entry id is kept on the loan transaction so the books can be followed.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "coverRequestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "journalEntryId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "approvalRef": {
+          "type": "string",
+          "pattern": "^reserve-cover:[0-9a-f-]{36}$"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "coverRequestId",
+        "loanId",
+        "memberId",
+        "amountCents",
+        "journalEntryId",
+        "approvalRef",
+        "businessDate"
+      ]
+    },
+    "CoverRejected": {
+      "description": "Also published when governance approved but the fund or the loan could no longer take the cover (reason RESERVE_INSUFFICIENT_FUNDS or LOAN_CHANGED); nothing was posted.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "coverRequestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "coverRequestId",
+        "loanId",
+        "memberId",
+        "reason",
+        "businessDate"
+      ]
+    },
+    "FraudFlagRaised": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "flagId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "signalCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "GOAL_VELOCITY",
+              "APPLICATION_VELOCITY",
+              "SHARED_PAYER",
+              "DEPOSIT_CHURN",
+              "NEW_ACCOUNT_LOAN",
+              "REPEATED_FAILED_PAYMENTS",
+              "PAYOUT_RECIPIENT_CHANGE"
+            ]
+          }
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "flagId",
+        "memberId",
+        "score",
+        "signalCodes",
+        "occurredAt"
+      ]
+    },
+    "FraudFlagReviewed": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "flagId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "REVIEWED_CLEAR",
+            "CONFIRMED"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "eventId",
+        "flagId",
+        "memberId",
+        "outcome",
+        "occurredAt"
+      ]
+    },
+    "RepaymentSource": {
+      "description": "RepaymentReceived.source gains the value RESERVE (money from the loss reserve, not from the member).",
+      "type": "string",
+      "enum": [
+        "AUTOPAY",
+        "AUTOPAY_RETRY",
+        "CHECKOUT",
+        "PAYMENT_LINK",
+        "RECONCILER",
+        "PAYPAL",
+        "SEED",
+        "RESERVE"
+      ]
     }
   }
 }

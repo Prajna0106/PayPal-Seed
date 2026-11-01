@@ -14,6 +14,14 @@ public interface LoanApplicationRepository {
 
     Optional<LoanApplication> findById(UUID id);
 
+    /**
+     * Loads the application and, in a database, locks its row until the transaction ends, so a payout event and a
+     * desk request cannot both act on the old state. A store with no locks just loads it.
+     */
+    default Optional<LoanApplication> findByIdForUpdate(UUID id) {
+        return findById(id);
+    }
+
     List<LoanApplication> findByMemberId(UUID memberId);
 
     List<LoanApplication> findAll();

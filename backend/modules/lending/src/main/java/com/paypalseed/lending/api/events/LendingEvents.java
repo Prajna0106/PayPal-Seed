@@ -63,8 +63,18 @@ public final class LendingEvents {
                                     String fromBucket, String toBucket, int dpd, String cause) implements LendingEvent {
     }
 
+    /**
+     * @param attribution null when no hold was involved; {@code MEMBER} when a grace hold ended and the member still
+     *                    had not paid; {@code SLA_BREACH} when our own decision on a hardship case ran late (ADR 0011).
+     *                    A miss attributed to {@code SLA_BREACH} must not count against the member.
+     */
     public record InstalmentMissed(UUID eventId, UUID loanId, UUID memberId, LocalDate businessDate,
-                                   int version, int seq, LocalDate dueDate) implements LendingEvent {
+                                   int version, int seq, LocalDate dueDate, String attribution) implements LendingEvent {
+        /** A miss with no hold involved. */
+        public InstalmentMissed(UUID eventId, UUID loanId, UUID memberId, LocalDate businessDate, int version, int seq,
+                                LocalDate dueDate) {
+            this(eventId, loanId, memberId, businessDate, version, seq, dueDate, null);
+        }
     }
 
     public record LoanCured(UUID eventId, UUID loanId, UUID memberId, LocalDate businessDate,

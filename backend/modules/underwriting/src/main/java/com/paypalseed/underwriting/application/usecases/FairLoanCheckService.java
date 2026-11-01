@@ -5,14 +5,17 @@ import com.paypalseed.engines.assessment.AssessmentEngine.AssessmentInput;
 import com.paypalseed.engines.assessment.AssessmentEngine.FairCheckResult;
 import com.paypalseed.engines.assessment.AssessmentEngine.MonthlyIncomePoint;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
 import com.paypalseed.underwriting.api.FairCheckNarrator;
 import com.paypalseed.underwriting.api.FairCheckNarrator.NarrationInput;
 import com.paypalseed.underwriting.api.FairCheckNarrator.NarrationResult;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.AssessmentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
+import com.paypalseed.underwriting.api.events.AssessmentChanged;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment.OfficerDecisionType;
 import com.paypalseed.underwriting.domain.model.UnderwritingErrors;
@@ -25,7 +28,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Application service for Feature 3: The Fair Loan Check (Blueprint §6).
@@ -33,6 +39,10 @@ import org.springframework.stereotype.Service;
  * computes deterministic income/volatility metrics via {@link AssessmentEngine},
  * optionally narrates the explanation card via {@link FairCheckNarrator},
  * and persists auditable explanation cards and human officer decisions.
+ *
+ * <p>Reading PayPal and calling the narrator happen outside any database transaction. Saving an assessment and
+ * publishing {@link AssessmentChanged} happen together in one, so a read model can never see an assessment the
+ * database does not hold (or the reverse). Joining a caller's transaction is fine: the event then commits with it.
  */
 @Service
 public class FairLoanCheckService {
@@ -51,25 +61,48 @@ public class FairLoanCheckService {
         public RunFairCheckCommand {
             monthlyIncomes = monthlyIncomes != null ? List.copyOf(monthlyIncomes) : List.of();
         }
+
+        RunFairCheckCommand withMonthlyIncomes(List<IncomeMonthDto> verified) {
+            return new RunFairCheckCommand(applicationId, purpose, requestedAmountCents, requestedTermMonths, verified,
+                statedMonthlyIncomeCents, statedMonthlyExpensesCents, completedLoansOnTime, hasActiveLoan);
+        }
     }
 
     private final UnderwritingRepository repository;
     private final SavingsFacade savingsFacade;
     private final FairCheckNarrator narrator;
+    private final IncomeRefresher incomeRefresher;
+    private final ApplicationEventPublisher events;
+    private final TransactionTemplate transaction;
 
     public FairLoanCheckService(UnderwritingRepository repository, SavingsFacade savingsFacade) {
         this(repository, savingsFacade, null);
     }
 
+    public FairLoanCheckService(
+        UnderwritingRepository repository,
+        SavingsFacade savingsFacade,
+        FairCheckNarrator narrator
+    ) {
+        this(repository, savingsFacade, narrator, null, null, null);
+    }
+
+    /** {@code incomeRefresher}, {@code events} and {@code transactions} may be null when running without a database. */
     @Autowired
     public FairLoanCheckService(
         UnderwritingRepository repository,
         SavingsFacade savingsFacade,
-        @Autowired(required = false) FairCheckNarrator narrator
+        @Autowired(required = false) FairCheckNarrator narrator,
+        @Autowired(required = false) IncomeRefresher incomeRefresher,
+        @Autowired(required = false) ApplicationEventPublisher events,
+        @Autowired(required = false) PlatformTransactionManager transactions
     ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
         this.narrator = narrator;
+        this.incomeRefresher = incomeRefresher;
+        this.events = events;
+        this.transaction = transactions == null ? null : new TransactionTemplate(transactions);
     }
 
     public ConsentStatusView grantConsent(UUID memberId) {
@@ -112,8 +145,13 @@ public class FairLoanCheckService {
             );
         }
 
+        // With the real income source the figures come from PayPal, not from the request, and a failed read refuses
+        // the check (retryable) instead of falling back to numbers the member typed.
+        RunFairCheckCommand effective = incomeRefresher == null ? command
+            : incomeRefresher.verifiedMonthlyIncomes(memberId).map(command::withMonthlyIncomes).orElse(command);
+
         MemberSavingsSummary savings = savingsFacade.getMemberSavingsSummary(memberId.toString());
-        List<MonthlyIncomePoint> incomePoints = command.monthlyIncomes().stream()
+        List<MonthlyIncomePoint> incomePoints = effective.monthlyIncomes().stream()
             .map(m -> new MonthlyIncomePoint(m.yearMonth(), m.amountCents()))
             .toList();
 
@@ -142,7 +180,7 @@ public class FairLoanCheckService {
         );
 
         applyNarrationIfPresent(assessment, null);
-        repository.saveAssessment(assessment);
+        commit(assessment);
         return toCardView(assessment);
     }
 
@@ -153,7 +191,7 @@ public class FairLoanCheckService {
         }
         assessment.flagMemberDispute(note, Instant.now());
         applyNarrationIfPresent(assessment, assessment.getMemberDisputeNote());
-        repository.saveAssessment(assessment);
+        commit(assessment);
         return toCardView(assessment);
     }
 
@@ -218,7 +256,7 @@ public class FairLoanCheckService {
             reason,
             Instant.now()
         );
-        repository.saveAssessment(assessment);
+        commit(assessment);
         return toCardView(assessment);
     }
 
@@ -240,6 +278,34 @@ public class FairLoanCheckService {
         return repository.findAllAssessments().stream()
             .map(FairLoanCheckService::toCardView)
             .toList();
+    }
+
+    /** The newest assessment as a status a member may see, without scores, tiers or reasons. */
+    public Optional<AssessmentStatusView> latestAssessmentStatus(UUID memberId) {
+        return repository.findAssessmentsByMemberId(memberId).stream().findFirst()
+            .map(a -> new AssessmentStatusView(a.getId(), a.getOfficerDecision().name(), a.isMemberDisputed(), a.getCreatedAt()));
+    }
+
+    private void commit(FairLoanCheckAssessment assessment) {
+        if (transaction == null) {
+            saveAndAnnounce(assessment);
+        } else {
+            transaction.executeWithoutResult(status -> saveAndAnnounce(assessment));
+        }
+    }
+
+    private void saveAndAnnounce(FairLoanCheckAssessment assessment) {
+        repository.saveAssessment(assessment);
+        if (events != null) {
+            events.publishEvent(changed(assessment));
+        }
+    }
+
+    static AssessmentChanged changed(FairLoanCheckAssessment a) {
+        FairCheckResult r = a.getResult();
+        Instant changedAt = a.getDecidedAt() != null ? a.getDecidedAt() : a.getCreatedAt();
+        return new AssessmentChanged(Ids.newId(), a.getId(), a.getMemberId(), a.getApplicationId(), r.recommended(),
+            r.suggestedLoanCents(), a.getOfficerDecision().name(), a.isMemberDisputed(), a.getCreatedAt(), changedAt);
     }
 
     private FairLoanCheckAssessment findOrThrow(UUID id) {
