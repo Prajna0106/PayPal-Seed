@@ -55,9 +55,6 @@ public class UnderwritingAgentRunner implements FairCheckNarrator {
     private static final int MAX_OUTPUT_TOKENS = 600;
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(12);
     private static final Pattern DOLLAR_AMOUNT = Pattern.compile("\\$[0-9][0-9,]*(?:\\.[0-9]{1,2})?");
-    private static final Pattern FORBIDDEN_TERMS = Pattern.compile(
-        "(?i)\\b(fico|credit\\s+score|credit\\s+bureau|late\\s+fee|penalty|penalties|guaranteed\\s+approval|apr)\\b"
-    );
 
     private static final String SYSTEM_PROMPT = loadPrompt("/underwriting/prompts/v1/explain.md");
     public static final String PROMPT_HASH = "sha256:" + sha256Hex(SYSTEM_PROMPT + "\u0000" + SCHEMA).substring(0, 16);
@@ -170,7 +167,7 @@ public class UnderwritingAgentRunner implements FairCheckNarrator {
     }
 
     private static boolean isGroundedLine(String text, Set<String> allowedDollars) {
-        if (FORBIDDEN_TERMS.matcher(text).find()) {
+        if (NarrationGuard.violates(text)) {
             return false;
         }
         Matcher m = DOLLAR_AMOUNT.matcher(text);

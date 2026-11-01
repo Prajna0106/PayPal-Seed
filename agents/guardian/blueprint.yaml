@@ -1,5 +1,16 @@
 name: guardian-agent
-model: gemini-1.5-pro
+version: 1.0.0
+model: openrouter/primary-chain
 role: read-only
+feature: F5-hardship-safety-net
+runtime_entry: com.paypalseed.guardian.application.usecases.GuardianRunner
+kill_switch_scope: guardian-agent
+max_turns: 6
+budget:
+  max_tokens: 4000
+  max_cost_cents: 5
+evals:
+  dataset: evals/eval-dataset.json
+  injection_corpus: ../shared/evals/injection-corpus.json
 tools:
   - openapi_spec: ../shared/agent-tools.yaml
