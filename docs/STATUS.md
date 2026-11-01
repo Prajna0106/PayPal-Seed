@@ -4,13 +4,26 @@ Status as of **2 Nov 2026**. The plan and roadmap are in [plan.md](../plan.md).
 
 Priorities: **P0** is needed for the demo, **P1** wins sponsor prizes or adds clear value, **P2** only if time is left.
 
+Submissions close **12 Nov 2026, 12:00 PT**, ten days from this status.
+
+---
+
+## Last verified
+
+`./gradlew build` with every task re-run passes: **1,126 tests, 0 failures, 0 errors, 0 skipped** across the engines, platform, modules, architecture tests and the `app` integration tests. Every module compiles with `-Xlint:all -Werror`. `pnpm gen:api` and the typecheck of both web apps and all packages pass against the merged contract. Nothing has run against the real PayPal sandbox, and the web screens for the new backend features are not built.
+
+Two test-suite notes from the final run:
+
+- `settle()` in the integration test base now re-submits stale incomplete event publications while it waits. Production does the same from `BackgroundJobs` every minute; tests switch that job off. This closed a race where a refund listener could run before its payment was recorded.
+- A payment for a savings goal that does not exist is now logged and dropped instead of retried forever (found by `PaypalCatalogIT`).
+
 ---
 
 ## Summary
 
 | Area | Built | Main gaps |
 | --- | --- | --- |
-| Backend | F1 to F6, identity, PayPal Payouts, savings subscriptions, Transaction Search, Venmo wallet, credit record, desk read models, reserve, fraud flags, member home call, signed actor tokens, ledger, governance, engagement, agent gateway | Nothing run against the real PayPal sandbox yet; the checks are listed under PayPal sandbox |
+| Backend | F1 to F6, identity, PayPal Payouts, savings subscriptions, Transaction Search, Venmo wallet, credit record, desk read models, reserve, fraud flags, member home call, signed actor tokens, ledger, governance, engagement, agent gateway. Full build passes: 1,126 tests | Nothing run against the real PayPal sandbox yet; the checks are listed under PayPal sandbox |
 | Contracts | Every route is in `contracts/openapi`, events in `contracts/events`; a test fails when a route and the contract disagree; the web client is generated from it | `agent-tools.yaml` uses the tool names as operation ids on purpose |
 | Frontend | Landing page; member loan, timeline, Pay now, hardship help; desk hardship, loans, agents, operations | Member login, Home, savings, apply, fair check, record; desk applications, fair check, portfolio, workload, reserve, fraud |
 | Agents | Guardian, Savings Coach, Fair Check, all through OpenRouter with kill switch and grounding checks | Astropods hosting and evals; Trust and Desk Analyst agents |
@@ -44,6 +57,15 @@ Pending:
 - [ ] **P1 Fair-check consent in the identity ledger**: the fair check keeps its own consent record; the member-facing consent list does not show it yet.
 - [ ] **P1 Record sharing consent** (identity `RECORD_SHARING`) is not checked when a share link is created.
 - [ ] **P1 A member without a PayPal login** gets `409 payout-recipient-missing` on withdrawal or disbursement. Correct, but the web has to explain it.
+- [ ] **P1 Reserve cover when the member pays at the same moment**: the ledger can be credited more than the schedule takes if a member pays between the reserve's posting and the listener. The unused amount is logged (`unusedCents`); an officer or a job has to reverse it.
+- [ ] **P1 Policy: a loan fully paid by the safety fund** becomes `REPAID` and the credit record counts it as repaid. Decide whether it should.
+- [ ] **P1 Transaction Search inside loan submission**: with `TRANSACTION_SEARCH` on, the PayPal read runs in the loan-submission transaction (30 s timeout), so a PayPal outage makes submission return `503`. Move it before the transaction if it matters for the demo.
+- [ ] **P1 Fraud rule for payout recipient changes** compares the wallet type only, because no event carries the recipient. An email changed at a later PayPal login is not seen. Feed `FraudFacade.observe` from the payout request when this matters.
+- [ ] **P2 Out-of-order PayPal reports**: a `SUSPENDED` made in PayPal after a resume in Seed is ordered by the resource's `update_time`; confirm PayPal sends it (see the unverified list below).
+- [ ] **P2 A savings webhook that beats the goal's commit** is dropped, not retried. Unlikely, because deposits follow the member's approval.
+- [ ] **P2 Pause and resume stamps** use the real clock (`Instant.now()`), not the business clock, because PayPal times are real while the demo clock can run ahead. This departs from the usual rule on purpose.
+- [ ] **P2 Application SLA** in the desk queue is `submittedAt + 24 h`, and the saving streak counts UTC calendar months. Both are assumptions to confirm.
+- [ ] **P2 Desk-query cursors** need `SEED_DESK_QUERY_CURSOR_KEY` set the same on every `api` instance (Render generates it; local runs make their own).
 - [ ] **P2 Hardship in the Postman collection** (F5 requests are not in it yet).
 
 ---
