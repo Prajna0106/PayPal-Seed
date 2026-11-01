@@ -6,12 +6,16 @@ import com.paypalseed.payments.application.ports.PayPalGateway;
 import com.paypalseed.payments.domain.model.PaymentsErrors;
 import com.paypalseed.payments.infrastructure.persistence.InboxRepository;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.Money;
+import com.paypalseed.savings.api.SavingsFacade;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,26 +28,41 @@ import org.springframework.web.bind.annotation.RestController;
  * refused and never stored.
  */
 @RestController
-class PayPalWebhookController {
+public class PayPalWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(PayPalWebhookController.class);
     private static final int MAX_BODY_CHARS = 256 * 1024;
 
-    record Ack(String status) {
+    public record Ack(String status, String eventId) {
+        public Ack(String status) {
+            this(status, null);
+        }
     }
 
     private final PayPalGateway paypal;
     private final InboxRepository inbox;
     private final ObjectMapper json;
+    private final SavingsFacade savingsFacade;
 
-    PayPalWebhookController(PayPalGateway paypal, InboxRepository inbox, ObjectMapper json) {
+    public PayPalWebhookController(PayPalGateway paypal, InboxRepository inbox, ObjectMapper json) {
+        this(paypal, inbox, json, null);
+    }
+
+    @Autowired
+    public PayPalWebhookController(
+            PayPalGateway paypal,
+            InboxRepository inbox,
+            ObjectMapper json,
+            @Autowired(required = false) SavingsFacade savingsFacade
+    ) {
         this.paypal = paypal;
         this.inbox = inbox;
         this.json = json;
+        this.savingsFacade = savingsFacade;
     }
 
-    @PostMapping(path = "/api/v1/webhooks/paypal", consumes = "application/json")
-    Ack receive(@RequestHeader HttpHeaders headers, @RequestBody String rawBody) {
+    @PostMapping(path = {"/api/v1/webhooks/paypal", "/api/v1/payments/webhooks"}, consumes = "application/json")
+    public Ack receive(@RequestHeader HttpHeaders headers, @RequestBody String rawBody) {
         if (rawBody.length() > MAX_BODY_CHARS) {
             throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Webhook body too large");
         }
@@ -69,6 +88,43 @@ class PayPalWebhookController {
         if (id.isBlank() || type.isBlank()) {
             throw new DomainException(PaymentsErrors.INVALID_WEBHOOK, "Missing id or event_type");
         }
-        return new Ack(inbox.insert(id, type, rawBody) ? "accepted" : "duplicate");
+
+        boolean inserted = inbox.insert(id, type, rawBody);
+
+        if (inserted && savingsFacade != null) {
+            routeSavingsEvent(type, event.path("resource"));
+        }
+
+        return new Ack(inserted ? "accepted" : "duplicate", id);
+    }
+
+    private void routeSavingsEvent(String eventType, JsonNode resource) {
+        try {
+            switch (eventType) {
+                case "PAYMENT.SALE.COMPLETED" -> {
+                    String subscriptionId = resource.path("billing_agreement_id").asText("");
+                    if (!subscriptionId.isBlank()) {
+                        String captureId = resource.path("id").asText("");
+                        String totalStr = resource.path("amount").path("total").asText("");
+                        String currency = resource.path("amount").path("currency").asText("USD");
+                        if (!totalStr.isBlank()) {
+                            Money amount = Money.of(new BigDecimal(totalStr), currency);
+                            savingsFacade.recordDepositBySubscription(subscriptionId, amount, captureId);
+                        }
+                    }
+                }
+                case "BILLING.SUBSCRIPTION.CANCELLED" -> {
+                    String subscriptionId = resource.path("id").asText("");
+                    if (!subscriptionId.isBlank()) {
+                        savingsFacade.pauseGoalBySubscription(subscriptionId);
+                    }
+                }
+                default -> {
+                    // Other event types handled by inbox poller / normalizer
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[PAYPAL WEBHOOK] Failed to process savings event {}: {}", eventType, ex.getMessage());
+        }
     }
 }
