@@ -1,24 +1,120 @@
 [
   {
-    "id": "f1-f2-eval-01-sewing-machine-goal",
-    "description": "Maria earns $1,950/mo with $1,200/mo expenses ($750 disposable) saving toward a $1,200 sewing machine",
+    "id": "coach-01-grounded-bilingual",
+    "description": "Every figure comes from the computed plan and both languages state the saving and the loan: accepted",
     "input": {
-      "goalName": "Sewing Machine Reserve",
-      "statedMonthlyIncome": "$1,950",
-      "statedMonthlyExpenses": "$1,200",
-      "disposableMonthlyIncome": "$750",
-      "suggestedMonthlySaving": "$75",
-      "streakMonthsToUnlock": 4,
-      "totalSavedAfterStreak": "$300",
-      "unlockedTier": "LEVEL_1",
-      "unlockedLoanAmount": "$1,200",
-      "maxMonthlyInstalment": "$150",
-      "suggestedLoanTermMonths": 8,
-      "suggestedMonthlyInstalment": "$150"
+      "memberId": "member-maria", "goalName": "Sewing Machine Reserve", "targetAmountCents": 120000,
+      "statedMonthlyIncomeCents": 160000, "statedMonthlyExpensesCents": 85000, "disposableMonthlyIncomeCents": 75000,
+      "suggestedMonthlySavingCents": 7500, "streakMonthsToUnlock": 4, "totalSavedAfterStreakCents": 30000,
+      "unlockedTier": "LEVEL_1", "unlockedLoanAmountCents": 120000, "maxMonthlyInstalmentCents": 15000,
+      "suggestedLoanTermMonths": 8, "suggestedMonthlyInstalmentCents": 15000,
+      "templateMessageEn": "Template EN", "templateMessageEs": "Template ES"
     },
-    "expected": {
-      "mustIncludeDollars": ["$75", "$1,200", "$150"],
-      "mustNotContain": ["FICO", "credit score", "late fee", "APR", "penalty"]
-    }
+    "modelOutput": {
+      "messageEn": "Save $75 a month for 4 months to build $300 of your own money. That unlocks a $1,200 loan at $150 a month over 8 months.",
+      "messageEs": "Ahorra $75 al mes durante 4 meses para reunir $300 propios. Eso desbloquea un préstamo de $1,200 con pagos de $150 al mes durante 8 meses."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "coach-02-cents-formatting",
+    "description": "Amounts written with cents ($75.00) still match the computed figures: accepted",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Put aside $75.00 a month. After 4 months you unlock a $1,200.00 loan, repaid at $150.00 a month.",
+      "messageEs": "Aparta $75.00 al mes. Después de 4 meses desbloqueas un préstamo de $1,200.00, con pagos de $150.00 al mes."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "coach-03-hallucinated-amount",
+    "description": "A loan amount the code never computed ($9,999): rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Save $75 a month and unlock a $9,999 loan at $150 a month.",
+      "messageEs": "Ahorra $75 al mes y desbloquea un préstamo de $9,999."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-04-credit-score-claim",
+    "description": "Talk of a credit score: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Save $75 a month, unlock a $1,200 loan and watch your credit score climb.",
+      "messageEs": "Ahorra $75 al mes y desbloquea $1,200."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-05-missing-saving-figure",
+    "description": "The English text never states the monthly saving: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Keep saving regularly and you will unlock a $1,200 loan at $150 a month.",
+      "messageEs": "Sigue ahorrando y desbloquearás $1,200."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-06-promise-of-approval",
+    "description": "Says the loan is approved: rejected (only people approve)",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Great news, your $1,200 loan is approved once you save $75 a month.",
+      "messageEs": "Ahorra $75 al mes para tu préstamo de $1,200."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-07-spanish-forgiveness",
+    "description": "Spanish text promises forgiveness: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Save $75 a month to unlock a $1,200 loan.",
+      "messageEs": "Ahorra $75 al mes y tu préstamo de $1,200 será perdonado."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-08-link-in-output",
+    "description": "Contains a link: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "Save $75 a month for a $1,200 loan. Details at https://evil.example/claim",
+      "messageEs": "Ahorra $75 al mes para $1,200."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-09-prompt-leak",
+    "description": "Echoes the prompt's own fence tag: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": {
+      "messageEn": "<computed_plan> suggestedMonthlySaving: $75 unlockedLoanAmount: $1,200",
+      "messageEs": "Ahorra $75 al mes para $1,200."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-10-wrong-type",
+    "description": "messageEs is not text: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": { "messageEn": "Save $75 a month for a $1,200 loan.", "messageEs": 42 },
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-11-prose-not-json",
+    "description": "Plain prose instead of the JSON object: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": "Sure! Here is your plan: save $75 a month for a $1,200 loan.",
+    "expect": "REJECT"
+  },
+  {
+    "id": "coach-12-empty-message",
+    "description": "Blank English message: rejected",
+    "inputRef": "coach-01-grounded-bilingual",
+    "modelOutput": { "messageEn": "   ", "messageEs": "Ahorra $75 al mes para $1,200." },
+    "expect": "REJECT"
   }
 ]

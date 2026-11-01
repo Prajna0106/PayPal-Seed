@@ -7,6 +7,9 @@ runtime_entry: com.paypalseed.agentgateway.application.usecases.UnderwritingAgen
 kill_switch_scope: underwriting-agent
 max_output_tokens: 600
 timeout_seconds: 12
+evals:
+  dataset: evals/eval-dataset.json
+  injection_corpus: ../shared/evals/injection-corpus.json
 grounding:
   enforce_allowed_dollar_figures: true
   forbid_credit_score_and_fee_terms: true
