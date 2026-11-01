@@ -4,6 +4,10 @@ import com.paypalseed.engines.rules.EligibilityEngine;
 import com.paypalseed.engines.rules.EligibilityEngine.EligibilityEvaluation;
 import com.paypalseed.engines.rules.EligibilityEngine.EligibilityInput;
 import com.paypalseed.engines.rules.EligibilityEngine.SizingDecision;
+import com.paypalseed.ledger.api.LedgerFacade;
+import com.paypalseed.ledger.api.dto.AccountRef;
+import com.paypalseed.ledger.api.dto.AccountType;
+import com.paypalseed.ledger.api.dto.PostingRequest;
 import com.paypalseed.lending.api.LendingFacade;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
@@ -22,6 +26,7 @@ import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
+import com.paypalseed.underwriting.api.UnderwritingFacade;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -31,11 +36,13 @@ import java.util.OptionalLong;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Application service orchestrating Feature 2: Savings-linked microloans (Blueprint §5).
- * Evaluates ladder eligibility from savings streaks, enforces sizing rules, manages two-officer
- * maker-checker approval, and registers disbursed 0% loans into the schedule & repayment engine.
+ * Evaluates ladder eligibility from savings streaks and consented underwriting income, enforces
+ * sizing rules, manages two-officer maker-checker approval, and registers disbursed 0% loans into
+ * the schedule & repayment engine.
  */
 @Service
 public class MicroloanApplicationService {
@@ -61,6 +68,18 @@ public class MicroloanApplicationService {
     private final LoanRepository loans;
     private final LendingFacade lendingFacade;
     private final BusinessClock clock;
+    private final UnderwritingFacade underwritingFacade;
+    private final LedgerFacade ledgerFacade;
+
+    public MicroloanApplicationService(
+        LoanApplicationRepository applications,
+        SavingsFacade savingsFacade,
+        LoanRepository loans,
+        LendingFacade lendingFacade,
+        BusinessClock clock
+    ) {
+        this(applications, savingsFacade, loans, lendingFacade, clock, null, null);
+    }
 
     @Autowired
     public MicroloanApplicationService(
@@ -68,13 +87,17 @@ public class MicroloanApplicationService {
         SavingsFacade savingsFacade,
         @Autowired(required = false) LoanRepository loans,
         @Autowired(required = false) LendingFacade lendingFacade,
-        @Autowired(required = false) BusinessClock clock
+        @Autowired(required = false) BusinessClock clock,
+        @Autowired(required = false) UnderwritingFacade underwritingFacade,
+        @Autowired(required = false) LedgerFacade ledgerFacade
     ) {
         this.applications = Objects.requireNonNull(applications, "applications repository is required");
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
         this.loans = loans;
         this.lendingFacade = lendingFacade;
         this.clock = clock;
+        this.underwritingFacade = underwritingFacade;
+        this.ledgerFacade = ledgerFacade;
     }
 
     public EligibilityView checkEligibility(UUID memberId, OptionalLong verifiedMonthlyIncomeCents) {
@@ -100,6 +123,7 @@ public class MicroloanApplicationService {
         );
     }
 
+    @Transactional
     public LoanApplicationView submitApplication(UUID memberId, SubmitApplicationCommand command) {
         Objects.requireNonNull(memberId, "memberId is required");
         Objects.requireNonNull(command, "command is required");
@@ -159,9 +183,26 @@ public class MicroloanApplicationService {
         );
 
         applications.save(app);
+
+        // Automatically record the linked F3 Fair Loan Check assessment when consented
+        if (command.fairCheckConsented() && underwritingFacade != null) {
+            long incomeCents = input.verifiedMonthlyIncomeCents().orElse(0L);
+            underwritingFacade.assessForLoanApplication(
+                memberId,
+                app.getId(),
+                app.getPurpose(),
+                app.getRequestedAmountCents(),
+                app.getTermMonths(),
+                incomeCents,
+                input.completedLoansOnTime(),
+                input.hasActiveLoan()
+            );
+        }
+
         return toView(app);
     }
 
+    @Transactional
     public LoanApplicationView approveApplication(UUID applicationId, UUID officerId) {
         LoanApplication app = findOrThrow(applicationId);
         app.approve(officerId, Instant.now());
@@ -169,6 +210,7 @@ public class MicroloanApplicationService {
         return toView(app);
     }
 
+    @Transactional
     public LoanApplicationView rejectApplication(UUID applicationId, UUID officerId, String reason) {
         LoanApplication app = findOrThrow(applicationId);
         app.reject(officerId, reason, Instant.now());
@@ -180,6 +222,7 @@ public class MicroloanApplicationService {
      * Disburses an approved loan (Blueprint §5: {@code sender_batch_id = loan-{id}-disb})
      * and registers the loan and Schedule Version 1 in the lending engine.
      */
+    @Transactional
     public LoanApplicationView disburseApplication(UUID applicationId) {
         LoanApplication app = findOrThrow(applicationId);
         if (app.getStatus() != ApplicationStatus.APPROVED) {
@@ -212,6 +255,7 @@ public class MicroloanApplicationService {
         return toView(app);
     }
 
+    @Transactional
     public LoanApplicationView cancelWithinCoolingOff(UUID applicationId, UUID memberId) {
         LoanApplication app = findOrThrow(applicationId);
         if (!app.getMemberId().equals(memberId)) {
@@ -219,6 +263,18 @@ public class MicroloanApplicationService {
         }
         app.cancelWithinCoolingOff(Instant.now());
         applications.save(app);
+
+        if (ledgerFacade != null && app.getLoanId() != null) {
+            LocalDate businessDate = clock != null ? clock.today() : LocalDate.now();
+            ledgerFacade.post(PostingRequest.builder(
+                    "loan-cooling-off:" + app.getId(),
+                    "48h cooling-off return for loan " + app.getLoanId(),
+                    businessDate)
+                .debit(AccountRef.program(AccountType.PROGRAM_CASH), app.getRequestedAmountCents())
+                .credit(AccountRef.of(AccountType.LOANS_RECEIVABLE, app.getLoanId()), app.getRequestedAmountCents())
+                .build());
+        }
+
         return toView(app);
     }
 
@@ -269,12 +325,18 @@ public class MicroloanApplicationService {
                 .anyMatch(a -> a.getStatus() == ApplicationStatus.DISBURSED);
         }
 
+        OptionalLong resolvedIncome = verifiedMonthlyIncomeCents != null ? verifiedMonthlyIncomeCents : OptionalLong.empty();
+        if (resolvedIncome.isEmpty() && underwritingFacade != null) {
+            LocalDate today = clock != null ? clock.today() : LocalDate.now();
+            resolvedIncome = underwritingFacade.verifiedMonthlyIncomeCents(memberId, today);
+        }
+
         return new EligibilityInput(
             savings.currentStreakMonths(),
             savings.totalOnTimeDeposits(),
             savings.missedDepositsInQuarter(),
             savings.monthlySavingCents(),
-            verifiedMonthlyIncomeCents != null ? verifiedMonthlyIncomeCents : OptionalLong.empty(),
+            resolvedIncome,
             completedLoansOnTime,
             hasActiveLoan
         );

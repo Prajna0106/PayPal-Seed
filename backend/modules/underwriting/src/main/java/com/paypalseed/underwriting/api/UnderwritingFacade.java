@@ -6,9 +6,10 @@ import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 
-/** What other modules (F3 Fair Loan Check, F5 hardship, agent tools) may ask of underwriting. */
+/** What other modules (F2 microloans, F3 Fair Loan Check, F5 hardship, agent tools) may ask of underwriting. */
 public interface UnderwritingFacade {
 
     /**
@@ -30,6 +31,30 @@ public interface UnderwritingFacade {
     }
 
     default Optional<FairCheckCardView> findAssessment(UUID assessmentId) {
+        return Optional.empty();
+    }
+
+    /**
+     * Resolves the member's verified monthly income in cents from their latest Fair Loan Check assessment
+     * or their 13-week consented PayPal income summary.
+     */
+    default OptionalLong verifiedMonthlyIncomeCents(UUID memberId, LocalDate asOf) {
+        return OptionalLong.empty();
+    }
+
+    /**
+     * Runs and records an auditable Fair Loan Check assessment linked to a submitted microloan application.
+     */
+    default Optional<FairCheckCardView> assessForLoanApplication(
+        UUID memberId,
+        UUID applicationId,
+        String purpose,
+        long requestedAmountCents,
+        int requestedTermMonths,
+        long statedMonthlyIncomeCents,
+        int completedLoansOnTime,
+        boolean hasActiveLoan
+    ) {
         return Optional.empty();
     }
 }
