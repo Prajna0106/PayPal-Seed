@@ -19,6 +19,18 @@
       "name": "Feature 1: Goal Savings",
       "item": [
         {
+          "name": "0. AI Coach: Suggest Monthly Saving & Loan Term",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"goalName\": \"Commercial Stand Mixer\",\n  \"targetAmount\": 1200.00,\n  \"statedMonthlyIncome\": 1600.00,\n  \"statedMonthlyExpenses\": 850.00,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/savings/coach/suggest"
+          }
+        },
+        {
           "name": "1. Create Savings Goal ($1,200 Mixer, $75/mo)",
           "event": [
             {
