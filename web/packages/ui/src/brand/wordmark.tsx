@@ -5,16 +5,18 @@ export interface WordmarkProps {
   className?: string;
   /** Hide the text and keep only the seed glyph (for collapsed sidebars). */
   compact?: boolean;
+  /** Size the glyph, e.g. `size-8` in a taller header. */
+  markClassName?: string;
 }
 
-export function Wordmark({ className, compact = false }: WordmarkProps) {
+export function Wordmark({ className, compact = false, markClassName }: WordmarkProps) {
   return (
     <span className={cn("inline-flex items-center gap-2 text-ink", className)}>
-      <SeedMark />
+      <SeedMark className={markClassName} />
       {compact ? (
         <span className="sr-only">PayPal Seed</span>
       ) : (
-        <span className="font-display text-xl font-light tracking-tight">
+        <span className="font-display text-xl leading-none font-light tracking-tight">
           PayPal <span className="italic">Seed</span>
         </span>
       )}

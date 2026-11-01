@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "PayPal Seed: save a little, borrow fairly, get help before a month goes wrong.";
+export const alt = "PayPal Seed: fair credit for the people banks overlook. Save from $5 a month, unlock a 0% loan.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -39,10 +39,10 @@ export default function OpengraphImage() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <div style={{ fontSize: 68, lineHeight: 1.05, letterSpacing: -2, maxWidth: 980 }}>
-            Save a little. Borrow fairly. Get help before a month goes wrong.
+            Fair credit for the people banks overlook.
           </div>
           <div style={{ fontSize: 28, color: BODY }}>
-            0% microloans inside PayPal · numbers from code, words from AI, decisions from people
+            Save from $5 a month · 0% loans · no credit score · no fees · inside PayPal
           </div>
         </div>
       </div>

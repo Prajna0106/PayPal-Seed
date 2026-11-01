@@ -17,6 +17,7 @@
     "@paypal-seed/timeline": "workspace:*",
     "@paypal-seed/ui": "workspace:*",
     "@paypal/react-paypal-js": "^10.6.1",
+    "framer-motion": "^14.9.0",
     "lucide-react": "^1.66.0",
     "next": "16.4.3",
     "react": "19.3.1",
