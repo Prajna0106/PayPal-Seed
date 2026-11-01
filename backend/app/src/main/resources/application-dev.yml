@@ -1,5 +1,20 @@
-# Local development against infra/docker-compose.yml.
+# Local development against infra/docker-compose.yml. Every value below is a throwaway for a laptop; none is a secret.
 seed:
   security:
     dev-header-auth: true
     internal-token: ${SEED_INTERNAL_TOKEN:local-dev-internal-token}
+    actor-token:
+      # The web apps in dev send X-Seed-* headers, so this is only needed to try signed tokens locally.
+      secrets: ${SEED_ACTOR_TOKEN_SECRETS:k1:dev-only-actor-token-secret-0123456789abcdef}
+  record:
+    # Fixed so share links survive a restart while developing.
+    signing-secret: ${SEED_RECORD_SIGNING_SECRET:dev-only-record-signing-secret-0123456789abcdef}
+  desk-query:
+    # Fixed so desk grid cursors survive a restart while developing.
+    cursor-key: ${SEED_DESK_QUERY_CURSOR_KEY:dev-only-desk-cursor-key-0123456789abcdef}
+  savings:
+    return-url: ${SEED_SAVINGS_RETURN_URL:http://localhost:3000/app/savings/return}
+    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://localhost:3000/app/savings/cancelled}
+  underwriting:
+    income:
+      source: ${SEED_UNDERWRITING_INCOME_SOURCE:SEEDED}   # TRANSACTION_SEARCH needs PayPal sandbox access to Transaction Search

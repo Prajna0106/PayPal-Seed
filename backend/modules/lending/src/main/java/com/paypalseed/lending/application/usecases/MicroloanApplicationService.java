@@ -1,9 +1,11 @@
 package com.paypalseed.lending.application.usecases;
 
+import com.paypalseed.creditrecord.api.CreditRecordFacade;
 import com.paypalseed.engines.rules.EligibilityEngine;
 import com.paypalseed.engines.rules.EligibilityEngine.EligibilityEvaluation;
 import com.paypalseed.engines.rules.EligibilityEngine.EligibilityInput;
 import com.paypalseed.engines.rules.EligibilityEngine.SizingDecision;
+import com.paypalseed.engines.rules.record.RecordLevel;
 import com.paypalseed.ledger.api.LedgerFacade;
 import com.paypalseed.ledger.api.dto.AccountRef;
 import com.paypalseed.ledger.api.dto.AccountType;
@@ -13,10 +15,14 @@ import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
+import com.paypalseed.lending.api.events.LoanApplicationChanged;
+import com.paypalseed.lending.application.ports.DisbursementPayouts;
 import com.paypalseed.lending.application.ports.LoanApplicationRepository;
+import com.paypalseed.lending.application.ports.PayoutRecipients;
 import com.paypalseed.lending.domain.model.LendingErrors;
 import com.paypalseed.lending.domain.model.LoanApplication;
 import com.paypalseed.lending.domain.model.LoanApplication.ApplicationStatus;
+import com.paypalseed.lending.domain.model.StaffReferences;
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
 import com.paypalseed.lending.domain.model.LoanRow;
 import com.paypalseed.lending.domain.model.LoanRow.LoanStatus;
@@ -34,7 +40,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +72,8 @@ public class MicroloanApplicationService {
         }
     }
 
+    private static final Logger log = LoggerFactory.getLogger(MicroloanApplicationService.class);
+
     private final LoanApplicationRepository applications;
     private final SavingsFacade savingsFacade;
     private final LoanRepository loans;
@@ -70,6 +81,10 @@ public class MicroloanApplicationService {
     private final BusinessClock clock;
     private final UnderwritingFacade underwritingFacade;
     private final LedgerFacade ledgerFacade;
+    private final DisbursementPayouts payouts;
+    private final PayoutRecipients recipients;
+    private final ApplicationEventPublisher events;
+    private final CreditRecordFacade creditRecord;
 
     public MicroloanApplicationService(
         LoanApplicationRepository applications,
@@ -81,6 +96,35 @@ public class MicroloanApplicationService {
         this(applications, savingsFacade, loans, lendingFacade, clock, null, null);
     }
 
+    /** Without the payments wiring: an approved application is disbursed at once, as before payouts went through PayPal. */
+    public MicroloanApplicationService(
+        LoanApplicationRepository applications,
+        SavingsFacade savingsFacade,
+        LoanRepository loans,
+        LendingFacade lendingFacade,
+        BusinessClock clock,
+        UnderwritingFacade underwritingFacade,
+        LedgerFacade ledgerFacade
+    ) {
+        this(applications, savingsFacade, loans, lendingFacade, clock, underwritingFacade, ledgerFacade, null, null, null);
+    }
+
+    /** Without a credit record: the ladder alone sizes the loan, as before the record existed. */
+    public MicroloanApplicationService(
+        LoanApplicationRepository applications,
+        SavingsFacade savingsFacade,
+        LoanRepository loans,
+        LendingFacade lendingFacade,
+        BusinessClock clock,
+        UnderwritingFacade underwritingFacade,
+        LedgerFacade ledgerFacade,
+        DisbursementPayouts payouts,
+        PayoutRecipients recipients,
+        ApplicationEventPublisher events
+    ) {
+        this(applications, savingsFacade, loans, lendingFacade, clock, underwritingFacade, ledgerFacade, payouts, recipients, events, null);
+    }
+
     @Autowired
     public MicroloanApplicationService(
         LoanApplicationRepository applications,
@@ -89,7 +133,11 @@ public class MicroloanApplicationService {
         @Autowired(required = false) LendingFacade lendingFacade,
         @Autowired(required = false) BusinessClock clock,
         @Autowired(required = false) UnderwritingFacade underwritingFacade,
-        @Autowired(required = false) LedgerFacade ledgerFacade
+        @Autowired(required = false) LedgerFacade ledgerFacade,
+        @Autowired(required = false) DisbursementPayouts payouts,
+        @Autowired(required = false) PayoutRecipients recipients,
+        @Autowired(required = false) ApplicationEventPublisher events,
+        @Autowired(required = false) CreditRecordFacade creditRecord
     ) {
         this.applications = Objects.requireNonNull(applications, "applications repository is required");
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
@@ -98,6 +146,10 @@ public class MicroloanApplicationService {
         this.clock = clock;
         this.underwritingFacade = underwritingFacade;
         this.ledgerFacade = ledgerFacade;
+        this.payouts = payouts;
+        this.recipients = recipients;
+        this.events = events;
+        this.creditRecord = creditRecord;
     }
 
     public EligibilityView checkEligibility(UUID memberId, OptionalLong verifiedMonthlyIncomeCents) {
@@ -119,7 +171,9 @@ public class MicroloanApplicationService {
             input.monthlySavingCents(),
             input.hasActiveLoan(),
             input.completedLoansOnTime(),
-            eval.reasons()
+            eval.reasons(),
+            eval.recordLevel().name(),
+            eval.limitReason()
         );
     }
 
@@ -199,43 +253,130 @@ public class MicroloanApplicationService {
             );
         }
 
+        publishChanged(app);
         return toView(app);
     }
 
     @Transactional
     public LoanApplicationView approveApplication(UUID applicationId, UUID officerId) {
-        LoanApplication app = findOrThrow(applicationId);
+        LoanApplication app = findForUpdate(applicationId);
         app.approve(officerId, Instant.now());
         applications.save(app);
+        publishChanged(app);
         return toView(app);
     }
 
     @Transactional
     public LoanApplicationView rejectApplication(UUID applicationId, UUID officerId, String reason) {
-        LoanApplication app = findOrThrow(applicationId);
+        LoanApplication app = findForUpdate(applicationId);
         app.reject(officerId, reason, Instant.now());
         applications.save(app);
+        publishChanged(app);
         return toView(app);
     }
 
     /**
-     * Disburses an approved loan (Blueprint §5: {@code sender_batch_id = loan-{id}-disb})
-     * and registers the loan and Schedule Version 1 in the lending engine.
+     * Disburses an approved loan (Blueprint §5: {@code sender_batch_id = loan-{id}-disb}). With PayPal wired in, the
+     * application moves to {@code DISBURSING} and the member is paid through Payouts with the application id as the
+     * payout reference; the loan and Schedule Version 1 are registered when the payout succeeds, never before. A
+     * payout PayPal answers at once is completed in this call; otherwise the payout event completes it. Asking again
+     * while disbursing asks PayPal for the same payout, and asking for a disbursed application returns it.
      */
     @Transactional
     public LoanApplicationView disburseApplication(UUID applicationId) {
-        LoanApplication app = findOrThrow(applicationId);
-        if (app.getStatus() != ApplicationStatus.APPROVED) {
+        return disburseApplication(applicationId, null);
+    }
+
+    /** {@code officerId} is the officer who pressed the button, kept for the desk queue; it may be null. */
+    @Transactional
+    public LoanApplicationView disburseApplication(UUID applicationId, UUID officerId) {
+        LoanApplication app = findForUpdate(applicationId);
+        if (app.getStatus() == ApplicationStatus.DISBURSED) {
+            return toView(app);
+        }
+        if (payouts == null || recipients == null) {
+            return disburseWithoutPayout(app);
+        }
+        if (app.getStatus() != ApplicationStatus.APPROVED && app.getStatus() != ApplicationStatus.DISBURSING) {
             throw new DomainException(
                 LendingErrors.APPLICATION_INVALID_STATE,
                 "Loan application must be APPROVED by two officers before disbursement; current status: " + app.getStatus()
             );
         }
+        PayoutRecipients.Recipient recipient = recipients.of(app.getMemberId())
+            .orElseThrow(() -> new DomainException(LendingErrors.PAYOUT_RECIPIENT_MISSING,
+                "The member has no PayPal account on file to receive the loan"));
+        boolean firstAsk = app.getStatus() == ApplicationStatus.APPROVED;
+        app.startDisbursement(officerId, Instant.now());
+        applications.save(app);
+        if (firstAsk) {
+            publishChanged(app);
+        }
+        DisbursementPayouts.Result result = payouts.send(app.payoutReference(), app.getRequestedAmountCents(), recipient,
+            app.getPayoutWallet(), "Seed microloan");
+        switch (result.state()) {
+            case SUCCEEDED -> complete(app);
+            case FAILED -> fail(app, result.reasonCode());
+            case PENDING -> {
+                // PayPal reports the end by webhook; the application stays DISBURSING until then
+            }
+        }
+        return toView(app);
+    }
 
+    /** The payout reached the member. Idempotent: an application already disbursed, or another payout''s reference, changes nothing. */
+    @Transactional
+    public void onPayoutSucceeded(String payoutReference) {
+        currentPayout(payoutReference).ifPresent(app -> {
+            if (app.getStatus() == ApplicationStatus.DISBURSING) {
+                complete(app);
+            }
+        });
+    }
+
+    /**
+     * The payout did not reach the member. A terminal failure puts the application back to {@code APPROVED} with the
+     * reason for an officer; a non-terminal one (money held for a recipient with no account yet) only notes it and
+     * waits for the success or the return that follows.
+     */
+    @Transactional
+    public void onPayoutFailed(String payoutReference, String reasonCode, boolean terminal) {
+        currentPayout(payoutReference).ifPresent(app -> {
+            if (app.getStatus() != ApplicationStatus.DISBURSING) {
+                return;
+            }
+            if (terminal) {
+                fail(app, reasonCode);
+            } else {
+                app.notePayoutIssue(reasonCode, Instant.now());
+                applications.save(app);
+            }
+        });
+    }
+
+    /** PayPal took the payout back (unclaimed money expired, or a delivered payout was reversed). */
+    @Transactional
+    public void onPayoutReturned(String payoutReference, String reasonCode) {
+        currentPayout(payoutReference).ifPresent(app -> {
+            if (app.getStatus() == ApplicationStatus.DISBURSING) {
+                fail(app, reasonCode == null ? "RETURNED" : reasonCode);
+            } else if (app.getStatus() == ApplicationStatus.DISBURSED) {
+                // The loan is registered and the member has the schedule, but the money is back in the program account.
+                // Unwinding a registered loan is a decision for people; say so loudly and show the desk.
+                log.error("Payout {} of disbursed application {} was returned ({}); the loan needs an officer", payoutReference,
+                    app.getId(), reasonCode);
+                app.notePayoutIssue("RETURNED_AFTER_DISBURSEMENT", Instant.now());
+                applications.save(app);
+                publishChanged(app);
+            }
+        });
+    }
+
+    /** Registers the loan exactly as {@code /internal/loans/disbursed} does: same use case, schedule and ledger postings. */
+    private void complete(LoanApplication app) {
         String batchId = app.expectedDisbursementBatchId();
         LocalDate disbursedOn = clock != null ? clock.today() : LocalDate.now();
         UUID registeredLoanId;
-
         if (lendingFacade != null) {
             LoanSummary summary = lendingFacade.registerDisbursedLoan(new RegisterDisbursedLoan(
                 app.getMemberId(),
@@ -249,20 +390,51 @@ public class MicroloanApplicationService {
         } else {
             registeredLoanId = Ids.newId();
         }
-
         app.markDisbursed(registeredLoanId, batchId, Instant.now());
         applications.save(app);
+        publishChanged(app);
+    }
+
+    private void fail(LoanApplication app, String reasonCode) {
+        app.payoutFailed(reasonCode, Instant.now());
+        applications.save(app);
+        publishChanged(app);
+    }
+
+    /** The behaviour before payouts went through PayPal: register the loan now. */
+    private LoanApplicationView disburseWithoutPayout(LoanApplication app) {
+        if (app.getStatus() != ApplicationStatus.APPROVED) {
+            throw new DomainException(
+                LendingErrors.APPLICATION_INVALID_STATE,
+                "Loan application must be APPROVED by two officers before disbursement; current status: " + app.getStatus()
+            );
+        }
+        complete(app);
         return toView(app);
     }
 
+    /** The application a payout event is about, if the event is about the application''s current payout. */
+    private java.util.Optional<LoanApplication> currentPayout(String payoutReference) {
+        if (payoutReference == null || payoutReference.length() < 36) {
+            return java.util.Optional.empty();
+        }
+        UUID applicationId;
+        try {
+            applicationId = UUID.fromString(payoutReference.substring(0, 36));
+        } catch (IllegalArgumentException notOurs) {
+            return java.util.Optional.empty(); // a savings withdrawal or something else paid through the same account
+        }
+        return applications.findByIdForUpdate(applicationId).filter(app -> payoutReference.equals(app.payoutReference()));
+    }
     @Transactional
     public LoanApplicationView cancelWithinCoolingOff(UUID applicationId, UUID memberId) {
-        LoanApplication app = findOrThrow(applicationId);
+        LoanApplication app = findForUpdate(applicationId);
         if (!app.getMemberId().equals(memberId)) {
             throw new DomainException(LendingErrors.APPLICATION_NOT_FOUND, "Loan application not found");
         }
         app.cancelWithinCoolingOff(Instant.now());
         applications.save(app);
+        publishChanged(app);
 
         if (ledgerFacade != null && app.getLoanId() != null) {
             LocalDate businessDate = clock != null ? clock.today() : LocalDate.now();
@@ -338,8 +510,32 @@ public class MicroloanApplicationService {
             savings.monthlySavingCents(),
             resolvedIncome,
             completedLoansOnTime,
-            hasActiveLoan
+            hasActiveLoan,
+            recordLevelOf(memberId)
         );
+    }
+
+    /** The level of the member's credit record; NEW when there is no record or it cannot be read. */
+    private RecordLevel recordLevelOf(UUID memberId) {
+        if (creditRecord == null) {
+            return RecordLevel.NEW;
+        }
+        return RecordLevel.ofRank(creditRecord.levelOf(memberId).levelRank());
+    }
+
+    private LoanApplication findForUpdate(UUID applicationId) {
+        return applications.findByIdForUpdate(applicationId)
+            .orElseThrow(() -> new DomainException(LendingErrors.APPLICATION_NOT_FOUND, "Loan application not found: " + applicationId));
+    }
+
+    private void publishChanged(LoanApplication app) {
+        if (events == null) {
+            return;
+        }
+        UUID officer = app.getLastOfficerId();
+        events.publishEvent(new LoanApplicationChanged(Ids.newId(), app.getId(), app.getMemberId(), app.getStatus().name(),
+            app.getRequestedAmountCents(), app.getTermMonths(), app.getCreatedAt(),
+            officer == null ? null : StaffReferences.of(officer), app.getUpdatedAt()));
     }
 
     private LoanApplication findOrThrow(UUID applicationId) {
@@ -369,7 +565,8 @@ public class MicroloanApplicationService {
             app.getCoolingOffExpiresAt(),
             app.getSizingReasons(),
             app.getCreatedAt(),
-            app.getUpdatedAt()
+            app.getUpdatedAt(),
+            app.getPayoutIssue()
         );
     }
 }

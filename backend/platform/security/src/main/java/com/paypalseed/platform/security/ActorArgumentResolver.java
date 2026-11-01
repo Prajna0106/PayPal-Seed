@@ -3,6 +3,7 @@ package com.paypalseed.platform.security;
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
@@ -36,7 +37,13 @@ public class ActorArgumentResolver implements HandlerMethodArgumentResolver, Web
     public Actor resolveArgument(MethodParameter parameter, ModelAndViewContainer mav, NativeWebRequest webRequest,
                                  WebDataBinderFactory binderFactory) {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
-        return authentication.authenticate(request)
-                .orElseThrow(() -> new DomainException(CommonErrors.UNAUTHENTICATED, "Sign in to use this route"));
+        return authentication.authenticate(request).orElseThrow(() -> {
+            HttpServletResponse response = webRequest.getNativeResponse(HttpServletResponse.class);
+            if (response != null) {
+                // A bare challenge: it must not say whether the token was missing, expired or forged.
+                response.setHeader("WWW-Authenticate", "Bearer");
+            }
+            return new DomainException(CommonErrors.UNAUTHENTICATED, "Sign in to use this route");
+        });
     }
 }

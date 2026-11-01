@@ -3,10 +3,12 @@ package com.paypalseed.savings.infrastructure.persistence;
 import static com.paypalseed.savings.infrastructure.persistence.jooq.Tables.SAVINGS_GOAL;
 
 import com.paypalseed.platform.kernel.Money;
-import com.paypalseed.savings.application.ports.SavingsGoalRepository;
+import com.paypalseed.savings.application.ports.GoalStore;
 import com.paypalseed.savings.domain.model.GoalStatus;
+import com.paypalseed.savings.domain.model.SavingsWallet;
 import com.paypalseed.savings.domain.model.SavingsGoal;
 import com.paypalseed.savings.infrastructure.persistence.jooq.tables.records.SavingsGoalRecord;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class SavingsRepository implements SavingsGoalRepository {
+public class SavingsRepository implements GoalStore {
 
     private final DSLContext dsl;
     private final Map<UUID, SavingsGoal> storage = new ConcurrentHashMap<>();
@@ -56,6 +58,13 @@ public class SavingsRepository implements SavingsGoalRepository {
             .set(SAVINGS_GOAL.DEPOSIT_COUNT, goal.getDepositCount())
             .set(SAVINGS_GOAL.CREATED_AT, goal.getCreatedAt())
             .set(SAVINGS_GOAL.UPDATED_AT, goal.getUpdatedAt())
+            .set(SAVINGS_GOAL.WALLET, goal.getWallet().name())
+            .set(SAVINGS_GOAL.APPROVAL_URL, goal.getApprovalUrl())
+            .set(SAVINGS_GOAL.APPROVAL_EXPIRES_AT, goal.getApprovalExpiresAt())
+            .set(SAVINGS_GOAL.RESERVED_CENTS, goal.getReservedBalance().cents())
+            .set(SAVINGS_GOAL.CHANGE_SEQ, goal.getChangeSeq())
+            .set(SAVINGS_GOAL.CREATE_KEY, goal.getCreateKey())
+            .set(SAVINGS_GOAL.SUBSCRIPTION_STATE_AT, goal.getSubscriptionStateAt())
             .onConflict(SAVINGS_GOAL.ID).doUpdate()
             .set(SAVINGS_GOAL.NAME, DSL.excluded(SAVINGS_GOAL.NAME))
             .set(SAVINGS_GOAL.TARGET_AMOUNT_CENTS, DSL.excluded(SAVINGS_GOAL.TARGET_AMOUNT_CENTS))
@@ -66,6 +75,11 @@ public class SavingsRepository implements SavingsGoalRepository {
             .set(SAVINGS_GOAL.CURRENT_BALANCE_CENTS, DSL.excluded(SAVINGS_GOAL.CURRENT_BALANCE_CENTS))
             .set(SAVINGS_GOAL.DEPOSIT_COUNT, DSL.excluded(SAVINGS_GOAL.DEPOSIT_COUNT))
             .set(SAVINGS_GOAL.UPDATED_AT, DSL.excluded(SAVINGS_GOAL.UPDATED_AT))
+            .set(SAVINGS_GOAL.APPROVAL_URL, DSL.excluded(SAVINGS_GOAL.APPROVAL_URL))
+            .set(SAVINGS_GOAL.APPROVAL_EXPIRES_AT, DSL.excluded(SAVINGS_GOAL.APPROVAL_EXPIRES_AT))
+            .set(SAVINGS_GOAL.RESERVED_CENTS, DSL.excluded(SAVINGS_GOAL.RESERVED_CENTS))
+            .set(SAVINGS_GOAL.CHANGE_SEQ, DSL.excluded(SAVINGS_GOAL.CHANGE_SEQ))
+            .set(SAVINGS_GOAL.SUBSCRIPTION_STATE_AT, DSL.excluded(SAVINGS_GOAL.SUBSCRIPTION_STATE_AT))
             .execute();
 
         return goal;
@@ -79,6 +93,48 @@ public class SavingsRepository implements SavingsGoalRepository {
         return dsl.selectFrom(SAVINGS_GOAL)
             .where(SAVINGS_GOAL.ID.eq(id))
             .fetchOptional(SavingsRepository::map);
+    }
+
+    @Override
+    public Optional<SavingsGoal> findByIdForUpdate(UUID id) {
+        if (dsl == null) {
+            return Optional.ofNullable(storage.get(id));
+        }
+        return dsl.selectFrom(SAVINGS_GOAL)
+            .where(SAVINGS_GOAL.ID.eq(id))
+            .forUpdate()
+            .fetchOptional(SavingsRepository::map);
+    }
+
+    @Override
+    public Optional<SavingsGoal> findByCreateKey(String memberId, String createKey) {
+        if (dsl == null) {
+            return storage.values().stream()
+                .filter(g -> g.getMemberId().equals(memberId) && createKey.equals(g.getCreateKey()))
+                .findFirst();
+        }
+        return dsl.selectFrom(SAVINGS_GOAL)
+            .where(SAVINGS_GOAL.MEMBER_ID.eq(memberId).and(SAVINGS_GOAL.CREATE_KEY.eq(createKey)))
+            .fetchOptional(SavingsRepository::map);
+    }
+
+    @Override
+    public List<UUID> findApprovalsExpiredBy(Instant now, int limit) {
+        if (dsl == null) {
+            return storage.values().stream()
+                .filter(g -> g.approvalExpired(now))
+                .sorted(Comparator.comparing(SavingsGoal::getApprovalExpiresAt))
+                .limit(limit)
+                .map(SavingsGoal::getId)
+                .toList();
+        }
+        return dsl.select(SAVINGS_GOAL.ID)
+            .from(SAVINGS_GOAL)
+            .where(SAVINGS_GOAL.STATUS.eq(GoalStatus.PENDING_APPROVAL.name())
+                .and(SAVINGS_GOAL.APPROVAL_EXPIRES_AT.le(now)))
+            .orderBy(SAVINGS_GOAL.APPROVAL_EXPIRES_AT.asc())
+            .limit(limit)
+            .fetch(SAVINGS_GOAL.ID);
     }
 
     @Override
@@ -116,13 +172,13 @@ public class SavingsRepository implements SavingsGoalRepository {
     public long countActiveByMemberId(String memberId) {
         if (dsl == null) {
             return storage.values().stream()
-                .filter(g -> g.getMemberId().equalsIgnoreCase(memberId) && g.getStatus() == GoalStatus.ACTIVE)
+                .filter(g -> g.getMemberId().equalsIgnoreCase(memberId) && countsAgainstLimit(g.getStatus()))
                 .count();
         }
         Integer count = dsl.selectCount()
             .from(SAVINGS_GOAL)
             .where(SAVINGS_GOAL.MEMBER_ID.equalIgnoreCase(memberId)
-                .and(SAVINGS_GOAL.STATUS.eq(GoalStatus.ACTIVE.name())))
+                .and(SAVINGS_GOAL.STATUS.in(GoalStatus.ACTIVE.name(), GoalStatus.PENDING_APPROVAL.name())))
             .fetchOne(0, Integer.class);
         return count != null ? count.longValue() : 0L;
     }
@@ -134,8 +190,13 @@ public class SavingsRepository implements SavingsGoalRepository {
         }
     }
 
+    /** A goal waiting for approval is a goal the member asked for, so it counts toward the limit. */
+    private static boolean countsAgainstLimit(GoalStatus status) {
+        return status == GoalStatus.ACTIVE || status == GoalStatus.PENDING_APPROVAL;
+    }
+
     private static SavingsGoal map(SavingsGoalRecord r) {
-        return new SavingsGoal(
+        SavingsGoal goal = new SavingsGoal(
             r.getId(),
             r.getMemberId(),
             r.getName(),
@@ -149,5 +210,13 @@ public class SavingsRepository implements SavingsGoalRepository {
             r.getCreatedAt(),
             r.getUpdatedAt()
         );
+        return goal.restoreState(
+            SavingsWallet.valueOf(r.getWallet()),
+            r.getApprovalUrl(),
+            r.getApprovalExpiresAt(),
+            Money.ofCents(r.getReservedCents()),
+            r.getChangeSeq(),
+            r.getCreateKey()
+        ).restoreSubscriptionStateAt(r.getSubscriptionStateAt());
     }
 }

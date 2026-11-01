@@ -1,11 +1,107 @@
 asyncapi: 3.0.0
 info:
   title: PayPal Seed Domain Events AsyncAPI
-  version: 1.0.0
+  version: 2.0.0
+  description: |
+    Events that cross module boundaries inside the monolith (Spring Modulith publication log). Payloads are the JSON
+    Schemas in domain-events.json. Only the events listed here are part of the contract; the other lending, ledger and
+    hardship events are defined in the modules' `api.events` packages.
 channels:
+  identityEvents:
+    address: seed.identity.events
+    messages:
+      MemberRegistered:
+        payload:
+          $ref: 'domain-events.json#/definitions/MemberRegistered'
+      MemberProfileChanged:
+        payload:
+          $ref: 'domain-events.json#/definitions/MemberProfileChanged'
+      ConsentGranted:
+        payload:
+          $ref: 'domain-events.json#/definitions/ConsentGranted'
+      ConsentRevoked:
+        payload:
+          $ref: 'domain-events.json#/definitions/ConsentRevoked'
+  paymentsEvents:
+    address: seed.payments.events
+    messages:
+      PayoutSucceeded:
+        payload:
+          $ref: 'domain-events.json#/definitions/PayoutSucceeded'
+      PayoutFailed:
+        payload:
+          $ref: 'domain-events.json#/definitions/PayoutFailed'
+      PayoutReturned:
+        payload:
+          $ref: 'domain-events.json#/definitions/PayoutReturned'
+      SavingsTopUpCaptured:
+        payload:
+          $ref: 'domain-events.json#/definitions/SavingsTopUpCaptured'
+      SavingsDepositReceived:
+        payload:
+          $ref: 'domain-events.json#/definitions/SavingsDepositReceived'
+      SavingsSubscriptionStateChanged:
+        payload:
+          $ref: 'domain-events.json#/definitions/SavingsSubscriptionStateChanged'
+      DonationCaptured:
+        payload:
+          $ref: 'domain-events.json#/definitions/DonationCaptured'
   savingsEvents:
     address: seed.savings.events
+    messages:
+      SavingsDepositedEvent:
+        payload:
+          $ref: 'domain-events.json#/definitions/SavingsDepositedEvent'
+      WithdrawalFailedEvent:
+        payload:
+          $ref: 'domain-events.json#/definitions/WithdrawalFailedEvent'
+      WithdrawalReturnedEvent:
+        payload:
+          $ref: 'domain-events.json#/definitions/WithdrawalReturnedEvent'
   lendingEvents:
     address: seed.lending.events
+    messages:
+      LoanApplicationChanged:
+        payload:
+          $ref: 'domain-events.json#/definitions/LoanApplicationChanged'
+      InstalmentMissed:
+        payload:
+          $ref: 'domain-events.json#/definitions/InstalmentMissed'
+  underwritingEvents:
+    address: seed.underwriting.events
+    messages:
+      AssessmentChanged:
+        payload:
+          $ref: 'domain-events.json#/definitions/AssessmentChanged'
+  creditRecordEvents:
+    address: seed.credit-record.events
+    messages:
+      RecordLevelChanged:
+        payload:
+          $ref: 'domain-events.json#/definitions/RecordLevelChanged'
+  reserveEvents:
+    address: seed.reserve.events
+    messages:
+      DonationReceived:
+        payload:
+          $ref: 'domain-events.json#/definitions/DonationReceived'
+      CoverRequested:
+        payload:
+          $ref: 'domain-events.json#/definitions/CoverRequested'
+      CoverApproved:
+        payload:
+          $ref: 'domain-events.json#/definitions/CoverApproved'
+      CoverRejected:
+        payload:
+          $ref: 'domain-events.json#/definitions/CoverRejected'
+  fraudEvents:
+    address: seed.fraud.events
+    messages:
+      FraudFlagRaised:
+        payload:
+          $ref: 'domain-events.json#/definitions/FraudFlagRaised'
+      FraudFlagReviewed:
+        payload:
+          $ref: 'domain-events.json#/definitions/FraudFlagReviewed'
   ledgerEvents:
     address: seed.ledger.events

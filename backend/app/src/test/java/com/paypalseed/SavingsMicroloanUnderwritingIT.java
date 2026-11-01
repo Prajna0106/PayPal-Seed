@@ -2,6 +2,8 @@ package com.paypalseed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.paypalseed.identity.api.IdentityFacade;
+import com.paypalseed.identity.api.dto.IdentityDtos.PayPalLogin;
 import com.paypalseed.ledger.api.dto.AccountRef;
 import com.paypalseed.ledger.api.dto.AccountType;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
@@ -19,6 +21,7 @@ import com.paypalseed.savings.application.usecases.ProcessWithdrawalUseCase;
 import com.paypalseed.savings.application.usecases.RecordDepositUseCase;
 import com.paypalseed.savings.application.usecases.SuggestSavingsPlanUseCase;
 import com.paypalseed.savings.domain.model.SavingsGoal;
+import com.paypalseed.support.FakePayPal;
 import com.paypalseed.support.IntegrationTest;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
@@ -58,6 +61,9 @@ class SavingsMicroloanUnderwritingIT extends IntegrationTest {
     SavingsFacade savingsFacade;
 
     @Autowired
+    IdentityFacade identity;
+
+    @Autowired
     FairLoanCheckService fairLoanCheckService;
 
     @Autowired
@@ -65,7 +71,11 @@ class SavingsMicroloanUnderwritingIT extends IntegrationTest {
 
     @Test
     void persistsSavingsGoalsLedgerPostingsFairLoanCheckAndMicroloanApplicationInPostgres() {
-        UUID anaId = UUID.randomUUID();
+        // The loan is paid out through PayPal now, so the member has to have signed in with PayPal (that is where
+        // the payout goes) and the PayPal simulator has to answer the payout at once.
+        UUID anaId = identity.loginWithPayPal(new PayPalLogin("PAYER-ANA-" + UUID.randomUUID(), "ana@example.test", "Ana", true, "en"))
+            .member().memberId();
+        paypal.payoutOutcome = FakePayPal.PayoutOutcome.INSTANT_SUCCESS;
         UUID officer1 = UUID.randomUUID();
         UUID officer2 = UUID.randomUUID();
 

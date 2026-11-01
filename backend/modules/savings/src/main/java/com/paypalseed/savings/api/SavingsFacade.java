@@ -1,7 +1,9 @@
 package com.paypalseed.savings.api;
 
 import com.paypalseed.platform.kernel.Money;
+import com.paypalseed.savings.api.dto.MemberGoalView;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
+import java.util.List;
 
 /**
  * PUBLIC API facade for the savings bounded context.
@@ -30,5 +32,10 @@ public interface SavingsFacade {
      */
     default MemberSavingsSummary getMemberSavingsSummary(String memberId) {
         return new MemberSavingsSummary(memberId, 0, 0, 0, 0L, 0L, false);
+    }
+
+    /** The member's goals, newest first. Only that member's; an unknown member has none. */
+    default List<MemberGoalView> goalsOfMember(String memberId) {
+        return List.of();
     }
 }

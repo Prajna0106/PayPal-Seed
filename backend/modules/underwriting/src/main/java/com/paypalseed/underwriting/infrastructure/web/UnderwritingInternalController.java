@@ -21,7 +21,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Service-only seeding of consented income (demo and sandbox) until F3 reads PayPal Transaction Search. */
+/**
+ * Service-only seeding of consented income for demos and sandboxes. With {@code seed.underwriting.income.source=
+ * TRANSACTION_SEARCH} the weeks come from PayPal instead and a seeded set is replaced on the next refresh (ADR 0018).
+ */
 @RestController
 class UnderwritingInternalController {
 

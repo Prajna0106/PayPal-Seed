@@ -8,6 +8,8 @@ dependencies {
     implementation(project(":engines:rules"))
     implementation(project(":modules:ledger"))
     implementation(project(":modules:payments"))
+    implementation(project(":modules:identity"))
+    implementation(project(":modules:credit-record"))
     implementation(project(":modules:savings"))
     implementation(project(":modules:underwriting"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
