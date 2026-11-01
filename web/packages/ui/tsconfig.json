@@ -1,0 +1,10 @@
+{
+  "extends": "@paypal-seed/config/tsconfig/library.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@paypal-seed/ui/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

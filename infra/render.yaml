@@ -1,3 +1,10 @@
+envVarGroups:
+  # Shared between the backend roles and the web apps: the web servers call /internal/** with this token.
+  - name: seed-shared
+    envVars:
+      - key: SEED_INTERNAL_TOKEN
+        generateValue: true
+
 services:
   - type: web
     name: seed-api
@@ -5,6 +12,7 @@ services:
     envVars:
       - key: SEED_ROLE
         value: api
+      - fromGroup: seed-shared
   - type: web
     name: seed-ingress
     env: java
@@ -17,12 +25,42 @@ services:
     envVars:
       - key: SEED_ROLE
         value: worker
+      - fromGroup: seed-shared
+
+  # Web apps: pnpm workspace in web/. They reach the backend server-side only (SEED_API_URL).
   - type: web
     name: seed-member-web
-    env: node
+    runtime: node
+    rootDir: web
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/member... build
+    startCommand: pnpm --filter @paypal-seed/member exec next start --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: SEED_API_URL
+        sync: false # https URL of seed-api
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_DESK_URL
+        sync: false
+      - key: NEXT_PUBLIC_PAYPAL_CLIENT_ID
+        sync: false # PayPal sandbox client id; Pay now is hidden without it
+      - fromGroup: seed-shared
   - type: web
     name: seed-desk-web
-    env: node
+    runtime: node
+    rootDir: web
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/desk... build
+    startCommand: pnpm --filter @paypal-seed/desk exec next start --port $PORT
+    healthCheckPath: /login
+    envVars:
+      - key: SEED_API_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - fromGroup: seed-shared
+
 databases:
   - name: seed-postgres
     plan: standard

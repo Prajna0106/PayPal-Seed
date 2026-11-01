@@ -1,12 +1,20 @@
 {
   "name": "paypal-seed-web",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint"
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "build:lowmem": "pnpm --filter @paypal-seed/member build:lowmem && pnpm --filter @paypal-seed/desk build:lowmem",
+    "gen:api": "pnpm --filter @paypal-seed/api-client gen:api"
   },
   "devDependencies": {
-    "turbo": "^2.0.0"
+    "turbo": "^2.11.10",
+    "typescript": "5.9.3"
   }
 }

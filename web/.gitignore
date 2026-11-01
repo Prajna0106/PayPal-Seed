@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.env.local
+.env.*.local
+
+# Written by `next dev`; the repo guide is the root AGENTS.md
+apps/*/AGENTS.md
