@@ -1,5 +1,17 @@
 name: trust-agent
-model: gemini-1.5-pro
-role: read-only
-tools:
-  - openapi_spec: ../shared/agent-tools.yaml
+version: 1.0.0
+model: openrouter/primary-chain
+role: read-only-narrator
+feature: F6-portable-credit-record
+runtime_entry: com.paypalseed.agentgateway.application.usecases.TrustAgentRunner
+kill_switch_scope: trust-agent
+max_output_tokens: 500
+timeout_seconds: 10
+evals:
+  dataset: evals/eval-dataset.json
+  injection_corpus: ../shared/evals/injection-corpus.json
+grounding:
+  enforce_allowed_dollar_figures: true
+  forbid_credit_score_and_fee_terms: true
+  fallback_mode: deterministic_template
+tools: []

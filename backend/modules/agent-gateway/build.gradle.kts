@@ -13,6 +13,8 @@ dependencies {
     implementation(project(":modules:lending"))
     implementation(project(":modules:hardship"))
     implementation(project(":modules:underwriting"))
+    implementation(project(":modules:credit-record"))
+    implementation(project(":modules:desk-query"))
     implementation(project(":modules:governance"))
     testImplementation("org.mockito:mockito-core")
     testImplementation(project(":platform:testing"))

@@ -3,6 +3,8 @@ package com.paypalseed.agentgateway.application.usecases;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.paypalseed.creditrecord.api.TrustRecordNarrator.TrustNarrationInput;
+import com.paypalseed.deskquery.api.DeskAnalystNarrator.DeskBriefingInput;
 import com.paypalseed.savings.api.SavingsCoachNarrator.CoachNarrationInput;
 import com.paypalseed.underwriting.api.FairCheckNarrator.NarrationInput;
 import java.util.ArrayList;
@@ -11,16 +13,18 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Guardrail eval for the Coach and Underwriting narrators. A scripted model answers each case in
- * {@code agents/coach/evals} and {@code agents/underwriting/evals}; the deterministic grounding validator must
- * accept the clean answers and reject every ungrounded, off-policy or malformed one. Run with
- * {@code ./gradlew :modules:agent-gateway:eval}.
+ * Guardrail eval for all four Seed agent narrators: Coach, Underwriting, Trust, and Desk Analyst.
+ * Scripted models answer each case in {@code agents/<name>/evals}; the deterministic grounding validator
+ * must accept clean grounded answers and reject every ungrounded, off-policy or malformed one.
+ * Run with: {@code ./gradlew :modules:agent-gateway:eval}.
  */
 @Tag("eval")
 class NarratorGuardrailEvalTest {
 
     private final SavingsCoachAgentRunner coach = new SavingsCoachAgentRunner(null, null, null, EvalSupport.JSON);
     private final UnderwritingAgentRunner underwriting = new UnderwritingAgentRunner(null, null, null, EvalSupport.JSON);
+    private final TrustAgentRunner trust = new TrustAgentRunner(null, null, null, EvalSupport.JSON);
+    private final DeskAnalystAgentRunner deskAnalyst = new DeskAnalystAgentRunner(null, null, null, EvalSupport.JSON);
 
     @Test
     void coachValidatorMatchesEveryExpectation() throws Exception {
@@ -47,8 +51,37 @@ class NarratorGuardrailEvalTest {
     }
 
     @Test
+    void trustValidatorMatchesEveryExpectation() throws Exception {
+        JsonNode dataset = EvalSupport.load("agents/trust/evals/eval-dataset.json");
+        List<String> failures = new ArrayList<>();
+        for (JsonNode c : dataset) {
+            TrustNarrationInput input = EvalSupport.JSON.treeToValue(EvalSupport.resolveInput(dataset, c), TrustNarrationInput.class);
+            boolean accepted = trust.parseAndValidate(EvalSupport.modelText(c), input) != null;
+            record(failures, c, accepted);
+        }
+        assertThat(failures).as("trust eval cases that did not behave as expected").isEmpty();
+    }
+
+    @Test
+    void deskAnalystValidatorMatchesEveryExpectation() throws Exception {
+        JsonNode dataset = EvalSupport.load("agents/desk-analyst/evals/eval-dataset.json");
+        List<String> failures = new ArrayList<>();
+        for (JsonNode c : dataset) {
+            DeskBriefingInput input = EvalSupport.JSON.treeToValue(EvalSupport.resolveInput(dataset, c), DeskBriefingInput.class);
+            boolean accepted = deskAnalyst.parseAndValidate(EvalSupport.modelText(c), input) != null;
+            record(failures, c, accepted);
+        }
+        assertThat(failures).as("desk-analyst eval cases that did not behave as expected").isEmpty();
+    }
+
+    @Test
     void everyDatasetHasBothOutcomes() {
-        for (String path : new String[] {"agents/coach/evals/eval-dataset.json", "agents/underwriting/evals/eval-dataset.json"}) {
+        for (String path : new String[] {
+            "agents/coach/evals/eval-dataset.json",
+            "agents/underwriting/evals/eval-dataset.json",
+            "agents/trust/evals/eval-dataset.json",
+            "agents/desk-analyst/evals/eval-dataset.json"
+        }) {
             JsonNode dataset = EvalSupport.load(path);
             long accepts = 0;
             long rejects = 0;
