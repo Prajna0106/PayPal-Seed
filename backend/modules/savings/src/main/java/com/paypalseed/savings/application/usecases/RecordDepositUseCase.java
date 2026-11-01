@@ -47,7 +47,7 @@ public class RecordDepositUseCase {
 
     @Transactional
     public SavingsGoal execute(Command command) {
-        SavingsGoal goal = repository.findById(command.goalId())
+        SavingsGoal goal = repository.findByIdForUpdate(command.goalId())
             .orElseThrow(() -> new IllegalArgumentException("Savings goal not found: " + command.goalId()));
 
         goal.recordDeposit(command.amount(), command.payPalCaptureId());

@@ -72,10 +72,17 @@ public class ReminderRepository {
     /** Returns false when this message was already decided (dedupe on the business key). */
     public boolean enqueue(String key, UUID memberId, UUID loanId, String type, String channel, String locale, String body,
                            Instant sendAfter, String status) {
+        return enqueue(key, memberId, loanId, null, type, channel, locale, body, sendAfter, status);
+    }
+
+    /** As above; a message names a loan, a savings goal, or both. */
+    public boolean enqueue(String key, UUID memberId, UUID loanId, UUID goalId, String type, String channel, String locale,
+                           String body, Instant sendAfter, String status) {
         return dsl.insertInto(REMINDER)
                 .set(REMINDER.DEDUPE_KEY, key)
                 .set(REMINDER.MEMBER_ID, memberId)
                 .set(REMINDER.LOAN_ID, loanId)
+                .set(REMINDER.GOAL_ID, goalId)
                 .set(REMINDER.TYPE, type)
                 .set(REMINDER.CHANNEL, channel)
                 .set(REMINDER.LOCALE, locale)
@@ -118,14 +125,21 @@ public class ReminderRepository {
                 .execute();
     }
 
-    /** The loan of the member's newest message, so an SMS reply can be tied to a loan. */
+    /** The loan of the member's newest loan message, so an SMS reply can be tied to a loan; goal messages have none. */
     public Optional<UUID> latestLoanOf(UUID memberId) {
         return dsl.select(REMINDER.LOAN_ID)
                 .from(REMINDER)
-                .where(REMINDER.MEMBER_ID.eq(memberId))
+                .where(REMINDER.MEMBER_ID.eq(memberId).and(REMINDER.LOAN_ID.isNotNull()))
                 .orderBy(REMINDER.CREATED_AT.desc())
                 .limit(1)
                 .fetchOptional(REMINDER.LOAN_ID);
+    }
+
+    public List<Reminder> forGoal(UUID goalId) {
+        return dsl.selectFrom(REMINDER)
+                .where(REMINDER.GOAL_ID.eq(goalId))
+                .orderBy(REMINDER.CREATED_AT)
+                .fetch(ReminderRepository::map);
     }
 
     public List<Reminder> forLoan(UUID loanId) {

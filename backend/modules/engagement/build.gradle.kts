@@ -7,4 +7,6 @@ dependencies {
     implementation(project(":modules:lending"))
     implementation(project(":modules:payments"))
     implementation(project(":modules:hardship"))
+    implementation(project(":modules:savings"))
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

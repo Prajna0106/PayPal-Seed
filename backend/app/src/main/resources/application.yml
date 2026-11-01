@@ -62,14 +62,77 @@ seed:
     mode: ${SEED_COB_MODE:TIMERS}           # TIMERS (index of due work) or SCAN (every active loan)
     shard-count: ${SEED_COB_SHARDS:8}
   security:
-    internal-token: ${SEED_INTERNAL_TOKEN:}  # bearer token for /internal/** (Render Workflows); 16+ chars
-    dev-header-auth: false
+    internal-token: ${SEED_INTERNAL_TOKEN:}  # bearer token for /internal/** (Render Workflows, web servers); 16+ chars
+    dev-header-auth: false                   # true only in the dev, test and demo profiles; startup refuses it elsewhere
+    actor-token:
+      # Signed actor tokens for /api/** (ADR 0016): "kid:secret" entries, comma separated, each secret 32+ characters.
+      # The first entry signs, every entry verifies, so a key is rotated by adding the new one in front.
+      # Required outside the dev, test and demo profiles; the web servers hold the same value.
+      secrets: ${SEED_ACTOR_TOKEN_SECRETS:}
+      clock-skew-seconds: ${SEED_ACTOR_TOKEN_CLOCK_SKEW_SECONDS:30}   # 0 to 30
+  identity:
+    consent:                                 # current text versions; a grant of any other version is refused (ADR 0012)
+      terms-version: ${SEED_CONSENT_TERMS_VERSION:2026-11}
+      privacy-version: ${SEED_CONSENT_PRIVACY_VERSION:2026-11}
+      income-read-version: ${SEED_CONSENT_INCOME_READ_VERSION:2026-11}
+      record-sharing-version: ${SEED_CONSENT_RECORD_SHARING_VERSION:2026-11}
   paypal:
     base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
     client-id: ${PAYPAL_CLIENT_ID:}
     client-secret: ${PAYPAL_CLIENT_SECRET:}
     webhook-id: ${PAYPAL_WEBHOOK_ID:}
+    read-timeout-ms: ${SEED_PAYPAL_READ_TIMEOUT_MS:20000}
+    brand-name: ${SEED_PAYPAL_BRAND_NAME:PayPal Seed}                  # shown on the PayPal approval page
+    # Catalog objects: run POST /internal/paypal/catalog/bootstrap (or scripts/paypal-bootstrap.sh) once and set the ids.
+    product-id: ${SEED_PAYPAL_PRODUCT_ID:}
+    product-name: ${SEED_PAYPAL_PRODUCT_NAME:PayPal Seed}
+    savings-plan-id: ${SEED_PAYPAL_SAVINGS_PLAN_ID:}
     loan-plan-id: ${PAYPAL_LOAN_PLAN_ID:}
+    transaction-search:                      # reading a member's own history needs PayPal's Transaction Search access
+      enabled: ${SEED_PAYPAL_TRANSACTION_SEARCH_ENABLED:false}
+      on-behalf: ${SEED_PAYPAL_TRANSACTION_SEARCH_ON_BEHALF:false}      # call on behalf of the member (third-party permission)
+  savings:
+    return-url: ${SEED_SAVINGS_RETURN_URL:http://localhost:3000/app/savings/return}       # where PayPal sends the member after agreeing
+    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://localhost:3000/app/savings/cancelled}
+    approval-window: ${SEED_SAVINGS_APPROVAL_WINDOW:PT24H}               # a goal not agreed at PayPal by then becomes EXPIRED
+  underwriting:
+    income:
+      source: ${SEED_UNDERWRITING_INCOME_SOURCE:SEEDED}                   # SEEDED (demo endpoint) or TRANSACTION_SEARCH
+      max-age: ${SEED_UNDERWRITING_INCOME_MAX_AGE:24h}                    # a stored income summary older than this is read again
+      timeout: ${SEED_UNDERWRITING_INCOME_TIMEOUT:30s}
+  hardship:
+    agent-deadline: ${SEED_HARDSHIP_AGENT_DEADLINE:PT90S}                 # after this the template offer goes out without the agent
+    checker-required: ${SEED_HARDSHIP_CHECKER_REQUIRED:true}
+  record:                                    # credit record share links (ADR 0014)
+    signing-secret: ${SEED_RECORD_SIGNING_SECRET:}                        # 32+ bytes. Empty: share links are switched off outside dev, test and demo
+    signing-key-id: ${SEED_RECORD_SIGNING_KEY_ID:k1}
+    previous-keys: ${SEED_RECORD_PREVIOUS_KEYS:}                          # "kid:secret" entries, comma separated, still accepted when verifying
+  desk-query:                                # desk grids (ADR 0015)
+    cursor-key: ${SEED_DESK_QUERY_CURSOR_KEY:}                            # set in production: empty means a random key per process, so cursors break across instances
+    application-sla: ${SEED_DESK_APPLICATION_SLA:PT24H}
+    sla-due-soon: ${SEED_DESK_SLA_DUE_SOON:PT4H}
+    default-page-size: ${SEED_DESK_DEFAULT_PAGE_SIZE:50}
+    max-page-size: ${SEED_DESK_MAX_PAGE_SIZE:200}
+    count-cap: ${SEED_DESK_COUNT_CAP:10000}
+  reserve:                                   # community safety fund (ADR 0019)
+    cover:
+      max-per-request-cents: ${SEED_RESERVE_COVER_MAX_PER_REQUEST_CENTS:50000}
+      max-per-member-year-cents: ${SEED_RESERVE_COVER_MAX_PER_MEMBER_YEAR_CENTS:100000}
+      decision-sla: ${SEED_RESERVE_COVER_DECISION_SLA:PT48H}
+    donation:
+      max-cents: ${SEED_RESERVE_DONATION_MAX_CENTS:10000000}
+  fraud:                                     # advisory flags (ADR 0019)
+    flag-threshold: ${SEED_FRAUD_FLAG_THRESHOLD:40}                       # a flag is raised when the score reaches this
+    lookback: ${SEED_FRAUD_LOOKBACK:P90D}
+  jobs:                                      # pollers; seed.jobs.enabled is set per role in application-<role>.yml
+    inbox-poll-ms: ${SEED_JOBS_INBOX_POLL_MS:1000}
+    reminder-poll-ms: ${SEED_JOBS_REMINDER_POLL_MS:30000}
+    event-retry-ms: ${SEED_JOBS_EVENT_RETRY_MS:60000}
+    hardship-scan-cron: ${SEED_JOBS_HARDSHIP_SCAN_CRON:0 15 6 * * *}      # America/Los_Angeles
+    hardship-sweep-ms: ${SEED_JOBS_HARDSHIP_SWEEP_MS:30000}
+    savings-approval-sweep-ms: ${SEED_JOBS_SAVINGS_APPROVAL_SWEEP_MS:60000}
+    record-close-ms: ${SEED_JOBS_RECORD_CLOSE_MS:21600000}                # month-end close of credit records, every 6 hours
+    record-close-initial-ms: ${SEED_JOBS_RECORD_CLOSE_INITIAL_MS:60000}
   zapier:
     sms-hook-url: ${ZAPIER_SMS_HOOK_URL:}
     signing-secret: ${ZAPIER_SIGNING_SECRET:}

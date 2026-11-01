@@ -14,42 +14,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Start close of business for a date (returns the existing run if already started) */
-        post: {
-            parameters: {
-                query?: {
-                    trigger?: string;
-                };
-                header?: never;
-                path: {
-                    date: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Run */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description cob-out-of-order (the previous date is not closed */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description cob-in-the-future */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["startCob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -66,39 +31,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Close up to maxLoans loans of one shard; call again until done */
-        post: {
-            parameters: {
-                query?: {
-                    maxLoans?: number;
-                };
-                header?: never;
-                path: {
-                    date: string;
-                    shard: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Shard progress */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: date */
-                            businessDate?: string;
-                            shard?: number;
-                            done?: boolean;
-                            processed?: number;
-                            skipped?: number;
-                            failed?: number;
-                        };
-                    };
-                };
-            };
-        };
+        post: operations["runCobShard"];
         delete?: never;
         options?: never;
         head?: never;
@@ -115,26 +48,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Close loans skipped while locked; mark the run COMPLETED or DEGRADED */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    date: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Run */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["finishCob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -151,26 +65,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Close every date after the last closed one up to `to` (default today), in order */
-        post: {
-            parameters: {
-                query?: {
-                    to?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Runs */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["catchUpCob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -187,24 +82,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Daily safety net: reconcile every active autopay mandate with its schedule (ADR 0005) */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Number of loans queued */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["reconcileMandates"];
         delete?: never;
         options?: never;
         head?: never;
@@ -221,50 +99,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Register a disbursed loan (F2 hand-over); idempotent on disbursementRef */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        memberId: string;
-                        /** @description Whole dollars */
-                        principalCents: number;
-                        instalmentCount: number;
-                        dueDay: number;
-                        /** Format: date */
-                        disbursedOn: string;
-                        disbursementRef: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Loan summary (the same shape as LoanSummary in seed-api.yaml) */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            loanId: string;
-                            /** Format: uuid */
-                            memberId: string;
-                            /** Format: int64 */
-                            principalCents: number;
-                            /** Format: int64 */
-                            outstandingCents: number;
-                            status: string;
-                        };
-                    };
-                };
-            };
-        };
+        post: operations["registerDisbursedLoan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -281,44 +116,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Apply an approved hardship option as a new schedule version (F5 governance calls this) */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        primitive: "MOVE_DATE" | "DEFER_TO_END" | "REAMORTIZE";
-                        seq?: number;
-                        days?: number;
-                        extraMonths?: number;
-                        approvalRef: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description New schedule */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description A rescheduling rule refused the request (problem code names the rule) */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["applyReschedule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -340,62 +138,7 @@ export interface paths {
          *     Idempotent per loan and scan date (one scorecard run per loan per day). Call again with `after = nextAfter`
          *     until `done`. The worker role runs the same job daily at 06:15 America/Los_Angeles (`seed.jobs.hardship-scan-cron`).
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "businessDate": "2027-03-10",
-                     *       "shardGroup": 0,
-                     *       "shardCount": 8,
-                     *       "limit": 500
-                     *     }
-                     */
-                    "application/json": {
-                        /**
-                         * Format: date
-                         * @description Defaults to today
-                         */
-                        businessDate?: string;
-                        shardGroup: number;
-                        shardCount: number;
-                        /**
-                         * Format: uuid
-                         * @description Keyset cursor
-                         */
-                        after?: string;
-                        /** @default 200 */
-                        limit?: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Page result */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: date */
-                            businessDate?: string;
-                            scanned?: number;
-                            opened?: number;
-                            failed?: number;
-                            /** Format: uuid */
-                            nextAfter?: string | null;
-                            done?: boolean;
-                        };
-                    };
-                };
-            };
-        };
+        post: operations["scanHardship"];
         delete?: never;
         options?: never;
         head?: never;
@@ -415,30 +158,7 @@ export interface paths {
          * Fire due hardship case timers (agent deadline, offer reminder and expiry, hold check and expiry, SLA 50/80/breach)
          * @description The worker role also runs it every 30 s (`seed.jobs.hardship-sweep-ms`). Each timer fires once.
          */
-        post: {
-            parameters: {
-                query?: {
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Timers fired */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            fired?: number;
-                        };
-                    };
-                };
-            };
-        };
+        post: operations["sweepHardshipTimers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -455,30 +175,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Recompute the governance audit hash chain end to end; a break is a Sev-1 alert */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Verification result */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            intact?: boolean;
-                            entries?: number;
-                            firstBrokenSeq?: number | null;
-                        };
-                    };
-                };
-            };
-        };
+        post: operations["verifyAuditChain"];
         delete?: never;
         options?: never;
         head?: never;
@@ -494,63 +191,7 @@ export interface paths {
         };
         get?: never;
         /** Seed consented weekly income for a member (demo and sandbox; F3 replaces it with PayPal Transaction Search) */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    memberId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "consent": true,
-                     *       "usualPaydayDow": 5,
-                     *       "weeks": [
-                     *         {
-                     *           "weekStart": "2026-12-09",
-                     *           "inflowCents": 20000
-                     *         },
-                     *         {
-                     *           "weekStart": "2027-02-10",
-                     *           "inflowCents": 9600
-                     *         }
-                     *       ]
-                     *     }
-                     */
-                    "application/json": {
-                        /** @description false revokes consent; income signals then never fire */
-                        consent: boolean;
-                        /** @description ISO day of week money usually arrives */
-                        usualPaydayDow?: number;
-                        weeks?: {
-                            /** Format: date */
-                            weekStart: string;
-                            inflowCents: number;
-                        }[];
-                    };
-                };
-            };
-            responses: {
-                /** @description The 13-week summary as of today, or no body when consent is revoked */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @description Oldest first */
-                            weeklyInflowCents?: number[];
-                            usualPaydayDow?: number | null;
-                            activeWeeks?: number;
-                        };
-                    };
-                };
-            };
-        };
+        put: operations["putMemberIncome"];
         post?: never;
         delete?: never;
         options?: never;
@@ -568,26 +209,69 @@ export interface paths {
         get?: never;
         put?: never;
         /** Demo profile only. Move the shared business date forward */
-        post: {
-            parameters: {
-                query: {
-                    days: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description New business date */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
+        post: operations["advanceDemoClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/members/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
+        get?: never;
+        put?: never;
+        /**
+         * Create or find the member for a PayPal payer id (called by the web server after Log in with PayPal)
+         * @description First login creates the member. Later logins return the same member id and set `lastLoginAt`.
+         *     Absent or blank fields never erase stored values. A locale other than `en` or `es` is ignored.
+         */
+        post: operations["loginWithPayPal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/staff/{staffId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Create or replace a staff record (called by the desk server after staff sign-in) */
+        put: operations["upsertStaff"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/paypal/catalog/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find or create the Seed PayPal product and its two monthly plans
+         * @description Idempotent by construction, so it takes no `Idempotency-Key`: ids set in configuration win, then ids Seed
+         *     recorded earlier, then a lookup by name at PayPal, and only then a create that carries a stable
+         *     `PayPal-Request-Id`. Calling it twice creates each object once. Both plans charge $1 per unit and
+         *     support quantity, so a subscription's quantity is the amount in whole dollars (ADR 0005). Set the
+         *     returned ids in the environment (`scripts/paypal-bootstrap.sh` prints the variable names).
+         */
+        post: operations["bootstrapPaypalCatalog"];
         delete?: never;
         options?: never;
         head?: never;
@@ -597,12 +281,590 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
-    responses: never;
+    schemas: {
+        Problem: {
+            /**
+             * Format: uri
+             * @example https://problems.paypal-seed.dev/consent-version-stale
+             */
+            type: string;
+            title: string;
+            status: number;
+            detail?: string;
+            instance?: string;
+            code: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        Language: "en" | "es";
+        /** @enum {string} */
+        WalletPreference: "PAYPAL" | "VENMO";
+        /** @enum {string} */
+        StaffRole: "OFFICER" | "CHECKER" | "ADMIN";
+        PayPalLogin: {
+            /** @description `sub` / payer_id from Log in with PayPal */
+            paypalPayerId: string;
+            email?: string;
+            name?: string;
+            /** @description PayPal says the account is verified */
+            verified?: boolean;
+            /**
+             * @description Only the language part is used; unsupported languages are ignored
+             * @example es-MX
+             */
+            locale?: string;
+        };
+        LoginResult: {
+            /** @description true on the first login of this payer id */
+            created: boolean;
+            member: components["schemas"]["MemberProfile"];
+        };
+        MemberProfile: {
+            /** Format: uuid */
+            memberId: string;
+            email?: string | null;
+            displayName?: string | null;
+            language: components["schemas"]["Language"];
+            walletPreference: components["schemas"]["WalletPreference"];
+            paypalVerified: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastLoginAt: string;
+        };
+        StaffUpsert: {
+            displayName: string;
+            email?: string;
+            roles: components["schemas"]["StaffRole"][];
+            /** @default true */
+            active: boolean;
+        };
+        StaffRecord: {
+            /** Format: uuid */
+            staffId: string;
+            displayName: string;
+            email?: string | null;
+            roles: components["schemas"]["StaffRole"][];
+            active: boolean;
+        };
+        PaypalCatalog: {
+            /** @description PayPal catalog product id (PROD-...); set as SEED_PAYPAL_PRODUCT_ID */
+            productId: string;
+            /** @description Monthly $1 x quantity plan for savings deposits; set as SEED_PAYPAL_SAVINGS_PLAN_ID */
+            savingsPlanId: string;
+            /** @description Monthly $1 x quantity plan for loan autopay; set as PAYPAL_LOAN_PLAN_ID */
+            loanPlanId: string;
+            /** @description true only when this call created the product */
+            createdProduct: boolean;
+            createdSavingsPlan: boolean;
+            createdLoanPlan: boolean;
+        };
+    };
+    responses: {
+        /** @description RFC 9457 problem */
+        Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    startCob: {
+        parameters: {
+            query?: {
+                trigger?: string;
+            };
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description cob-out-of-order (the previous date is not closed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description cob-in-the-future */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    runCobShard: {
+        parameters: {
+            query?: {
+                maxLoans?: number;
+            };
+            header?: never;
+            path: {
+                date: string;
+                shard: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shard progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        businessDate?: string;
+                        shard?: number;
+                        done?: boolean;
+                        processed?: number;
+                        skipped?: number;
+                        failed?: number;
+                    };
+                };
+            };
+        };
+    };
+    finishCob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    catchUpCob: {
+        parameters: {
+            query?: {
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reconcileMandates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Number of loans queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registerDisbursedLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    memberId: string;
+                    /** @description Whole dollars */
+                    principalCents: number;
+                    instalmentCount: number;
+                    dueDay: number;
+                    /** Format: date */
+                    disbursedOn: string;
+                    disbursementRef: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Loan summary (the same shape as LoanSummary in seed-api.yaml) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        loanId: string;
+                        /** Format: uuid */
+                        memberId: string;
+                        /** Format: int64 */
+                        principalCents: number;
+                        /** Format: int64 */
+                        outstandingCents: number;
+                        status: string;
+                    };
+                };
+            };
+        };
+    };
+    applyReschedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    primitive: "MOVE_DATE" | "DEFER_TO_END" | "REAMORTIZE";
+                    seq?: number;
+                    days?: number;
+                    extraMonths?: number;
+                    approvalRef: string;
+                };
+            };
+        };
+        responses: {
+            /** @description New schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A rescheduling rule refused the request (problem code names the rule) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    scanHardship: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "businessDate": "2027-03-10",
+                 *       "shardGroup": 0,
+                 *       "shardCount": 8,
+                 *       "limit": 500
+                 *     }
+                 */
+                "application/json": {
+                    /**
+                     * Format: date
+                     * @description Defaults to today
+                     */
+                    businessDate?: string;
+                    shardGroup: number;
+                    shardCount: number;
+                    /**
+                     * Format: uuid
+                     * @description Keyset cursor
+                     */
+                    after?: string;
+                    /** @default 200 */
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Page result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        businessDate?: string;
+                        scanned?: number;
+                        opened?: number;
+                        failed?: number;
+                        /** Format: uuid */
+                        nextAfter?: string | null;
+                        done?: boolean;
+                    };
+                };
+            };
+        };
+    };
+    sweepHardshipTimers: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Timers fired */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        fired?: number;
+                    };
+                };
+            };
+        };
+    };
+    verifyAuditChain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        intact?: boolean;
+                        entries?: number;
+                        firstBrokenSeq?: number | null;
+                    };
+                };
+            };
+        };
+    };
+    putMemberIncome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "consent": true,
+                 *       "usualPaydayDow": 5,
+                 *       "weeks": [
+                 *         {
+                 *           "weekStart": "2026-12-09",
+                 *           "inflowCents": 20000
+                 *         },
+                 *         {
+                 *           "weekStart": "2027-02-10",
+                 *           "inflowCents": 9600
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                "application/json": {
+                    /** @description false revokes consent; income signals then never fire */
+                    consent: boolean;
+                    /** @description ISO day of week money usually arrives */
+                    usualPaydayDow?: number;
+                    weeks?: {
+                        /** Format: date */
+                        weekStart: string;
+                        inflowCents: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The 13-week summary as of today, or no body when consent is revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Oldest first */
+                        weeklyInflowCents?: number[];
+                        usualPaydayDow?: number | null;
+                        activeWeeks?: number;
+                    };
+                };
+            };
+        };
+    };
+    advanceDemoClock: {
+        parameters: {
+            query: {
+                days: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New business date */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    loginWithPayPal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayPalLogin"];
+            };
+        };
+        responses: {
+            /** @description The member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    upsertStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffUpsert"];
+            };
+        };
+        responses: {
+            /** @description The staff record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffRecord"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    bootstrapPaypalCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The product and plans that now exist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaypalCatalog"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description paypal-rejected (PayPal refused a create; details.paypalIssue says why) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (PayPal unreachable; call again, the creates are replay-safe) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+}
