@@ -1,2 +1,4 @@
-// Member app page / module
-export default function Component() { return null; }
+// Live updates aren't built yet.
+export function GET() {
+  return new Response(null, { status: 501 });
+}

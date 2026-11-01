@@ -13,6 +13,8 @@ Thumbs.db
 node_modules/
 .pnpm-store/
 .next/
+next-env.d.ts
+*.tsbuildinfo
 out/
 dist/
 build/
