@@ -2,6 +2,7 @@ package com.paypalseed.lending.application.usecases;
 
 import com.paypalseed.engines.schedule.Allocation.InstalmentAllocation;
 import com.paypalseed.engines.schedule.Instalment;
+import com.paypalseed.engines.schedule.TimerPlanner.Kind;
 import com.paypalseed.engines.schedule.TimerPlanner.Timer;
 import com.paypalseed.lending.api.events.LendingEvents;
 import com.paypalseed.lending.application.usecases.LoanRecalculator.Outcome;
@@ -12,6 +13,7 @@ import com.paypalseed.lending.infrastructure.persistence.AttemptRepository;
 import com.paypalseed.lending.infrastructure.persistence.AttemptRepository.Status;
 import com.paypalseed.lending.infrastructure.persistence.CobRepository;
 import com.paypalseed.lending.infrastructure.persistence.CobRepository.CobRun;
+import com.paypalseed.lending.infrastructure.persistence.HardshipSupportRepository;
 import com.paypalseed.lending.infrastructure.persistence.LoanRepository;
 import com.paypalseed.lending.infrastructure.persistence.TimerRepository;
 import com.paypalseed.lending.infrastructure.persistence.TransactionRepository;
@@ -73,6 +75,7 @@ public class CloseOfBusiness {
     private final AttemptRepository attempts;
     private final TransactionRepository transactions;
     private final CobRepository cob;
+    private final HardshipSupportRepository hardship;
     private final LoanRecalculator recalculator;
     private final BusinessClock clock;
     private final ApplicationEventPublisher events;
@@ -81,7 +84,8 @@ public class CloseOfBusiness {
     private final int shardCount;
 
     public CloseOfBusiness(LoanRepository loans, TimerRepository timers, AttemptRepository attempts,
-                           TransactionRepository transactions, CobRepository cob, LoanRecalculator recalculator,
+                           TransactionRepository transactions, CobRepository cob, HardshipSupportRepository hardship,
+                           LoanRecalculator recalculator,
                            BusinessClock clock, ApplicationEventPublisher events, PlatformTransactionManager txManager,
                            @Value("${seed.cob.mode:TIMERS}") Mode mode, @Value("${seed.cob.shard-count:8}") int shardCount) {
         this.loans = loans;
@@ -89,6 +93,7 @@ public class CloseOfBusiness {
         this.attempts = attempts;
         this.transactions = transactions;
         this.cob = cob;
+        this.hardship = hardship;
         this.recalculator = recalculator;
         this.clock = clock;
         this.events = events;
@@ -227,8 +232,12 @@ public class CloseOfBusiness {
                     return LoanResult.SKIPPED_LOCKED;
                 }
                 Outcome outcome = recalculator.recalculate(locked.get(), date, LoanRecalculator.Cause.COB);
+                boolean hardshipOpen = hardship.openCase(loanId).isPresent();
                 for (Timer timer : timers.due(loanId, date)) {
-                    fire(timer, outcome, date);
+                    if (graceExpiryHeld(timer, outcome, date)) {
+                        continue; // stays due, so each close of business looks again until the hold ends
+                    }
+                    fire(timer, outcome, date, hardshipOpen);
                     timers.markFired(loanId, timer, date);
                 }
                 loans.setLastClosedOn(loanId, date);
@@ -240,7 +249,16 @@ public class CloseOfBusiness {
         }
     }
 
-    private void fire(Timer timer, Outcome o, LocalDate date) {
+    /** An F5 grace hold keeps the miss unwritten; the timer must stay due until the hold ends. */
+    private boolean graceExpiryHeld(Timer timer, Outcome o, LocalDate date) {
+        if (timer.kind() != Kind.GRACE_EXPIRY) {
+            return false;
+        }
+        Matcher m = INSTALMENT_REF.matcher(timer.ref());
+        return m.find() && recalculator.isHeld(o.after(), Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), date);
+    }
+
+    private void fire(Timer timer, Outcome o, LocalDate date, boolean hardshipOpen) {
         LoanRow loan = o.after();
         switch (timer.kind()) {
             case REMIND_DUE_SOON -> currentInstalment(timer, o)
@@ -249,6 +267,7 @@ public class CloseOfBusiness {
                             loan.memberId(), date, o.schedule().version(), i.seq(), i.dueDate(), remaining(o, i),
                             loan.collectionMode().name())));
             case GRACE_NUDGE -> currentInstalment(timer, o)
+                    .filter(i -> !hardshipOpen) // the open case already talks to the member (F4 AC3)
                     .filter(i -> {
                         long dpd = ChronoUnit.DAYS.between(i.dueDate(), date);
                         return dpd >= 1 && dpd <= loan.policy().graceDays() && transactions.pendingCents(loan.id()) == 0;
@@ -259,19 +278,23 @@ public class CloseOfBusiness {
                     .filter(i -> loan.collectionMode() == CollectionMode.AUTOPAY)
                     .ifPresent(i -> events.publishEvent(new LendingEvents.CollectionCheckRequested(Ids.newId(), loan.id(),
                             loan.memberId(), date, i.dueDate())));
-            case RETRY_CAPTURE -> fireRetry(timer, o, date);
+            case RETRY_CAPTURE -> fireRetry(timer, o, date, hardshipOpen);
             case GRACE_EXPIRY, BUCKET_BOUNDARY -> {
                 // the recalculation that just ran re-aged the loan and recorded any missed instalment
             }
         }
     }
 
-    private void fireRetry(Timer timer, Outcome o, LocalDate date) {
+    private void fireRetry(Timer timer, Outcome o, LocalDate date, boolean hardshipOpen) {
         UUID attemptId = UUID.fromString(timer.ref().substring("attempt:".length()));
         attempts.find(attemptId).filter(a -> a.status() == Status.PLANNED).ifPresent(a -> {
             boolean owed = a.version() == o.schedule().version() && o.schedule().find(a.seq()).isPresent()
                     && o.allocation().of(a.seq()).remainingCents() > 0;
             boolean autopay = o.after().isActive() && o.after().collectionMode() == CollectionMode.AUTOPAY;
+            if (hardshipOpen) {
+                attempts.setStatus(a.id(), Status.CANCELLED, "hardship case open");
+                return;
+            }
             if (!owed || !autopay || transactions.pendingCents(o.after().id()) > 0) {
                 attempts.setStatus(a.id(), Status.CANCELLED, owed ? "no longer applicable" : "paid another way");
                 return;

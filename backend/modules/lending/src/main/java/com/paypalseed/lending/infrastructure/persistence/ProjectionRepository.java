@@ -87,12 +87,18 @@ public class ProjectionRepository {
 
     /** Records the fact once; returns true when it is new. */
     public boolean recordMissed(UUID loanId, int version, int seq, LocalDate dueDate, LocalDate missedOn) {
+        return recordMissed(loanId, version, seq, dueDate, missedOn, null);
+    }
+
+    /** {@code attribution} is set only when a grace hold was involved (MEMBER or SLA_BREACH). */
+    public boolean recordMissed(UUID loanId, int version, int seq, LocalDate dueDate, LocalDate missedOn, String attribution) {
         return dsl.insertInto(INSTALMENT_MISSED)
                 .set(INSTALMENT_MISSED.LOAN_ID, loanId)
                 .set(INSTALMENT_MISSED.VERSION, version)
                 .set(INSTALMENT_MISSED.SEQ, seq)
                 .set(INSTALMENT_MISSED.DUE_DATE, dueDate)
                 .set(INSTALMENT_MISSED.MISSED_ON, missedOn)
+                .set(INSTALMENT_MISSED.ATTRIBUTION, attribution)
                 .onConflictDoNothing()
                 .execute() == 1;
     }
