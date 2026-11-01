@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":platform:observability"))
     implementation(project(":engines:schedule"))
     implementation(project(":engines:rules"))
+    implementation(project(":engines:assessment"))
 
     rootProject.subprojects
         .filter { it.path.startsWith(":modules:") }
