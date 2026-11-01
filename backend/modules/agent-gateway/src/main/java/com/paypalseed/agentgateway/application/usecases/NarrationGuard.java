@@ -16,7 +16,7 @@ final class NarrationGuard {
     private static final Pattern FORBIDDEN = Pattern.compile(
         "\\b(?:fico|credit\\s+scores?|credit\\s+bureaus?|late\\s+fees?|penalt(?:y|ies)|guarantee[ds]?"
             + "|guaranteed\\s+approval|apr|approved|forgiven|waived|perdonad[oa]|system\\s+prompt"
-            + "|computed_(?:facts|plan)|tool_result|member_text|member_dispute_note|goal_name)\\b"
+            + "|computed_(?:facts|plan|trust_facts|portfolio_metrics)|tool_result|member_text|member_dispute_note|goal_name)\\b"
             + "|https?://|www\\.|[\\w.+-]+@[\\w-]+\\.[\\w.]+"
             + "|without\\s+(?:a\\s+|an\\s+|the\\s+)?(?:officer\\s+|second\\s+)?(?:review|check)",
         Pattern.CASE_INSENSITIVE);
