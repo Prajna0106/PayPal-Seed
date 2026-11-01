@@ -63,6 +63,28 @@ public class FairLoanCheckAssessment {
         this.decidedTermMonths = result.suggestedTermMonths();
     }
 
+    public void restoreReviewState(
+        boolean memberDisputed,
+        String memberDisputeNote,
+        Instant disputedAt,
+        OfficerDecisionType officerDecision,
+        UUID officerId,
+        long decidedLoanCents,
+        int decidedTermMonths,
+        String officerReason,
+        Instant decidedAt
+    ) {
+        this.memberDisputed = memberDisputed;
+        this.memberDisputeNote = memberDisputeNote;
+        this.disputedAt = disputedAt;
+        this.officerDecision = officerDecision != null ? officerDecision : OfficerDecisionType.PENDING;
+        this.officerId = officerId;
+        this.decidedLoanCents = decidedLoanCents;
+        this.decidedTermMonths = decidedTermMonths;
+        this.officerReason = officerReason;
+        this.decidedAt = decidedAt;
+    }
+
     public static FairLoanCheckAssessment create(
         UUID memberId,
         UUID applicationId,
