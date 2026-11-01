@@ -9,6 +9,7 @@ import com.paypalseed.lending.domain.model.LoanRow.CollectionMode;
 import com.paypalseed.lending.infrastructure.persistence.AttemptRepository;
 import com.paypalseed.lending.infrastructure.persistence.AttemptRepository.Attempt;
 import com.paypalseed.lending.infrastructure.persistence.AttemptRepository.Status;
+import com.paypalseed.lending.infrastructure.persistence.HardshipSupportRepository;
 import com.paypalseed.lending.infrastructure.persistence.LoanRepository;
 import com.paypalseed.lending.infrastructure.persistence.TransactionRepository;
 import com.paypalseed.platform.kernel.BusinessClock;
@@ -35,15 +36,18 @@ public class CollectionFailureService {
     private final LoanRepository loans;
     private final AttemptRepository attempts;
     private final TransactionRepository transactions;
+    private final HardshipSupportRepository hardship;
     private final LoanRecalculator recalculator;
     private final BusinessClock clock;
     private final ApplicationEventPublisher events;
 
     public CollectionFailureService(LoanRepository loans, AttemptRepository attempts, TransactionRepository transactions,
-                                    LoanRecalculator recalculator, BusinessClock clock, ApplicationEventPublisher events) {
+                                    HardshipSupportRepository hardship, LoanRecalculator recalculator, BusinessClock clock,
+                                    ApplicationEventPublisher events) {
         this.loans = loans;
         this.attempts = attempts;
         this.transactions = transactions;
+        this.hardship = hardship;
         this.recalculator = recalculator;
         this.clock = clock;
         this.events = events;
@@ -85,7 +89,8 @@ public class CollectionFailureService {
                     Status.FAILED, causedBy));
             boolean retriedBefore = history.stream().anyMatch(a -> "RETRY".equals(a.kind()));
             boolean pending = transactions.pendingCents(loanId) > 0;
-            if (!retriedBefore && !pending) {
+            boolean hardshipOpen = hardship.openCase(loanId).isPresent(); // F4 AC3: no retry while a case is open
+            if (!retriedBefore && !pending && !hardshipOpen) {
                 // No F3 income profile is available yet, so RetryPlanner falls back to the middle of the window.
                 retryOn = RetryPlanner.retryDate(inst.dueDate(), today, Optional.empty(), loan.policy()).orElse(null);
                 if (retryOn != null) {

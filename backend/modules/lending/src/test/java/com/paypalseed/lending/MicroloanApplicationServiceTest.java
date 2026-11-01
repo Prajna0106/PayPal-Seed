@@ -7,7 +7,9 @@ import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
 import com.paypalseed.lending.api.dto.LendingDtos.ReschedulePreview;
 import com.paypalseed.lending.api.dto.LendingDtos.RescheduleRequest;
+import com.paypalseed.lending.api.dto.LendingDtos.RiskFacts;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
+import com.paypalseed.lending.api.dto.LendingDtos.Slot;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.SubmitApplicationCommand;
 import com.paypalseed.lending.domain.model.LendingErrors;
@@ -204,5 +206,23 @@ class MicroloanApplicationServiceTest {
 
         @Override
         public ScheduleView applyReschedule(RescheduleRequest request, String approvalRef) { return null; }
+
+        @Override
+        public ScheduleView applyReschedule(RescheduleRequest request, String approvalRef, List<Slot> expectedProposed) { return null; }
+
+        @Override
+        public void setHardshipOpen(UUID loanId, String caseRef, boolean open) {}
+
+        @Override
+        public void placeHold(UUID loanId, int seq, LocalDate until, String caseRef, String cause) {}
+
+        @Override
+        public void releaseHold(String caseRef, String reason) {}
+
+        @Override
+        public Optional<RiskFacts> riskFacts(UUID loanId, LocalDate asOf) { return Optional.empty(); }
+
+        @Override
+        public List<UUID> hardshipScanCandidates(LocalDate asOf, int leadDays, int graceDays, int shardGroup, int shardCount, UUID after, int limit) { return List.of(); }
     }
 }

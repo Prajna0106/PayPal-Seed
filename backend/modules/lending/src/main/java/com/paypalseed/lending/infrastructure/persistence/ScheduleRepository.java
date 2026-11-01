@@ -48,6 +48,13 @@ public class ScheduleRepository {
         rows.execute();
     }
 
+    /** The version an approval created, if it was already applied. */
+    public Optional<Integer> versionCausedBy(UUID loanId, String causedBy) {
+        return dsl.select(SCHEDULE_VERSION.VERSION).from(SCHEDULE_VERSION)
+                .where(SCHEDULE_VERSION.LOAN_ID.eq(loanId).and(SCHEDULE_VERSION.CAUSED_BY.eq(causedBy)))
+                .fetchOptional(SCHEDULE_VERSION.VERSION);
+    }
+
     public Optional<Schedule> load(UUID loanId, int version, int dueDay) {
         return versions(loanId, dueDay).stream()
                 .map(StoredVersion::schedule)

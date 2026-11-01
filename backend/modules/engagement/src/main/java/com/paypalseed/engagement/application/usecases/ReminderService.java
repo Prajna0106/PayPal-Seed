@@ -15,6 +15,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -42,15 +43,24 @@ public class ReminderService {
 
     @Transactional
     public void remind(UUID memberId, UUID loanId, Type type, String factKey, long amountCents, LocalDate date) {
+        notify(memberId, loanId, type.name(), "loan:" + loanId + ":" + factKey + ":" + type,
+                locale -> ReminderTemplates.render(type, locale, amountCents, date));
+    }
+
+    /**
+     * A message whose text the caller renders per locale (hardship offers). Same rules as every reminder: one
+     * message per dedupe key, in-app always, SMS only with a phone and no STOP, deferred past quiet hours.
+     */
+    @Transactional
+    public void notify(UUID memberId, UUID loanId, String type, String key, Function<String, String> bodyFor) {
         Optional<Contact> contact = reminders.contact(memberId);
         String locale = contact.map(Contact::locale).orElse("en");
-        String body = ReminderTemplates.render(type, locale, amountCents, date);
-        String key = "loan:" + loanId + ":" + factKey + ":" + type;
-        reminders.enqueue(key + ":IN_APP", memberId, loanId, type.name(), "IN_APP", locale, body, clock.now(), "SENT");
+        String body = bodyFor.apply(locale);
+        reminders.enqueue(key + ":IN_APP", memberId, loanId, type, "IN_APP", locale, body, clock.now(), "SENT");
         String smsStatus = contact.isEmpty() || contact.get().phoneE164() == null ? "SKIPPED_NO_CONTACT"
                 : contact.get().optedOut() ? "SKIPPED_OPT_OUT" : "QUEUED";
         Instant sendAfter = contact.map(c -> QuietHours.nextAllowed(clock.now(), ZoneId.of(c.timezone()))).orElse(clock.now());
-        reminders.enqueue(key + ":SMS", memberId, loanId, type.name(), "SMS", locale, body, sendAfter, smsStatus);
+        reminders.enqueue(key + ":SMS", memberId, loanId, type, "SMS", locale, body, sendAfter, smsStatus);
     }
 
     /** Sends due SMS reminders; returns how many were sent. Runs on the worker role. */

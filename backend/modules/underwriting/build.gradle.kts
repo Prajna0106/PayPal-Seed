@@ -1,6 +1,7 @@
 // Module: underwriting (F3: consented data fetch, assessment records, card requests to agent)
 plugins {
     `java-library`
+    id("jooq-module")
 }
 
 dependencies {

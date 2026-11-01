@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Internal Jobs API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Idempotent backend triggers for Render Workflows and the worker role. Every route requires
     `Authorization: Bearer <SEED_INTERNAL_TOKEN>` (service role). Close of business runs business dates
@@ -87,6 +87,97 @@ paths:
       responses:
         '200': { description: New schedule }
         '422': { description: A rescheduling rule refused the request (problem code names the rule) }
+  /internal/jobs/hardship/scan:
+    post:
+      summary: Score one keyset page of one shard group and open hardship cases at LIKELY_MISS or above (F5)
+      description: |
+        Looks only at active loans whose oldest owed instalment is due in the next 10 days or is in grace.
+        Idempotent per loan and scan date (one scorecard run per loan per day). Call again with `after = nextAfter`
+        until `done`. The worker role runs the same job daily at 06:15 America/Los_Angeles (`seed.jobs.hardship-scan-cron`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shardGroup, shardCount]
+              properties:
+                businessDate: { type: string, format: date, description: Defaults to today }
+                shardGroup: { type: integer, minimum: 0 }
+                shardCount: { type: integer, minimum: 1, maximum: 64 }
+                after: { type: string, format: uuid, description: Keyset cursor }
+                limit: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+            example: { businessDate: '2027-03-10', shardGroup: 0, shardCount: 8, limit: 500 }
+      responses:
+        '200':
+          description: Page result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  businessDate: { type: string, format: date }
+                  scanned: { type: integer }
+                  opened: { type: integer }
+                  failed: { type: integer }
+                  nextAfter: { type: [string, 'null'], format: uuid }
+                  done: { type: boolean }
+  /internal/jobs/hardship/sweep:
+    post:
+      summary: Fire due hardship case timers (agent deadline, offer reminder and expiry, hold check and expiry, SLA 50/80/breach)
+      description: The worker role also runs it every 30 s (`seed.jobs.hardship-sweep-ms`). Each timer fires once.
+      parameters: [ { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } } ]
+      responses:
+        '200': { description: Timers fired, content: { application/json: { schema: { type: object, properties: { fired: { type: integer } } } } } }
+  /internal/jobs/governance/verify-audit-chain:
+    post:
+      summary: Recompute the governance audit hash chain end to end; a break is a Sev-1 alert
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  intact: { type: boolean }
+                  entries: { type: integer }
+                  firstBrokenSeq: { type: [integer, 'null'] }
+  /internal/underwriting/members/{memberId}/income:
+    put:
+      summary: Seed consented weekly income for a member (demo and sandbox; F3 replaces it with PayPal Transaction Search)
+      parameters: [ { name: memberId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consent]
+              properties:
+                consent: { type: boolean, description: false revokes consent; income signals then never fire }
+                usualPaydayDow: { type: integer, minimum: 1, maximum: 7, description: ISO day of week money usually arrives }
+                weeks:
+                  type: array
+                  maxItems: 104
+                  items:
+                    type: object
+                    required: [weekStart, inflowCents]
+                    properties:
+                      weekStart: { type: string, format: date }
+                      inflowCents: { type: integer, minimum: 0 }
+            example: { consent: true, usualPaydayDow: 5, weeks: [ { weekStart: '2026-12-09', inflowCents: 20000 }, { weekStart: '2027-02-10', inflowCents: 9600 } ] }
+      responses:
+        '200':
+          description: The 13-week summary as of today, or no body when consent is revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  weeklyInflowCents: { type: array, items: { type: integer }, minItems: 13, maxItems: 13, description: Oldest first, ending yesterday }
+                  usualPaydayDow: { type: [integer, 'null'] }
+                  activeWeeks: { type: integer }
   /internal/demo-clock/advance:
     post:
       summary: Demo profile only. Move the shared business date forward
