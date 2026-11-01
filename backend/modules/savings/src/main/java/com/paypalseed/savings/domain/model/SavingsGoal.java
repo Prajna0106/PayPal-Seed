@@ -23,6 +23,7 @@ public class SavingsGoal {
     private String payPalSubscriptionId;
     private GoalStatus status;
     private Money currentBalance;
+    private int depositCount;
     private final Instant createdAt;
     private Instant updatedAt;
 
@@ -48,6 +49,9 @@ public class SavingsGoal {
         this.payPalSubscriptionId = payPalSubscriptionId;
         this.status = Objects.requireNonNull(status, "Status is required");
         this.currentBalance = currentBalance != null ? currentBalance : Money.zero(monthlyAmount.currency());
+        this.depositCount = this.monthlyAmount.cents() > 0
+            ? (int) (this.currentBalance.cents() / this.monthlyAmount.cents())
+            : 0;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt is required");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt is required");
     }
@@ -86,6 +90,7 @@ public class SavingsGoal {
         }
 
         this.currentBalance = this.currentBalance.add(depositAmount);
+        this.depositCount++;
         this.updatedAt = Instant.now();
 
         if (this.currentBalance.isGreaterThanOrEqual(this.targetAmount) && this.status == GoalStatus.ACTIVE) {
@@ -167,6 +172,7 @@ public class SavingsGoal {
     public String getPayPalSubscriptionId() { return payPalSubscriptionId; }
     public GoalStatus getStatus() { return status; }
     public Money getCurrentBalance() { return currentBalance; }
+    public int getDepositCount() { return depositCount; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 
