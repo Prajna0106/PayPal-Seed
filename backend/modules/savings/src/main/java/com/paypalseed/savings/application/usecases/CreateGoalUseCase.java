@@ -8,6 +8,7 @@ import com.paypalseed.savings.domain.model.SavingsGoal;
 
 import java.time.LocalDate;
 import java.util.Objects;
+import org.springframework.transaction.annotation.Transactional;
 
 public class CreateGoalUseCase {
 
@@ -30,6 +31,11 @@ public class CreateGoalUseCase {
         String payPalSubscriptionId
     ) {}
 
+    /**
+     * Owns its transaction: the goal and its {@code GoalCreatedEvent} commit together, and the event reaches the
+     * {@code @ApplicationModuleListener}s only because it is published inside one.
+     */
+    @Transactional
     public SavingsGoal execute(Command command) {
         long activeCount = repository.countActiveByMemberId(command.memberId());
         if (activeCount >= MAX_ACTIVE_GOALS_PER_MEMBER) {

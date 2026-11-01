@@ -53,14 +53,24 @@ public class ReminderService {
      */
     @Transactional
     public void notify(UUID memberId, UUID loanId, String type, String key, Function<String, String> bodyFor) {
+        deliver(memberId, loanId, null, type, key, bodyFor);
+    }
+
+    /** As {@link #notify}, for a message about a savings goal (a failed or returned withdrawal) rather than a loan. */
+    @Transactional
+    public void notifyAboutGoal(UUID memberId, UUID goalId, String type, String key, Function<String, String> bodyFor) {
+        deliver(memberId, null, goalId, type, key, bodyFor);
+    }
+
+    private void deliver(UUID memberId, UUID loanId, UUID goalId, String type, String key, Function<String, String> bodyFor) {
         Optional<Contact> contact = reminders.contact(memberId);
         String locale = contact.map(Contact::locale).orElse("en");
         String body = bodyFor.apply(locale);
-        reminders.enqueue(key + ":IN_APP", memberId, loanId, type, "IN_APP", locale, body, clock.now(), "SENT");
+        reminders.enqueue(key + ":IN_APP", memberId, loanId, goalId, type, "IN_APP", locale, body, clock.now(), "SENT");
         String smsStatus = contact.isEmpty() || contact.get().phoneE164() == null ? "SKIPPED_NO_CONTACT"
                 : contact.get().optedOut() ? "SKIPPED_OPT_OUT" : "QUEUED";
         Instant sendAfter = contact.map(c -> QuietHours.nextAllowed(clock.now(), ZoneId.of(c.timezone()))).orElse(clock.now());
-        reminders.enqueue(key + ":SMS", memberId, loanId, type, "SMS", locale, body, sendAfter, smsStatus);
+        reminders.enqueue(key + ":SMS", memberId, loanId, goalId, type, "SMS", locale, body, sendAfter, smsStatus);
     }
 
     /** Sends due SMS reminders; returns how many were sent. Runs on the worker role. */

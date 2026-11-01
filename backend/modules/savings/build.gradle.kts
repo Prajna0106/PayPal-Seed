@@ -9,6 +9,9 @@ dependencies {
     implementation(project(":platform:persistence"))
     implementation(project(":platform:messaging"))
     implementation(project(":modules:ledger"))
+    implementation(project(":modules:payments"))
+    implementation(project(":modules:identity"))
+    implementation(project(":engines:schedule"))
     implementation("org.springframework.boot:spring-boot-starter-web")
 
     testImplementation(project(":platform:testing"))

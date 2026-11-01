@@ -216,7 +216,7 @@ public class RepaymentService {
      * Settles open attempts whose instalment is now paid: a requested capture succeeded, and a planned
      * retry is cancelled. Runs before recalculating, so those retry timers are not planned again.
      */
-    private void cancelRetriesNoLongerNeeded(UUID loanId, LoanRecalculator.Projection projected) {
+    public void cancelRetriesNoLongerNeeded(UUID loanId, LoanRecalculator.Projection projected) {
         for (AttemptRepository.Attempt a : attempts.open(loanId)) {
             boolean stillOwed = a.version() == projected.schedule().version()
                     && projected.schedule().find(a.seq()).isPresent()

@@ -12,27 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /** The signed-in member's loans */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Loans */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["LoanSummary"][];
-                    };
-                };
-                401: components["responses"]["Problem"];
-            };
-        };
+        get: operations["listMyLoans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -49,41 +29,7 @@ export interface paths {
             cookie?: never;
         };
         /** Current (or a given) schedule version with derived instalment status */
-        get: {
-            parameters: {
-                query?: {
-                    version?: number;
-                };
-                header?: {
-                    "If-None-Match"?: string;
-                };
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Schedule */
-                200: {
-                    headers: {
-                        ETag?: string;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ScheduleView"];
-                    };
-                };
-                /** @description Not modified */
-                304: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["Problem"];
-            };
-        };
+        get: operations["getLoanSchedule"];
         put?: never;
         post?: never;
         delete?: never;
@@ -100,28 +46,7 @@ export interface paths {
             cookie?: never;
         };
         /** Every schedule version, with the diff from the previous one */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Versions */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["VersionView"][];
-                    };
-                };
-            };
-        };
+        get: operations["listScheduleVersions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -138,28 +63,7 @@ export interface paths {
             cookie?: never;
         };
         /** Bryntum Scheduler Pro payload (instalments, previous plan as ghost events, grace windows) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Timeline */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TimelineView"];
-                    };
-                };
-            };
-        };
+        get: operations["getLoanTimeline"];
         put?: never;
         post?: never;
         delete?: never;
@@ -176,28 +80,7 @@ export interface paths {
             cookie?: never;
         };
         /** Money events of the loan (receipts, reversals, overpayment refunds) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Transactions */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TransactionView"][];
-                    };
-                };
-            };
-        };
+        get: operations["listLoanTransactions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -214,34 +97,7 @@ export interface paths {
             cookie?: never;
         };
         /** Outstanding balance (0% loan, valid until the next money event) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Quote */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            loanId: string;
-                            outstandingCents: number;
-                            /** Format: date */
-                            validOn: string;
-                        };
-                    };
-                };
-            };
-        };
+        get: operations["getPayoffQuote"];
         put?: never;
         post?: never;
         delete?: never;
@@ -260,34 +116,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** What paying an amount today would do. Pure engine call; writes nothing */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        amountCents: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Projected schedule */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ScheduleView"];
-                    };
-                };
-            };
-        };
+        post: operations["previewPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -304,33 +133,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** What a hardship option would do. Pure engine call; writes nothing */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["RescheduleRequest"];
-                };
-            };
-            responses: {
-                /** @description Current and proposed schedules */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReschedulePreview"];
-                    };
-                };
-                422: components["responses"]["Problem"];
-            };
-        };
+        post: operations["previewReschedule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -347,66 +150,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Create a PayPal order for a catch-up, early, payoff or pay-what-you-can payment */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** @description Whole dollars only */
-                        amountCents: number;
-                        /** @enum {string} */
-                        purpose: "CATCH_UP" | "EARLY" | "PAYOFF" | "PAY_WHAT_YOU_CAN";
-                    };
-                };
-            };
-            responses: {
-                /** @description Order */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CheckoutOrder"];
-                    };
-                };
-                /** @description idempotency-key-reused */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description amount-not-whole-dollars | amount-exceeds-outstanding | amount-too-small | loan-not-active */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description dependency-unavailable (retry with the same Idempotency-Key) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["createLoanPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -423,30 +167,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Capture an approved order. The repayment itself is recorded from the payment event */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                    orderId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Captured */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CapturedOrder"];
-                    };
-                };
-                404: components["responses"]["Problem"];
-            };
-        };
+        post: operations["captureLoanPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -463,48 +184,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Refund money held as overpayment (newest captures first) */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        amountCents: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Refunded */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            paypalRefundIds?: string[];
-                            amountCents?: number;
-                        };
-                    };
-                };
-                /** @description no-overpayment | refund-exceeds-overpayment */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["refundOverpayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -521,57 +201,9 @@ export interface paths {
         get?: never;
         put?: never;
         /** Start autopay (PayPal subscription, $1 x quantity). Idempotent while approval is pending */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        returnUrl: string;
-                        cancelUrl: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Mandate with approve URL */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["MandateView"];
-                    };
-                };
-                409: components["responses"]["Problem"];
-            };
-        };
+        post: operations["startAutopay"];
         /** Stop autopay; the loan returns to manual payments */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Stopped */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        delete: operations["stopAutopay"];
         options?: never;
         head?: never;
         patch?: never;
@@ -587,34 +219,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Return-URL confirmation; safe to race with the activation webhook */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        subscriptionId: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Mandate */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["MandateView"];
-                    };
-                };
-            };
-        };
+        post: operations["confirmAutopay"];
         delete?: never;
         options?: never;
         head?: never;
@@ -629,33 +234,7 @@ export interface paths {
             cookie?: never;
         };
         /** Suggested due day (day after money usually arrives; falls back to stated payday) */
-        get: {
-            parameters: {
-                query?: {
-                    statedPayday?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Suggestion */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            dueDay?: number;
-                            /** @enum {string} */
-                            basis?: "INCOME_PATTERN" | "STATED_PAYDAY" | "DEFAULT";
-                            reason?: string;
-                        };
-                    };
-                };
-            };
-        };
+        get: operations["getDueDaySuggestion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -671,31 +250,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: {
-                    version?: number;
-                };
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Schedule */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ScheduleView"];
-                    };
-                };
-                403: components["responses"]["Problem"];
-            };
-        };
+        get: operations["getDeskLoanSchedule"];
         put?: never;
         post?: never;
         delete?: never;
@@ -712,37 +267,7 @@ export interface paths {
             cookie?: never;
         };
         /** INV-2 check for one loan (allocation, cached state and ledger agree) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Integrity report */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            loanId?: string;
-                            outstandingCents?: number;
-                            ledgerReceivableCents?: number;
-                            overpaidCents?: number;
-                            memberOverpaidCents?: number;
-                            ledgerMemberOverpaymentCents?: number;
-                            consistent?: boolean;
-                        };
-                    };
-                };
-            };
-        };
+        get: operations["getLoanIntegrity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -758,29 +283,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query: {
-                    from: string;
-                    to: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Close-of-business runs */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CobRun"][];
-                    };
-                };
-            };
-        };
+        get: operations["listCobRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -799,42 +302,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** PayPal webhook ingress (verify signature, store in inbox, fast 200) */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            responses: {
-                /** @description accepted | duplicate */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status?: "accepted" | "duplicate";
-                        };
-                    };
-                };
-                /** @description invalid-webhook (signature failed; never stored) */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["receivePayPalWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -851,42 +319,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Member SMS replies via Zapier (HMAC-SHA256 over "timestamp.body"); A to D, NO and HELP go to the hardship case of that member */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "X-Seed-Timestamp": string;
-                    "X-Seed-Signature": string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        from?: string;
-                        text?: string;
-                        /** @description Zapier message id; replays with the same id are ignored */
-                        messageId?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Keyword handled */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            keyword?: "STOP" | "START" | "PAY" | "HELP" | "YES" | "A" | "B" | "C" | "D" | "NO" | "UNKNOWN";
-                        };
-                    };
-                };
-                401: components["responses"]["Problem"];
-            };
-        };
+        post: operations["receiveZapierSms"];
         delete?: never;
         options?: never;
         head?: never;
@@ -906,31 +339,7 @@ export interface paths {
          *     AI-written field; it passed the grounding check, or it is the template (`source: TEMPLATE`). The risk level and
          *     score are never shown to the member. Another member's loan returns 404 `hardship-no-open-offer`.
          */
-        get: {
-            parameters: {
-                query?: {
-                    lang?: "en" | "es";
-                };
-                header?: never;
-                path: {
-                    loanId: components["parameters"]["LoanId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Case and offer */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["HardshipView"];
-                    };
-                };
-                404: components["responses"]["Problem"];
-            };
-        };
+        get: operations["getHardshipOffer"];
         put?: never;
         post?: never;
         delete?: never;
@@ -953,52 +362,7 @@ export interface paths {
          * @description `reasonText` is untrusted. It goes only to the closed-set reason classifier; the text is not stored, logged,
          *     put in an event or shown to an agent. Only the category is kept.
          */
-        post: {
-            parameters: {
-                query?: {
-                    lang?: "en" | "es";
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "loanId": "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01",
-                     *       "reasonText": "Sales dropped this month."
-                     *     }
-                     */
-                    "application/json": {
-                        /** Format: uuid */
-                        loanId: string;
-                        reasonText?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Case and offer */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["HardshipView"];
-                    };
-                };
-                404: components["responses"]["Problem"];
-                /** @description hardship-not-eligible (loan not active, in the 60-plus bucket, or a case is already open) */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["openHardshipCase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1020,69 +384,7 @@ export interface paths {
          *     If the schedule changed since the offer, the offer is rebuilt as a new revision and the call returns
          *     409 `hardship-offer-stale`: show the new numbers and ask again.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    caseId: components["parameters"]["CaseId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        offerId: string;
-                        /** Format: uuid */
-                        optionId: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Choice recorded */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "caseId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01",
-                         *       "status": "PENDING_APPROVAL",
-                         *       "optionLabel": "B",
-                         *       "tier": "MAKER_CHECKER",
-                         *       "decisionDueAt": "2027-03-12T17:42:00Z",
-                         *       "holdUntil": null,
-                         *       "payNowCents": null
-                         *     }
-                         */
-                        "application/json": components["schemas"]["HardshipChoice"];
-                    };
-                };
-                404: components["responses"]["Problem"];
-                /** @description hardship-offer-stale | hardship-case-closed */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description hardship-policy-violation | hardship-unknown-option */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["chooseHardshipOption"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1099,37 +401,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** One-tap decline; no reason needed */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    caseId: components["parameters"]["CaseId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Declined */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            caseId?: string;
-                            /** @enum {string} */
-                            status?: "DECLINED_BY_MEMBER";
-                        };
-                    };
-                };
-                404: components["responses"]["Problem"];
-                409: components["responses"]["Problem"];
-            };
-        };
+        post: operations["declineHardshipOffer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1147,39 +419,7 @@ export interface paths {
          * Hardship queue (keyset paged, newest first; filters are an allowlist)
          * @description Roles OFFICER, CHECKER or ADMIN. An unknown filter value returns 422 `hardship-invalid-filter`.
          */
-        get: {
-            parameters: {
-                query?: {
-                    status?: components["schemas"]["HardshipCaseStatus"][];
-                    level?: ("NONE" | "WATCH" | "LIKELY_MISS" | "IMMINENT")[];
-                    origin?: ("PROACTIVE_SCAN" | "MEMBER_HELP" | "STAFF")[];
-                    /** @description Keyset cursor (`nextBefore` of the previous page) */
-                    before?: string;
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description One page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            rows?: components["schemas"]["HardshipQueueRow"][];
-                            /** Format: uuid */
-                            nextBefore?: string | null;
-                        };
-                    };
-                };
-                403: components["responses"]["Problem"];
-                422: components["responses"]["Problem"];
-            };
-        };
+        get: operations["listHardshipCases"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1196,30 +436,7 @@ export interface paths {
             cookie?: never;
         };
         /** Evidence panel (signals with numbers, options, member choice, narratives with their source, approval, agent run) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    caseId: components["parameters"]["CaseId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Case detail */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["HardshipCaseDetail"];
-                    };
-                };
-                403: components["responses"]["Problem"];
-                404: components["responses"]["Problem"];
-            };
-        };
+        get: operations["getHardshipCase"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1242,95 +459,7 @@ export interface paths {
          * @description The first decision is the maker's (role OFFICER); the second is the checker's (role CHECKER), by a different
          *     person who is not the member. A decision on a stale offer voids the request and returns 409 `approval-stale`.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    caseId: components["parameters"]["CaseId"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "decision": "APPROVE",
-                     *       "reasonCode": "INCOME_DROP_VERIFIED",
-                     *       "note": "Signals match the member's own message.",
-                     *       "evidenceViewedMs": 41200
-                     *     }
-                     */
-                    "application/json": {
-                        /** @enum {string} */
-                        decision: "APPROVE" | "REJECT";
-                        reasonCode: string;
-                        note?: string;
-                        /** @description Time the evidence panel was open; feeds the rubber-stamp detector */
-                        evidenceViewedMs: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Decision recorded */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "requestId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10",
-                         *       "requestStatus": "OPEN",
-                         *       "role": "MAKER",
-                         *       "next": "CHECKER",
-                         *       "auditSeq": 18423
-                         *     }
-                         */
-                        "application/json": {
-                            /** Format: uuid */
-                            requestId?: string;
-                            /** @enum {string} */
-                            requestStatus?: "OPEN" | "APPROVED" | "REJECTED" | "VOIDED";
-                            /** @enum {string} */
-                            role?: "MAKER" | "CHECKER";
-                            /** @enum {string|null} */
-                            next?: "CHECKER" | null;
-                            auditSeq?: number;
-                        };
-                    };
-                };
-                /** @description sod-violation (the checker is the maker or the member) or missing role */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description approval-stale | hardship-not-awaiting-decision */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description reason-code-required */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["decideHardshipCase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1347,28 +476,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Retry an approved case whose execution ran out of attempts (roles OFFICER or ADMIN) */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    caseId: components["parameters"]["CaseId"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Execution retried */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                403: components["responses"]["Problem"];
-                409: components["responses"]["Problem"];
-            };
-        };
+        post: operations["retryHardshipExecution"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1383,29 +491,7 @@ export interface paths {
             cookie?: never;
         };
         /** Effective agent mode and circuit state (roles OFFICER, CHECKER or ADMIN) */
-        get: {
-            parameters: {
-                query?: {
-                    agent?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description State */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["KillSwitchState"];
-                    };
-                };
-                403: components["responses"]["Problem"];
-            };
-        };
+        get: operations["getKillSwitch"];
         put?: never;
         /**
          * Change an agent mode (audited, append-only history)
@@ -1413,47 +499,1050 @@ export interface paths {
          *     Moving back to a less restrictive mode needs ADMIN (`kill-switch-up-needs-admin`). Automatic trips only ever
          *     move to TEMPLATES_ONLY.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "scope": "GLOBAL",
-                     *       "mode": "TEMPLATES_ONLY",
-                     *       "reason": "Grounding failures spiked after a model change"
-                     *     }
-                     */
-                    "application/json": {
-                        /**
-                         * @example GLOBAL
-                         * @example guardian
-                         */
-                        scope: string;
-                        /** @enum {string} */
-                        mode: "LIVE" | "SHADOW" | "TEMPLATES_ONLY";
-                        reason: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description New state */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["KillSwitchState"];
-                    };
-                };
-                403: components["responses"]["Problem"];
-            };
+        post: operations["setKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
+        /** The signed-in member's profile */
+        get: operations["getMyProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change language, wallet preference or display name (only the fields present change) */
+        patch: operations["updateMyProfile"];
+        trace?: never;
+    };
+    "/api/v1/members/me/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything the member has agreed to, newest first, revoked entries included */
+        get: operations["listMyConsents"];
+        put?: never;
+        /**
+         * Record a consent (idempotent for the same type and version)
+         * @description `version` defaults to the current version of the text. A version that is not current is refused with
+         *     `consent-version-stale` so the member never agrees to text they did not see. Granting a newer version closes the
+         *     older entry and appends a new one.
+         *     `INCOME_READ` here is the member-facing record; the fair loan check keeps enforcing its own consent in
+         *     underwriting (ADR 0012).
+         */
+        post: operations["grantConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/consents/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a consent now. Always allowed; revoking something not granted is a no-op */
+        delete: operations["revokeConsent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Staff directory (names for maker and checker columns). Officers, checkers and admins */
+        get: operations["listStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in member's credit record
+         * @description A member with no history yet gets level `NEW` with empty counts, not a 404. `next` says what is still
+         *     missing for the next level and is absent at the top level. Hardship plans are shown as `hardshipPlansOnPlan`
+         *     and never reduce a level.
+         */
+        get: operations["getMyRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/record/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The facts behind the record, newest first, keyset paginated */
+        get: operations["getMyRecordHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/record/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The member's share links, newest first, without tokens */
+        get: operations["listRecordShares"];
+        put?: never;
+        /**
+         * Create a share link for the current record
+         * @description Freezes the record as a snapshot and returns a signed token. The token is shown only in this response (and
+         *     in an idempotent replay of it); the list never returns it. `expiresInDays` is 1 to 30. `detail` chooses what
+         *     a partner sees: `LEVEL` (level only), `SUMMARY` (also since date and loans repaid on plan) or `FULL` (also
+         *     the on-time band). The same `Idempotency-Key` with the same body returns the same share; with a different
+         *     body, 409 `idempotency-key-reused`. A member can hold 25 active shares.
+         */
+        post: operations["createRecordShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/record/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a share link
+         * @description Takes effect for the next verification (partners may hold a cached answer for up to 5 seconds). Revoking twice is fine.
+         */
+        delete: operations["revokeRecordShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/records/verify/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verify a shared record (public, no sign-in)
+         * @description Returns only what the member chose to share: level, since date, loans repaid on plan, an on-time band, when
+         *     the link was issued and when it expires, and a `valid` flag. `valid` is false when the member has had a
+         *     default since the snapshot was taken, so a partner does not rely on an out-of-date answer.
+         *
+         *     Unknown, expired, revoked and tampered tokens all return the same generic 404 `record-not-found`; nothing
+         *     says which. The response never contains a name, an email, a payer id, a loan amount or a member id. It may
+         *     be cached for 5 seconds. Put a rate limit in front of this route.
+         */
+        get: operations["verifyRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/members/{memberId}/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A member's record with the last facts (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["getMemberRecordForDesk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One call for the member Home page
+         * @description Member role only. Staff and the service get `403`; no credential gets `401`. A member with no data in a
+         *     module gets that section as `null` with a `sectionErrors` entry (`code: no-data`), and a module that failed
+         *     gets `code: unavailable`. The response is never cached by shared caches.
+         */
+        get: operations["getMyHome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loan application queue
+         * @description Default order is `slaDueAt` ascending, so the application closest to its deadline comes first. `slaBreached=true`
+         *     returns open applications (SUBMITTED, PENDING_SECOND_APPROVAL) whose deadline has passed.
+         */
+        get: operations["listDeskApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fair-check decisions queue
+         * @description Default order is newest first (`createdAt` descending).
+         */
+        get: operations["listDeskAssessments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/portfolio/loans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loan portfolio
+         * @description Default order is newest disbursement first. `agingBucket` as a sort column orders by severity (CURRENT first),
+         *     not by name. A loan is listed once its schedule has been seen.
+         */
+        get: operations["listDeskPortfolioLoans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/portfolio/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio totals and inclusion impact
+         * @description Counts and cents by status and aging bucket (every bucket is listed, in severity order), the on-time repayment
+         *     rate, open hardship cases and the inclusion figures. The figures come from one snapshot. `rateBasisPoints` is
+         *     null while no instalment has fallen due.
+         */
+        get: operations["getDeskPortfolioSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/workload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Approvals waiting per officer role and SLA bucket
+         * @description One cell per kind of work, role and SLA bucket, for the Bryntum workload view. Loan applications wait for an
+         *     OFFICER until the first approval and for a CHECKER after it; hardship decisions the same by stage.
+         */
+        get: operations["getDeskWorkload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reserve/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fund balance, donations, payouts and coverage (public, no sign-in)
+         * @description Exposure is the sum of outstanding balances of loans, kept up to date from lending events. The coverage
+         *     ratio is `balanceCents / openExposureCents` in basis points (10000 means the fund could repay every open
+         *     loan once); it is null when there is no exposure. The response may be cached for 30 seconds.
+         */
+        get: operations["getReserveSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reserve/donations/intent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a donation. Returns the custom id the web page puts on the PayPal order or Donate button
+         * @description Public. The server remembers whether the donor wants their display name shown (default: anonymous) and
+         *     returns a `customId` of the form `reserve-donation:{uuid}`. The web page passes it to PayPal as
+         *     `custom_id`; the capture webhook carries it back. No PayPal credential is returned. The same
+         *     `Idempotency-Key` with the same body returns the same `customId`.
+         */
+        post: operations["createDonationIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/reserve/cover-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cover requests, newest first, keyset paginated (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["listCoverRequests"];
+        put?: never;
+        /**
+         * Raise a cover request for a member's loan (roles OFFICER or ADMIN)
+         * @description The amount is capped per request and per member per calendar year (`seed.reserve.cover.*`). The fund must
+         *     hold at least the amount, the loan must be the member's and active, and the amount cannot exceed what is
+         *     outstanding. The request then waits for a maker (OFFICER) and a different checker (CHECKER). The same
+         *     `Idempotency-Key` with the same body returns the stored request.
+         */
+        post: operations["createCoverRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/reserve/cover-requests/{coverRequestId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Maker or checker decision (roles OFFICER, then a different CHECKER)
+         * @description The first decision is the maker's, the second the checker's, by a different person. The second approval
+         *     posts the ledger entry (fund to the loan's receivable) and publishes `CoverApproved`. An approval is refused
+         *     with 409 `reserve-insufficient-funds` when the fund no longer holds the amount.
+         */
+        post: operations["decideCoverRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/fraud/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Flags, newest first, keyset paginated (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["listFraudFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/fraud/flags/{flagId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One flag with its signals and review (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["getFraudFlag"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/fraud/flags/{flagId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear or confirm a flag (roles OFFICER or ADMIN)
+         * @description Writes an entry to the audit log. Confirming needs a note. A flag is reviewed once; new evidence later opens a
+         *     new flag. The same `Idempotency-Key` with the same body returns the stored result.
+         */
+        post: operations["reviewFraudFlag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/fraud/flags/{flagId}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dispute evidence pack - every signal with the facts behind it (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["getFraudFlagEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a savings goal (and its PayPal subscription)
+         * @description Needs an `Idempotency-Key`; the same key returns the same goal (`200`) and one PayPal subscription, a different
+         *     body under it is `409 idempotency-key-reused`. `wallet` PAYPAL (default) saves by monthly subscription and the
+         *     monthly amount must be whole dollars; VENMO has no subscription and the goal is `ACTIVE` at once.
+         *     `payPalSubscriptionId` is legacy: accepted only in the dev, test and demo profiles (the goal is then `ACTIVE`
+         *     with no approval step) and `422 legacy-id-not-allowed` anywhere else.
+         */
+        post: operations["createSavingsGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the member's goals */
+        get: operations["getSavingsGoal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/members/{memberId}/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The member's goals, oldest first (only the signed-in member's own id is allowed) */
+        get: operations["listSavingsGoals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause saving; suspends the PayPal subscription */
+        post: operations["pauseSavingsGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume saving; activates the subscription, or starts a new one to approve when PayPal ended it */
+        post: operations["resumeSavingsGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/amount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the monthly amount; revises the PayPal subscription
+         * @description PayPal may ask the member to agree to the change; the goal then carries an `approvalUrl`.
+         */
+        post: operations["changeSavingsAmount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take money out of a goal through a PayPal payout
+         * @description Reserves the amount (it leaves `currentBalance` at once and cannot be spent twice), asks PayPal to pay it out, and
+         *     answers `202` with status `REQUESTED` while the payout is in flight. A payout PayPal answers at once is `200`.
+         *     The ledger moves when the payout succeeds. On a failed payout the money returns to the goal and the member is
+         *     told; if PayPal takes a delivered payout back, the booking is reversed and the money returns to the goal.
+         *     `wallet` defaults to the member's saved wallet. `payPalPayoutId` is legacy (dev, test and demo only: books
+         *     the withdrawal at once without calling PayPal) and answers the goal.
+         */
+        post: operations["withdrawFromSavingsGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/withdrawals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The goal's withdrawals, newest first */
+        get: operations["listSavingsWithdrawals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/topup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a one-off deposit (PayPal or Venmo); the only way to save from Venmo
+         * @description Moves no money. The member approves the order at `approvalUrl` (the PayPal JS SDK with Venmo enabled) and the
+         *     client then calls the capture route. The goal is credited when PayPal confirms the money, once. The same
+         *     `Idempotency-Key` returns the same order. `payPalCaptureId` is legacy (dev, test and demo only: credits the goal
+         *     at once) and answers the goal.
+         */
+        post: operations["startSavingsTopUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/goals/{goalId}/topup/{orderId}/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture an approved top-up order
+         * @description The goal is credited by the capture event (whichever of this call or PayPal's webhook reports it first), so read the goal again for the new balance.
+         */
+        post: operations["captureSavingsTopUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/applications/{applicationId}/disburse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay an approved application out through PayPal
+         * @description Moves the application to `DISBURSING` and asks PayPal to pay the member (payout reference = the application id;
+         *     a retry after a payout PayPal refused uses a new reference). The loan, Schedule Version 1 and the ledger
+         *     postings are created only when the payout succeeds, exactly as `/internal/loans/disbursed` does, and once. A
+         *     payout PayPal answers at once is completed in this call (`DISBURSED`). Calling again while `DISBURSING` asks
+         *     PayPal for the same payout; calling for a `DISBURSED` application returns it.
+         */
+        post: operations["disburseLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the signed-in member can borrow, and why
+         * @description Member role only. `memberId` is optional and must be the caller's own, otherwise `404`.
+         *     `tierLimitCents` is the ceiling that applies: the larger of the ladder rung's and the credit record level's.
+         *     `recordLevel` and `limitReason` say which and why in plain words; there is no score. A NEW record gives the
+         *     same limit the ladder always gave.
+         */
+        get: operations["getLoanEligibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in member's applications */
+        get: operations["listMyLoanApplications"];
+        put?: never;
+        /**
+         * Apply for a microloan as the signed-in member
+         * @description `memberId` in the body is optional and must be the caller's own, otherwise `404`.
+         */
+        post: operations["submitLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/applications/{applicationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One application
+         * @description A member sees only their own (another member's application is `404`). An officer, checker or admin sees any.
+         */
+        get: operations["getLoanApplication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/applications/{applicationId}/cooling-off-cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return a disbursed loan within 48 hours */
+        post: operations["cancelLoanInCoolingOff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every application (roles OFFICER, CHECKER or ADMIN; the keyset grid is `/api/v1/desk/applications`) */
+        get: operations["listDeskLoanApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/applications/{applicationId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * First or second approval
+         * @description Roles OFFICER, CHECKER or ADMIN. The approver is the actor. The second approval must come from a different
+         *     person (`409 maker-checker-same-officer`).
+         */
+        post: operations["approveLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/applications/{applicationId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject an application (the officer is the actor; `officerId` in a body is ignored) */
+        post: operations["rejectLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/{loanId}/schedule/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every schedule version of any loan, with the diff from the previous one (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["getDeskScheduleVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/loans/{loanId}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Money events of any loan (roles OFFICER, CHECKER or ADMIN) */
+        get: operations["getDeskLoanTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/underwriting/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in member's consent to read income, and what it covers */
+        get: operations["getIncomeConsent"];
+        put?: never;
+        /** Grant income consent (idempotent) */
+        post: operations["grantIncomeConsent"];
+        /** Withdraw income consent. Always allowed */
+        delete: operations["revokeIncomeConsent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/underwriting/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in member's fair checks */
+        get: operations["listMyAssessments"];
+        put?: never;
+        /**
+         * Run the fair loan check for the signed-in member
+         * @description `memberId` in the body is optional and must be the caller's own, otherwise `404`. The check reads income only
+         *     with the member's consent; without it the stated figures are used and the card says so
+         *     (`usedFallbackStatedIncome`).
+         */
+        post: operations["runFairLoanCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/underwriting/assessments/{assessmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One fair check
+         * @description A member sees only their own (another member's is `404`). An officer, checker or admin sees any.
+         */
+        get: operations["getAssessment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/underwriting/assessments/{assessmentId}/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Say a number in the fair check is wrong */
+        post: operations["disputeAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/underwriting/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every fair check (roles OFFICER, CHECKER or ADMIN; the keyset grid is `/api/v1/desk/assessments`) */
+        get: operations["listDeskFairChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/underwriting/assessments/{assessmentId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The officer's decision on a fair check
+         * @description Roles OFFICER, CHECKER or ADMIN. The decider is the actor; `officerId` in the body is ignored.
+         */
+        post: operations["recordOfficerDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/coach/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A savings plan and the loan it would unlock, from stated income and expenses
+         * @description The numbers are computed by code from the stated figures. `messageEn` and `messageEs` are the only model-written
+         *     fields; `modelGenerated` says whether a model or the fixed template wrote them. Writes nothing. Amounts are
+         *     decimal dollars like the rest of the savings routes.
+         */
+        post: operations["suggestSavingsPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Older path of `/api/v1/webhooks/paypal`; same handler and the same answers
+         * @deprecated
+         */
+        post: operations["receivePayPalWebhookLegacyPath"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1561,8 +1650,11 @@ export interface components {
             id?: string;
             /** @enum {string} */
             type?: "RECEIPT" | "REVERSAL" | "OVERPAYMENT_REFUND";
-            /** @enum {string} */
-            source?: "AUTOPAY" | "AUTOPAY_RETRY" | "CHECKOUT" | "PAYMENT_LINK" | "RECONCILER" | "PAYPAL" | "SEED";
+            /**
+             * @description RESERVE: money from the community fund paid the loan, not the member; paypalTxnId is reserve-cover:<coverRequestId>
+             * @enum {string}
+             */
+            source?: "AUTOPAY" | "AUTOPAY_RETRY" | "CHECKOUT" | "PAYMENT_LINK" | "RECONCILER" | "PAYPAL" | "SEED" | "RESERVE";
             paypalTxnId?: string;
             amountCents?: number;
             feeCents?: number;
@@ -1797,6 +1889,1088 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @enum {string} */
+        Language: "en" | "es";
+        /** @enum {string} */
+        WalletPreference: "PAYPAL" | "VENMO";
+        /** @enum {string} */
+        ConsentType: "TERMS" | "PRIVACY" | "INCOME_READ" | "RECORD_SHARING";
+        /** @enum {string} */
+        StaffRole: "OFFICER" | "CHECKER" | "ADMIN";
+        MemberProfile: {
+            /** Format: uuid */
+            memberId: string;
+            email?: string | null;
+            displayName?: string | null;
+            language: components["schemas"]["Language"];
+            walletPreference: components["schemas"]["WalletPreference"];
+            paypalVerified: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastLoginAt: string;
+        };
+        ProfileUpdate: {
+            language?: components["schemas"]["Language"];
+            walletPreference?: components["schemas"]["WalletPreference"];
+            displayName?: string;
+        };
+        ConsentGrant: {
+            type: components["schemas"]["ConsentType"];
+            /** @description Defaults to the current version */
+            version?: string;
+        };
+        ConsentRecord: {
+            /** Format: uuid */
+            consentId: string;
+            type: components["schemas"]["ConsentType"];
+            version: string;
+            active: boolean;
+            /** Format: date-time */
+            grantedAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        StaffRecord: {
+            /** Format: uuid */
+            staffId: string;
+            displayName: string;
+            email?: string | null;
+            roles: components["schemas"]["StaffRole"][];
+            active: boolean;
+        };
+        /** @enum {string} */
+        RecordLevel: "NEW" | "BUILDING" | "STEADY" | "TRUSTED" | "EXEMPLARY";
+        /**
+         * @description The on-time share of saving months and instalments, as a band
+         * @enum {string}
+         */
+        OnTimeBand: "below 70%" | "70-84%" | "85-94%" | "95-100%";
+        /** @enum {string} */
+        ShareDetail: "LEVEL" | "SUMMARY" | "FULL";
+        /** @enum {string} */
+        FactKind: "SAVINGS_DEPOSIT" | "SAVING_MONTHS_CLOSED" | "LOAN_DISBURSED" | "INSTALMENT_PAID" | "INSTALMENT_MISSED" | "LOAN_REPAID" | "LOAN_DEFAULTED" | "HARDSHIP_PLAN_APPLIED";
+        RecordView: {
+            level: components["schemas"]["RecordLevel"];
+            levelRank: number;
+            /**
+             * Format: int64
+             * @description The loan ceiling this level unlocks; lending takes the larger of this and the ladder tier limit
+             */
+            loanLimitCents: number;
+            /** @description The microloan ladder rung this level corresponds to (0 means none) */
+            ladderTier: number;
+            /**
+             * Format: date
+             * @description Date of the first fact
+             */
+            since?: string | null;
+            /** Format: date */
+            levelSince?: string | null;
+            onTimeBps: number;
+            /** @description Null until there is a first fact */
+            onTimeBand?: components["schemas"]["OnTimeBand"] | null;
+            savings: {
+                onTimeMonths: number;
+                missedMonths: number;
+            };
+            loans: {
+                disbursed: number;
+                repaidOnPlan: number;
+                repaidOffPlan: number;
+            };
+            instalments: {
+                onTime: number;
+                /** @description Paid after the grace period */
+                late: number;
+                /** @description Missed and still unpaid */
+                openLate: number;
+            };
+            /** @description Approved hardship plans; counted as on plan, never as a miss */
+            hardshipPlansOnPlan: number;
+            defaults: number;
+            next?: components["schemas"]["NextStep"] | null;
+            /** @example record-v1 */
+            policyVersion: string;
+        };
+        NextStep: {
+            level: components["schemas"]["RecordLevel"];
+            onTimeSavingMonthsToGo: number;
+            loansRepaidOnPlanToGo: number;
+            requiredOnTimeBps: number;
+            onTimeShareTooLow: boolean;
+            latePaymentOpen: boolean;
+        };
+        HistoryItem: {
+            /** Format: int64 */
+            seq: number;
+            kind: components["schemas"]["FactKind"];
+            /** Format: date */
+            occurredOn: string;
+            /** @description For INSTALMENT_PAID only */
+            daysLate?: number;
+        };
+        HistoryPage: {
+            items: components["schemas"]["HistoryItem"][];
+            /**
+             * Format: int64
+             * @description Pass as `before` for the next page; null on the last page
+             */
+            nextBefore?: number | null;
+        };
+        CreateShareRequest: {
+            /** @default 7 */
+            expiresInDays: number;
+            detail?: components["schemas"]["ShareDetail"];
+        };
+        ShareCreated: {
+            /** Format: uuid */
+            shareId: string;
+            /** @description Compact signed token: v1.{keyId}.{payload}.{signature}. Treat as a secret link. */
+            token: string;
+            /** @example /api/v1/records/verify/v1.k1.AAAA.BBBB */
+            verifyPath: string;
+            detail: components["schemas"]["ShareDetail"];
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ShareView: {
+            /** Format: uuid */
+            shareId: string;
+            detail: components["schemas"]["ShareDetail"];
+            /** @enum {string} */
+            status: "ACTIVE" | "EXPIRED" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        /** @description Fields beyond `level` appear only when the member chose a wider `detail`. */
+        VerifiedRecord: {
+            valid: boolean;
+            level: components["schemas"]["RecordLevel"];
+            /**
+             * Format: date
+             * @description First day of the month the record began (SUMMARY and FULL)
+             */
+            since?: string;
+            /** @description SUMMARY and FULL */
+            loansRepaidOnPlan?: number;
+            onTimeBand?: components["schemas"]["OnTimeBand"];
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        DeskRecordView: {
+            /** Format: uuid */
+            memberId: string;
+            record: components["schemas"]["RecordView"];
+            /** @description The last 20 facts */
+            recent: components["schemas"]["HistoryItem"][];
+        };
+        Money: {
+            /** Format: int64 */
+            cents: number;
+            /** @example USD */
+            currency: string;
+        };
+        /** @enum {string} */
+        HomeSectionName: "profile" | "savings" | "lending" | "underwriting" | "creditRecord" | "hardship";
+        /**
+         * @description `no-data`: the module has nothing for this member yet. `unavailable`: the module failed; try again.
+         * @enum {string}
+         */
+        HomeSectionErrorCode: "no-data" | "unavailable";
+        SectionError: {
+            section: components["schemas"]["HomeSectionName"];
+            code: components["schemas"]["HomeSectionErrorCode"];
+        };
+        HomeView: {
+            /**
+             * Format: date
+             * @description The business date the page was built for
+             */
+            generatedOn: string;
+            profile?: components["schemas"]["ProfileSection"] | null;
+            savings?: components["schemas"]["SavingsSection"] | null;
+            lending?: components["schemas"]["LendingSection"] | null;
+            underwriting?: components["schemas"]["UnderwritingSection"] | null;
+            creditRecord?: components["schemas"]["CreditRecordSection"] | null;
+            hardship?: components["schemas"]["HardshipSection"] | null;
+            sectionErrors: components["schemas"]["SectionError"][];
+        };
+        ProfileSection: {
+            displayName?: string | null;
+            /** @enum {string} */
+            language: "en" | "es";
+            /** @enum {string} */
+            walletPreference: "PAYPAL" | "VENMO";
+        };
+        SavingsSection: {
+            currentStreakMonths: number;
+            monthlySaving: components["schemas"]["Money"];
+            totalSaved: components["schemas"]["Money"];
+            missedDepositsInQuarter: number;
+            microloanEligible: boolean;
+            /** @description Omitted while the goal list is not available; an empty list means the member has no goals */
+            goals?: components["schemas"]["GoalCard"][];
+        };
+        GoalCard: {
+            /** Format: uuid */
+            goalId: string;
+            name: string;
+            status: string;
+            target: components["schemas"]["Money"];
+            saved: components["schemas"]["Money"];
+            monthly: components["schemas"]["Money"];
+            /** Format: date */
+            targetDate?: string | null;
+        };
+        LendingSection: {
+            eligibility: components["schemas"]["EligibilityCard"];
+            activeLoan?: components["schemas"]["ActiveLoanCard"] | null;
+            openApplication?: components["schemas"]["OpenApplicationCard"] | null;
+        };
+        EligibilityCard: {
+            eligible: boolean;
+            maxLoan: components["schemas"]["Money"];
+            maxMonthlyInstalment: components["schemas"]["Money"];
+            minTermMonths: number;
+            maxTermMonths: number;
+            /** @description Plain-language reasons computed by lending */
+            reasons: string[];
+        };
+        ActiveLoanCard: {
+            /** Format: uuid */
+            loanId: string;
+            status: string;
+            outstanding: components["schemas"]["Money"];
+            nextPayment?: components["schemas"]["NextPayment"] | null;
+            autopay?: components["schemas"]["AutopayCard"] | null;
+        };
+        NextPayment: {
+            seq: number;
+            /** Format: date */
+            dueDate: string;
+            amount: components["schemas"]["Money"];
+            remaining: components["schemas"]["Money"];
+        };
+        AutopayCard: {
+            /** @description The mandate state as payments reports it */
+            status: string;
+            /** Format: date */
+            nextBillingDate?: string | null;
+        };
+        OpenApplicationCard: {
+            /** Format: uuid */
+            applicationId: string;
+            status: string;
+            requested: components["schemas"]["Money"];
+            termMonths: number;
+            /** Format: date-time */
+            coolingOffExpiresAt?: string | null;
+            /** @description A PayPal reason name when the last payout did not complete; the web maps it to plain words */
+            payoutIssue?: string | null;
+        };
+        UnderwritingSection: {
+            /** @description The member agreed to Seed reading their income for the fair loan check */
+            incomeConsent: boolean;
+            latestAssessment?: components["schemas"]["HomeAssessment"] | null;
+        };
+        /** @description Where the latest fair loan check stands. No score, no tier, no reasons. */
+        HomeAssessment: {
+            /** Format: uuid */
+            assessmentId: string;
+            /** @enum {string} */
+            decision: "PENDING" | "APPROVED" | "ADJUSTED" | "DECLINED";
+            memberDisputed: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreditRecordSection: {
+            /** @enum {string} */
+            level: "NEW" | "BUILDING" | "STEADY" | "TRUSTED" | "EXEMPLARY";
+            /**
+             * Format: date
+             * @description The month the record began; null for a member with no history
+             */
+            since?: string | null;
+            nextStep: components["schemas"]["HomeNextStep"] | null;
+        };
+        /** @description What is missing for the next level, in the member's language. Absent at the top level. */
+        HomeNextStep: {
+            nextLevel: string;
+            onTimeSavingMonthsToGo?: number;
+            loansRepaidOnPlanToGo?: number;
+            /** @description One short */
+            hint: string;
+        };
+        HardshipSection: {
+            /** @description Seed has options ready for the member to look at */
+            offerWaiting: boolean;
+            /** Format: uuid */
+            caseId?: string | null;
+            /** Format: uuid */
+            loanId?: string | null;
+            /** @description Where the case stands; never a risk level */
+            status?: string | null;
+            /**
+             * Format: date
+             * @description The business date of the payment the case is about
+             */
+            dueDate?: string | null;
+            amountAtStake?: components["schemas"]["Money"] | null;
+        };
+        /** @enum {string} */
+        ApplicationStatus: "SUBMITTED" | "PENDING_SECOND_APPROVAL" | "APPROVED" | "DISBURSING" | "DISBURSED" | "REJECTED" | "CANCELLED_COOLING_OFF";
+        /** @enum {string} */
+        AssessmentOutcome: "RECOMMENDED" | "NOT_RECOMMENDED" | "APPROVED" | "ADJUSTED" | "DECLINED";
+        /** @enum {string} */
+        AssessmentStatus: "PENDING" | "APPROVED" | "ADJUSTED" | "DECLINED";
+        /** @enum {string} */
+        LoanStatus: "ACTIVE" | "REPAID" | "COVERED" | "CANCELLED";
+        /** @enum {string} */
+        AgingBucket: "CURRENT" | "DPD_1_7" | "DPD_8_30" | "DPD_31_60" | "DPD_60_PLUS";
+        /** @enum {string} */
+        SlaState: "OVERDUE" | "DUE_SOON" | "ON_TRACK" | "NO_SLA";
+        Total: {
+            /** Format: int64 */
+            value: number;
+            /** @description False once the list is larger than the count cap and `value` is the planner's estimate */
+            exact: boolean;
+        };
+        PageEnvelope: {
+            /** @description Absent on the last page */
+            nextCursor?: string;
+            /** @description First page only */
+            total?: components["schemas"]["Total"];
+            /** Format: date-time */
+            asOf: string;
+        };
+        ApplicationPage: components["schemas"]["PageEnvelope"] & {
+            rows?: components["schemas"]["DeskApplicationRow"][];
+        };
+        AssessmentPage: components["schemas"]["PageEnvelope"] & {
+            rows?: components["schemas"]["DeskAssessmentRow"][];
+        };
+        LoanPage: components["schemas"]["PageEnvelope"] & {
+            rows?: components["schemas"]["DeskLoanRow"][];
+        };
+        DeskApplicationRow: {
+            /** Format: uuid */
+            applicationId: string;
+            /**
+             * Format: uuid
+             * @description Opaque member reference
+             */
+            memberRef: string;
+            status: components["schemas"]["ApplicationStatus"];
+            /** Format: int64 */
+            requestedAmountCents: number;
+            termMonths: number;
+            /** @description Consecutive months with a deposit */
+            savingStreakMonths: number;
+            assessmentOutcome?: components["schemas"]["AssessmentOutcome"];
+            /** Format: date-time */
+            submittedAt: string;
+            /** Format: int64 */
+            ageDays: number;
+            /** Format: date-time */
+            slaDueAt: string;
+            slaState: components["schemas"]["SlaState"];
+            slaBreached: boolean;
+            /** @description Pseudonymous reference of the officer who acted last */
+            assignedOfficerRef?: string;
+        };
+        DeskAssessmentRow: {
+            /** Format: uuid */
+            assessmentId: string;
+            /** Format: uuid */
+            memberRef: string;
+            /** Format: uuid */
+            applicationId?: string;
+            recommended: boolean;
+            /** Format: int64 */
+            recommendedAmountCents: number;
+            status: components["schemas"]["AssessmentStatus"];
+            disputed: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            ageDays: number;
+        };
+        DeskLoanRow: {
+            /** Format: uuid */
+            loanId: string;
+            /** Format: uuid */
+            memberRef: string;
+            status: components["schemas"]["LoanStatus"];
+            /** Format: int64 */
+            principalCents: number;
+            /** Format: int64 */
+            outstandingCents: number;
+            /**
+             * Format: date
+             * @description Absent when nothing is owing
+             */
+            nextDueDate?: string;
+            /** Format: int64 */
+            nextDueCents?: number;
+            daysLate: number;
+            agingBucket: components["schemas"]["AgingBucket"];
+            autopay: boolean;
+            /** @description A hardship case is open on the loan */
+            hardship: boolean;
+            /** Format: date */
+            disbursedOn: string;
+        };
+        PortfolioSummary: {
+            /** Format: date-time */
+            asOf: string;
+            /** Format: int64 */
+            loans: number;
+            /** Format: int64 */
+            outstandingCents: number;
+            byStatus: {
+                status: components["schemas"]["LoanStatus"];
+                /** Format: int64 */
+                loans: number;
+                /** Format: int64 */
+                outstandingCents: number;
+            }[];
+            /** @description Loans still owed, all five buckets in severity order */
+            byAgingBucket: {
+                bucket: components["schemas"]["AgingBucket"];
+                /** Format: int64 */
+                loans: number;
+                /** Format: int64 */
+                outstandingCents: number;
+            }[];
+            onTimeRepayment: {
+                /** Format: int64 */
+                instalmentsDue: number;
+                /**
+                 * Format: int64
+                 * @description Missed instalments are append-only facts; a cured late payment still counts
+                 */
+                instalmentsMissed: number;
+                /** @description Absent while nothing has fallen due */
+                rateBasisPoints?: number;
+            };
+            /** Format: int64 */
+            openHardshipCases: number;
+            hardshipOutcomes: {
+                /** @description Close reason of the case */
+                outcome: string;
+                /** Format: int64 */
+                cases: number;
+            }[];
+            impact: {
+                /**
+                 * Format: int64
+                 * @description Members who saved or borrowed
+                 */
+                membersServed: number;
+                /** Format: int64 */
+                membersWithLoan: number;
+                /**
+                 * Format: int64
+                 * @description Equals membersWithLoan
+                 */
+                membersLoanedWithoutCreditScore: number;
+                /** Format: int64 */
+                loansIssued: number;
+                /** Format: int64 */
+                averageLoanSizeCents: number;
+                /** Format: int64 */
+                firstLoansRepaid: number;
+                /**
+                 * Format: int64
+                 * @description Members whose first loan was repaid with no missed instalment
+                 */
+                firstLoansRepaidOnPlan: number;
+                firstLoanOnPlanRateBasisPoints?: number;
+            };
+        };
+        Workload: {
+            /** Format: date-time */
+            asOf: string;
+            items: {
+                /** @enum {string} */
+                kind: "LOAN_APPLICATION" | "HARDSHIP_DECISION";
+                /** @enum {string} */
+                role: "OFFICER" | "CHECKER";
+                slaBucket: components["schemas"]["SlaState"];
+                /** Format: int64 */
+                waiting: number;
+                /** Format: date-time */
+                earliestSlaDueAt?: string;
+            }[];
+            byRole: {
+                /** @enum {string} */
+                role: "OFFICER" | "CHECKER";
+                /** Format: int64 */
+                waiting: number;
+                /** Format: int64 */
+                overdue: number;
+            }[];
+        };
+        /**
+         * @example {
+         *       "balanceCents": 125000,
+         *       "totalDonatedCents": 175000,
+         *       "donationCount": 31,
+         *       "totalPaidOutCents": 50000,
+         *       "membersCovered": 3,
+         *       "openExposureCents": 900000,
+         *       "coverageRatioBps": 1388,
+         *       "supporters": [
+         *         "Maria",
+         *         "Tom"
+         *       ],
+         *       "asOf": "2026-11-10"
+         *     }
+         */
+        ReserveSummary: {
+            balanceCents: number;
+            totalDonatedCents: number;
+            /** @description Gifts received, one per PayPal capture. A repeat donor counts each time: Seed keeps no donor identity to deduplicate on. */
+            donationCount: number;
+            /** @description Paid to loans on behalf of members */
+            totalPaidOutCents: number;
+            membersCovered: number;
+            /** @description Outstanding balance of all open loans */
+            openExposureCents: number;
+            /** @description balance over exposure in basis points; null without exposure */
+            coverageRatioBps: number | null;
+            /** @description Display names of the latest donors who opted in; never an email or amount */
+            supporters: string[];
+            /** Format: date */
+            asOf: string;
+        };
+        DonationIntentRequest: {
+            /** @default true */
+            anonymous: boolean;
+            /** @description Shown on the public summary only when anonymous is false */
+            displayName?: string;
+        };
+        DonationIntent: {
+            /** Format: uuid */
+            intentId: string;
+            /** @description Pass to PayPal as custom_id */
+            customId: string;
+        };
+        /** @enum {string} */
+        CoverStatus: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "FAILED";
+        /**
+         * @example {
+         *       "memberId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10",
+         *       "loanId": "0197f3a4-2c3d-7e4f-9051-6b7c8d9e0f21",
+         *       "amountCents": 5000,
+         *       "reasonCode": "INCOME_DROP_VERIFIED"
+         *     }
+         */
+        CreateCoverRequest: {
+            /** Format: uuid */
+            memberId: string;
+            /** Format: uuid */
+            loanId: string;
+            amountCents: number;
+            reasonCode: string;
+            /**
+             * Format: uuid
+             * @description The hardship case that needs the bridge
+             */
+            hardshipCaseId?: string;
+            note?: string;
+        };
+        CoverRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            memberId: string;
+            /** Format: uuid */
+            loanId: string;
+            amountCents: number;
+            reasonCode: string;
+            /** Format: uuid */
+            hardshipCaseId?: string | null;
+            status: components["schemas"]["CoverStatus"];
+            /** Format: uuid */
+            approvalRequestId?: string | null;
+            /** Format: date */
+            requestedOn: string;
+            closedReason?: string | null;
+            /** Format: uuid */
+            journalEntryId?: string | null;
+        };
+        CoverRequestPage: {
+            rows: components["schemas"]["CoverRequest"][];
+            /** Format: uuid */
+            nextBefore?: string | null;
+        };
+        CoverDecision: {
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            reasonCode: string;
+            note?: string;
+            evidenceViewedMs: number;
+        };
+        CoverDecisionResult: {
+            /** Format: uuid */
+            requestId: string;
+            /** @enum {string} */
+            requestStatus: "OPEN" | "APPROVED" | "REJECTED" | "VOIDED";
+            /** @enum {string} */
+            role: "MAKER" | "CHECKER";
+            /** @enum {string|null} */
+            next?: "CHECKER" | null;
+            auditSeq?: number;
+            coverStatus: components["schemas"]["CoverStatus"];
+        };
+        /** @enum {string} */
+        FlagStatus: "OPEN" | "REVIEWED_CLEAR" | "CONFIRMED";
+        /** @enum {string} */
+        ReviewDecision: "CLEAR" | "CONFIRM";
+        /** @enum {string} */
+        FraudFactKind: "ACCOUNT_CREATED" | "GOAL_CREATED" | "DEPOSIT" | "WITHDRAWAL" | "APPLICATION_SUBMITTED" | "LOAN_DISBURSED" | "PAYMENT_FAILED" | "PAYER_SEEN" | "PAYOUT_RECIPIENT_CHANGED";
+        /** @enum {string} */
+        SignalCode: "GOAL_VELOCITY" | "APPLICATION_VELOCITY" | "SHARED_PAYER" | "DEPOSIT_CHURN" | "NEW_ACCOUNT_LOAN" | "REPEATED_FAILED_PAYMENTS" | "PAYOUT_RECIPIENT_CHANGE";
+        FlagView: {
+            /** Format: uuid */
+            flagId: string;
+            /** Format: uuid */
+            memberId: string;
+            status: components["schemas"]["FlagStatus"];
+            /** @description Sum over rules of the heaviest signal of that rule */
+            score: number;
+            signalCodes: components["schemas"]["SignalCode"][];
+            /** Format: date-time */
+            raisedAt: string;
+            /** Format: date-time */
+            reviewedAt?: string | null;
+        };
+        FlagPage: {
+            rows: components["schemas"]["FlagView"][];
+            /** Format: uuid */
+            nextBefore?: string | null;
+        };
+        SignalView: {
+            code: components["schemas"]["SignalCode"];
+            weight: number;
+            explanation: string;
+            /** Format: date-time */
+            detectedAt: string;
+            /** @description Counts */
+            evidence: {
+                [key: string]: unknown;
+            };
+        };
+        ReviewView: {
+            decision: components["schemas"]["ReviewDecision"];
+            note?: string | null;
+            /** Format: date-time */
+            reviewedAt: string;
+        };
+        FlagDetail: {
+            flag: components["schemas"]["FlagView"];
+            signals: components["schemas"]["SignalView"][];
+            review?: components["schemas"]["ReviewView"] | null;
+            /** @example fraud-rules-v1 */
+            policyVersion: string;
+            /** @description A flag is raised when the score reaches this value */
+            flagThreshold: number;
+        };
+        FactView: {
+            /** Format: int64 */
+            factId: number;
+            kind: components["schemas"]["FraudFactKind"];
+            /** Format: date-time */
+            occurredAt: string;
+            amountCents?: number | null;
+            /** @description First 8 characters of the salted hash; matches two facts, reveals nothing */
+            referenceTag?: string | null;
+            attributes?: {
+                [key: string]: string;
+            };
+        };
+        SignalEvidence: {
+            signal: components["schemas"]["SignalView"];
+            facts: components["schemas"]["FactView"][];
+        };
+        FlagEvidence: {
+            /** Format: uuid */
+            flagId: string;
+            /** Format: uuid */
+            memberId: string;
+            status: components["schemas"]["FlagStatus"];
+            score: number;
+            policyVersion: string;
+            flagThreshold: number;
+            /** Format: date-time */
+            generatedAt: string;
+            signals: components["schemas"]["SignalEvidence"][];
+            review?: components["schemas"]["ReviewView"] | null;
+        };
+        /**
+         * @example {
+         *       "decision": "CLEAR",
+         *       "note": "Two goals for two children; payer is the household's shared PayPal."
+         *     }
+         */
+        ReviewRequest: {
+            decision: components["schemas"]["ReviewDecision"];
+            /** @description Required when confirming */
+            note?: string;
+        };
+        /** @enum {string} */
+        Wallet: "PAYPAL" | "VENMO";
+        /**
+         * @description PENDING_APPROVAL waits for the member to agree at PayPal; EXPIRED means they never did within the window
+         * @enum {string}
+         */
+        GoalStatus: "PENDING_APPROVAL" | "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED" | "EXPIRED";
+        CreateGoalRequest: {
+            /** @description Ignored for a signed-in member */
+            memberId?: string;
+            name: string;
+            targetAmount: number;
+            /** @description Whole dollars for a PayPal wallet */
+            monthlyAmount: number;
+            /** @default USD */
+            currency: string;
+            /** Format: date */
+            targetDate?: string;
+            wallet?: components["schemas"]["Wallet"];
+            /**
+             * @deprecated
+             * @description Legacy; dev, test and demo only
+             */
+            payPalSubscriptionId?: string;
+        };
+        SavingsGoal: {
+            /** Format: uuid */
+            id: string;
+            memberId: string;
+            name: string;
+            targetAmount: number;
+            monthlyAmount: number;
+            /** @description Money available; money in a withdrawal in flight is in reservedAmount */
+            currentBalance: number;
+            reservedAmount: number;
+            currency: string;
+            status: components["schemas"]["GoalStatus"];
+            /** Format: date */
+            targetDate?: string | null;
+            wallet: components["schemas"]["Wallet"];
+            payPalSubscriptionId?: string | null;
+            /**
+             * Format: uri
+             * @description Where the member agrees at PayPal; set while PENDING_APPROVAL, and after an amount change PayPal wants agreed
+             */
+            approvalUrl?: string | null;
+            /** Format: date-time */
+            approvalExpiresAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ChangeAmountRequest: {
+            monthlyAmount: number;
+            /** @default USD */
+            currency: string;
+        };
+        WithdrawRequest: {
+            amount: number;
+            /** @default USD */
+            currency: string;
+            wallet?: components["schemas"]["Wallet"];
+            /**
+             * @deprecated
+             * @description Legacy; dev, test and demo only
+             */
+            payPalPayoutId?: string;
+        };
+        Withdrawal: {
+            /**
+             * Format: uuid
+             * @description Also the payout reference at PayPal
+             */
+            id: string;
+            /** Format: uuid */
+            goalId: string;
+            /** @enum {string} */
+            status: "REQUESTED" | "SUCCEEDED" | "FAILED" | "RETURNED";
+            amount: number;
+            currency: string;
+            wallet: components["schemas"]["Wallet"];
+            /** @description PayPal's reason name */
+            failureReason?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TopUpRequest: {
+            amount: number;
+            /** @default USD */
+            currency: string;
+            /**
+             * @deprecated
+             * @description Legacy; dev, test and demo only
+             */
+            payPalCaptureId?: string;
+        };
+        TopUpOrder: {
+            /** Format: uuid */
+            goalId: string;
+            orderId: string;
+            status: string;
+            /** Format: uri */
+            approvalUrl?: string | null;
+            amount: number;
+            currency: string;
+        };
+        TopUpCapture: {
+            /** Format: uuid */
+            goalId: string;
+            orderId: string;
+            status: string;
+            amount: number;
+            currency: string;
+        };
+        SubmitLoanApplicationRequest: {
+            /**
+             * Format: uuid
+             * @description Ignored for a signed-in member; any other member's id is a 404
+             */
+            memberId?: string;
+            purpose: string;
+            /** Format: int64 */
+            requestedAmountCents: number;
+            termMonths: number;
+            preferredDueDay?: number;
+            payoutWallet?: components["schemas"]["Wallet"];
+            /** @description The member agreed to the fair loan check for this application */
+            fairCheckConsented: boolean;
+            /** Format: int64 */
+            verifiedMonthlyIncomeCents?: number;
+        };
+        RejectApplicationRequest: {
+            reason?: string;
+        };
+        LoanApplication: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            memberId: string;
+            purpose: string;
+            /** Format: int64 */
+            requestedAmountCents: number;
+            termMonths: number;
+            preferredDueDay?: number;
+            payoutWallet?: components["schemas"]["Wallet"];
+            fairCheckConsented?: boolean;
+            unlockedTier?: string;
+            /** Format: int64 */
+            maxMonthlyInstalmentCents?: number;
+            /** Format: int64 */
+            monthlyInstalmentCents?: number;
+            status: components["schemas"]["ApplicationStatus"];
+            /** Format: uuid */
+            firstApproverId?: string | null;
+            /** Format: uuid */
+            secondApproverId?: string | null;
+            rejectionReason?: string | null;
+            /** Format: uuid */
+            loanId?: string | null;
+            disbursementRef?: string | null;
+            /** Format: date-time */
+            coolingOffExpiresAt?: string | null;
+            sizingReasons?: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the last payout did not complete the disbursement (a PayPal reason name such as RECEIVER_UNREGISTERED); an officer reads it on an APPROVED application */
+            payoutIssue?: string | null;
+        };
+        Eligibility: {
+            /** Format: uuid */
+            memberId: string;
+            eligible: boolean;
+            tier: string;
+            tierLevel: number;
+            /**
+             * Format: int64
+             * @description The ceiling that applies
+             */
+            tierLimitCents: number;
+            /** Format: int64 */
+            maxLoanCents: number;
+            /** Format: int64 */
+            maxMonthlyInstalmentCents: number;
+            minTermMonths: number;
+            maxTermMonths: number;
+            currentSavingStreakMonths?: number;
+            /** Format: int64 */
+            monthlySavingCents?: number;
+            hasActiveLoan: boolean;
+            completedLoansOnTime: number;
+            reasons: string[];
+            recordLevel: components["schemas"]["RecordLevel"];
+            /** @description Which limit applied and why */
+            limitReason: string;
+        };
+        ConsentStatus: {
+            /** Format: uuid */
+            memberId: string;
+            consented: boolean;
+            /** Format: date-time */
+            updatedAt?: string | null;
+            /** @description What the check reads */
+            usedData: string[];
+            /** @description What the check never reads */
+            neverUsedData: string[];
+        };
+        IncomeMonth: {
+            /** @example 2026-10 */
+            yearMonth: string;
+            /** Format: int64 */
+            amountCents: number;
+        };
+        RunAssessmentRequest: {
+            /**
+             * Format: uuid
+             * @description Ignored for a signed-in member; any other member's id is a 404
+             */
+            memberId?: string;
+            /** Format: uuid */
+            applicationId?: string;
+            purpose: string;
+            /** Format: int64 */
+            requestedAmountCents: number;
+            requestedTermMonths: number;
+            /** @description Member-entered months */
+            monthlyIncomes?: components["schemas"]["IncomeMonth"][];
+            /** Format: int64 */
+            statedMonthlyIncomeCents?: number;
+            /** Format: int64 */
+            statedMonthlyExpensesCents?: number;
+            completedLoansOnTime?: number;
+            hasActiveLoan?: boolean;
+        };
+        /** @enum {string} */
+        OfficerDecisionType: "PENDING" | "APPROVED" | "ADJUSTED" | "DECLINED";
+        /**
+         * @description The fair loan check as the member and the officer read it. Every figure is computed by the engine; the
+         *     sentences in `plainLanguageReasons` and `officerQuestions` come from fixed templates over those figures.
+         *     There is no credit score on the card.
+         */
+        FairCheckCard: {
+            /** Format: uuid */
+            assessmentId: string;
+            /** Format: uuid */
+            memberId: string;
+            /** Format: uuid */
+            applicationId?: string | null;
+            purpose: string;
+            recommended: boolean;
+            unlockedTier?: string;
+            /** @description True when no consented income was available and the stated figures were used */
+            usedFallbackStatedIncome?: boolean;
+            /** Format: int64 */
+            averageMonthlyIncomeCents?: number;
+            /** Format: int64 */
+            lowestMonthlyIncomeCents?: number;
+            lowestIncomeMonth?: string | null;
+            /** Format: double */
+            coefficientOfVariation?: number;
+            highIncomeVolatility?: boolean;
+            /** Format: int64 */
+            provenMonthlySavingCents?: number;
+            monthsSaved?: number;
+            targetMonthsWindow?: number;
+            /** Format: int64 */
+            instalmentCapCents?: number;
+            /** Format: int64 */
+            requestedAmountCents: number;
+            requestedTermMonths: number;
+            /** Format: int64 */
+            suggestedLoanCents: number;
+            suggestedTermMonths: number;
+            /** Format: int64 */
+            suggestedMonthlyInstalmentCents: number;
+            inputsHash?: string;
+            modelVersion?: string;
+            plainLanguageReasons: string[];
+            officerQuestions?: string[];
+            usedData: string[];
+            neverUsedData: string[];
+            memberDisputed: boolean;
+            memberDisputeNote?: string | null;
+            officerDecision: components["schemas"]["OfficerDecisionType"];
+            /** Format: uuid */
+            officerId?: string | null;
+            /** Format: int64 */
+            decidedLoanCents?: number;
+            decidedTermMonths?: number;
+            officerReason?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            decidedAt?: string | null;
+        };
+        DisputeAssessmentRequest: {
+            note: string;
+        };
+        OfficerDecisionRequest: {
+            decision: components["schemas"]["OfficerDecisionType"];
+            /**
+             * Format: int64
+             * @description Needed for ADJUSTED
+             */
+            adjustedLoanCents?: number;
+            adjustedTermMonths?: number;
+            reason: string;
+        };
+        CoachSuggestionRequest: {
+            memberId?: string;
+            goalName?: string;
+            /** @description Decimal dollars */
+            targetAmount?: number;
+            statedMonthlyIncome?: number;
+            statedMonthlyExpenses?: number;
+            /** @default USD */
+            currency: string;
+        };
+        CoachSuggestion: {
+            memberId?: string;
+            goalName: string;
+            currency: string;
+            targetAmount: number;
+            statedMonthlyIncome?: number;
+            statedMonthlyExpenses?: number;
+            disposableMonthlyIncome?: number;
+            suggestedMonthlySaving: number;
+            streakMonthsToUnlock: number;
+            totalSavedAfterStreak?: number;
+            unlockedTier: string;
+            unlockedLoanAmount?: number;
+            maxMonthlyInstalment?: number;
+            suggestedLoanTermMonths: number;
+            suggestedMonthlyInstalment?: number;
+            /** @description AI-written when modelGenerated, otherwise a fixed template */
+            messageEn: string;
+            messageEs: string;
+            modelGenerated: boolean;
+        };
     };
     responses: {
         /** @description RFC 9457 problem */
@@ -1813,10 +2987,2900 @@ export interface components {
         LoanId: string;
         CaseId: string;
         IdempotencyKey: string;
+        /** @description `nextCursor` of the previous page; valid only for the same list, sort and filters */
+        Cursor: string;
+        Limit: number;
+        FlagId: string;
+        GoalId: string;
+        ApplicationId: string;
+        AssessmentId: string;
     };
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    listMyLoans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Loans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanSummary"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getLoanSchedule: {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedule */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleView"];
+                };
+            };
+            /** @description Not modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listScheduleVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionView"][];
+                };
+            };
+        };
+    };
+    getLoanTimeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Timeline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineView"];
+                };
+            };
+        };
+    };
+    listLoanTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionView"][];
+                };
+            };
+        };
+    };
+    getPayoffQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quote */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        loanId: string;
+                        outstandingCents: number;
+                        /** Format: date */
+                        validOn: string;
+                    };
+                };
+            };
+        };
+    };
+    previewPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    amountCents: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Projected schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    previewReschedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RescheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Current and proposed schedules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReschedulePreview"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    createLoanPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Whole dollars only */
+                    amountCents: number;
+                    /** @enum {string} */
+                    purpose: "CATCH_UP" | "EARLY" | "PAYOFF" | "PAY_WHAT_YOU_CAN";
+                };
+            };
+        };
+        responses: {
+            /** @description Order */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutOrder"];
+                };
+            };
+            /** @description idempotency-key-reused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description amount-not-whole-dollars | amount-exceeds-outstanding | amount-too-small | loan-not-active */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (retry with the same Idempotency-Key) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    captureLoanPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Captured */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapturedOrder"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    refundOverpayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    amountCents: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Refunded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        paypalRefundIds?: string[];
+                        amountCents?: number;
+                    };
+                };
+            };
+            /** @description no-overpayment | refund-exceeds-overpayment */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startAutopay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    returnUrl: string;
+                    cancelUrl: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Mandate with approve URL */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MandateView"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    stopAutopay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirmAutopay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    subscriptionId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Mandate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MandateView"];
+                };
+            };
+        };
+    };
+    getDueDaySuggestion: {
+        parameters: {
+            query?: {
+                statedPayday?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dueDay?: number;
+                        /** @enum {string} */
+                        basis?: "INCOME_PATTERN" | "STATED_PAYDAY" | "DEFAULT";
+                        reason?: string;
+                    };
+                };
+            };
+        };
+    };
+    getDeskLoanSchedule: {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    getLoanIntegrity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integrity report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        loanId?: string;
+                        outstandingCents?: number;
+                        ledgerReceivableCents?: number;
+                        overpaidCents?: number;
+                        memberOverpaidCents?: number;
+                        ledgerMemberOverpaymentCents?: number;
+                        consistent?: boolean;
+                    };
+                };
+            };
+        };
+    };
+    listCobRuns: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Close-of-business runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CobRun"][];
+                };
+            };
+        };
+    };
+    receivePayPalWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description accepted | duplicate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "accepted" | "duplicate";
+                    };
+                };
+            };
+            /** @description invalid-webhook (signature failed; never stored) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    receiveZapierSms: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Seed-Timestamp": string;
+                "X-Seed-Signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    from?: string;
+                    text?: string;
+                    /** @description Zapier message id; replays with the same id are ignored */
+                    messageId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Keyword handled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        keyword?: "STOP" | "START" | "PAY" | "HELP" | "YES" | "A" | "B" | "C" | "D" | "NO" | "UNKNOWN";
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getHardshipOffer: {
+        parameters: {
+            query?: {
+                lang?: "en" | "es";
+            };
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case and offer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardshipView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    openHardshipCase: {
+        parameters: {
+            query?: {
+                lang?: "en" | "es";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "loanId": "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01",
+                 *       "reasonText": "Sales dropped this month."
+                 *     }
+                 */
+                "application/json": {
+                    /** Format: uuid */
+                    loanId: string;
+                    reasonText?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Case and offer */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardshipView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description hardship-not-eligible (loan not active, in the 60-plus bucket, or a case is already open) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    chooseHardshipOption: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                caseId: components["parameters"]["CaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    offerId: string;
+                    /** Format: uuid */
+                    optionId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Choice recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "caseId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01",
+                     *       "status": "PENDING_APPROVAL",
+                     *       "optionLabel": "B",
+                     *       "tier": "MAKER_CHECKER",
+                     *       "decisionDueAt": "2027-03-12T17:42:00Z",
+                     *       "holdUntil": null,
+                     *       "payNowCents": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["HardshipChoice"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description hardship-offer-stale | hardship-case-closed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description hardship-policy-violation | hardship-unknown-option */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    declineHardshipOffer: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                caseId: components["parameters"]["CaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        caseId?: string;
+                        /** @enum {string} */
+                        status?: "DECLINED_BY_MEMBER";
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listHardshipCases: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["HardshipCaseStatus"][];
+                level?: ("NONE" | "WATCH" | "LIKELY_MISS" | "IMMINENT")[];
+                origin?: ("PROACTIVE_SCAN" | "MEMBER_HELP" | "STAFF")[];
+                /** @description Keyset cursor (`nextBefore` of the previous page) */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: components["schemas"]["HardshipQueueRow"][];
+                        /** Format: uuid */
+                        nextBefore?: string | null;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHardshipCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: components["parameters"]["CaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardshipCaseDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    decideHardshipCase: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                caseId: components["parameters"]["CaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "decision": "APPROVE",
+                 *       "reasonCode": "INCOME_DROP_VERIFIED",
+                 *       "note": "Signals match the member's own message.",
+                 *       "evidenceViewedMs": 41200
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "APPROVE" | "REJECT";
+                    reasonCode: string;
+                    note?: string;
+                    /** @description Time the evidence panel was open; feeds the rubber-stamp detector */
+                    evidenceViewedMs: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Decision recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "requestId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10",
+                     *       "requestStatus": "OPEN",
+                     *       "role": "MAKER",
+                     *       "next": "CHECKER",
+                     *       "auditSeq": 18423
+                     *     }
+                     */
+                    "application/json": {
+                        /** Format: uuid */
+                        requestId?: string;
+                        /** @enum {string} */
+                        requestStatus?: "OPEN" | "APPROVED" | "REJECTED" | "VOIDED";
+                        /** @enum {string} */
+                        role?: "MAKER" | "CHECKER";
+                        /** @enum {string|null} */
+                        next?: "CHECKER" | null;
+                        auditSeq?: number;
+                    };
+                };
+            };
+            /** @description sod-violation (the checker is the maker or the member) or missing role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description approval-stale | hardship-not-awaiting-decision */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description reason-code-required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryHardshipExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: components["parameters"]["CaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Execution retried */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getKillSwitch: {
+        parameters: {
+            query?: {
+                agent?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description State */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitchState"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    setKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "scope": "GLOBAL",
+                 *       "mode": "TEMPLATES_ONLY",
+                 *       "reason": "Grounding failures spiked after a model change"
+                 *     }
+                 */
+                "application/json": {
+                    /**
+                     * @example GLOBAL
+                     * @example guardian
+                     */
+                    scope: string;
+                    /** @enum {string} */
+                    mode: "LIVE" | "SHADOW" | "TEMPLATES_ONLY";
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description New state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitchState"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberProfile"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listMyConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consent ledger */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentRecord"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    grantConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentGrant"];
+            };
+        };
+        responses: {
+            /** @description Already active at this version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentRecord"];
+                };
+            };
+            /** @description The consent was recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentRecord"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    revokeConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: components["schemas"]["ConsentType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No active consent of this type remains */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listStaff: {
+        parameters: {
+            query?: {
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffRecord"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMyRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordView"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMyRecordHistory: {
+        parameters: {
+            query?: {
+                /** @description The nextBefore of the previous page */
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listRecordShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareView"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createRecordShare: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "expiresInDays": 14,
+                 *       "detail": "SUMMARY"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Share created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareCreated"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description idempotency-key-reused | record-nothing-to-share | share-limit-reached */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (no signing key is configured) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeRecordShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description share-not-found (no such share */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified */
+            200: {
+                headers: {
+                    /** @description public, max-age=5 */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifiedRecord"];
+                };
+            };
+            /** @description record-not-found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (no signing key is configured) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMemberRecordForDesk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeskRecordView"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMyHome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The home summary, possibly with some sections missing */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeView"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listDeskApplications: {
+        parameters: {
+            query?: {
+                /** @description Allowed columns: submittedAt, slaDueAt, requestedAmountCents, termMonths, savingStreakMonths, status, assessmentOutcome, assignedOfficer */
+                sort?: string;
+                status?: components["schemas"]["ApplicationStatus"][];
+                slaBreached?: boolean;
+                assessmentOutcome?: components["schemas"]["AssessmentOutcome"][];
+                /** @description `nextCursor` of the previous page; valid only for the same list, sort and filters */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listDeskAssessments: {
+        parameters: {
+            query?: {
+                /** @description Allowed columns: createdAt, recommendedAmountCents, status */
+                sort?: string;
+                status?: components["schemas"]["AssessmentStatus"][];
+                disputed?: boolean;
+                recommended?: boolean;
+                /** @description `nextCursor` of the previous page; valid only for the same list, sort and filters */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listDeskPortfolioLoans: {
+        parameters: {
+            query?: {
+                /** @description Allowed columns: disbursedOn, principalCents, outstandingCents, nextDueDate, daysLate, agingBucket, status */
+                sort?: string;
+                status?: components["schemas"]["LoanStatus"][];
+                agingBucket?: components["schemas"]["AgingBucket"][];
+                autopay?: boolean;
+                hardship?: boolean;
+                /** @description `nextCursor` of the previous page; valid only for the same list, sort and filters */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDeskPortfolioSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioSummary"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    getDeskWorkload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workload */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workload"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    getReserveSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    /** @description public, max-age=30 */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReserveSummary"];
+                };
+            };
+        };
+    };
+    createDonationIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "anonymous": false,
+                 *       "displayName": "Maria"
+                 *     }
+                 */
+                "application/json": components["schemas"]["DonationIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description Intent */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DonationIntent"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            /** @description idempotency-key-reused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCoverRequests: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["CoverStatus"][];
+                /** @description The nextBefore of the previous page */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverRequestPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    createCoverRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCoverRequest"];
+            };
+        };
+        responses: {
+            /** @description Created, waiting for approval */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverRequest"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description cover-loan-not-found (no such loan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description idempotency-key-reused | reserve-insufficient-funds | cover-request-open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description cover-amount-exceeds-request-cap | cover-member-cap-exceeded | cover-loan-not-active | cover-exceeds-outstanding */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decideCoverRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                coverRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverDecision"];
+            };
+        };
+        responses: {
+            /** @description Decision recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverDecisionResult"];
+                };
+            };
+            /** @description sod-violation (the checker is the maker) or missing role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description cover-request-not-found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description cover-not-awaiting-decision | reserve-insufficient-funds | approval-request-closed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description reason-code-required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFraudFlags: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["FlagStatus"][];
+                /** @description The nextBefore of the previous page */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getFraudFlag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flagId: components["parameters"]["FlagId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reviewFraudFlag: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                flagId: components["parameters"]["FlagId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Reviewed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description fraud-flag-already-reviewed | idempotency-key-reused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description fraud-note-required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFraudFlagEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flagId: components["parameters"]["FlagId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evidence */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagEvidence"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createSavingsGoal: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Replay of the same Idempotency-Key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            /** @description Created; for a PayPal wallet `status` is PENDING_APPROVAL and `approvalUrl` is where the member agrees */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            /** @description idempotency-key-reused, or the limit of three open goals */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description idempotency-key-required, amount-not-whole-dollars, legacy-id-not-allowed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (PayPal unreachable; nothing was created, retry with the same Idempotency-Key) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSavingsGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The goal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listSavingsGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    pauseSavingsGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The paused goal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description The goal cannot be paused in its state (not yet approved, cancelled, expired) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeSavingsGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The goal; PENDING_APPROVAL with a new `approvalUrl` when the old subscription was cancelled at PayPal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description The goal cannot be resumed in its state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    changeSavingsAmount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeAmountRequest"];
+            };
+        };
+        responses: {
+            /** @description The goal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsGoal"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description The goal is pending approval, cancelled or expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description amount-not-whole-dollars */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    withdrawFromSavingsGoal: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawRequest"];
+            };
+        };
+        responses: {
+            /** @description Replay, or a payout PayPal finished at once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Withdrawal"];
+                };
+            };
+            /** @description Reserved and sent to PayPal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Withdrawal"];
+                };
+            };
+            /** @description Insufficient available balance */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            /** @description idempotency-key-reused, or payout-recipient-missing (no PayPal account on file) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description idempotency-key-required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (nothing was reserved; retry with the same Idempotency-Key) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSavingsWithdrawals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Withdrawal"][];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    startSavingsTopUp: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                goalId: components["parameters"]["GoalId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopUpRequest"];
+            };
+        };
+        responses: {
+            /** @description The order to approve */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopUpOrder"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            /** @description topup-not-allowed (the goal is pending approval, cancelled or expired) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description idempotency-key-required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    captureSavingsTopUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: components["parameters"]["GoalId"];
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capture asked of PayPal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopUpCapture"];
+                };
+            };
+            /** @description Not the member's goal, or no such top-up */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    disburseLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The application (DISBURSING, DISBURSED, or APPROVED again with `payoutIssue` when PayPal refused at once) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description application-invalid-state (not approved by two officers), or payout-recipient-missing (the member has no PayPal account on file) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (the application stays APPROVED; call again) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLoanEligibility: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+                verifiedMonthlyIncomeCents?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligibility */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Eligibility"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMyLoanApplications: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    submitLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitLoanApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            /** @description dependency-unavailable (Transaction Search could not be read in time; nothing was stored) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The application */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    cancelLoanInCoolingOff: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description application-invalid-state (including while the money is on its way: status DISBURSING), or cooling-off-expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDeskLoanApplications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    approveLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The application */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    rejectLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RejectApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description The application */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getDeskScheduleVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionView"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getDeskLoanTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loanId: components["parameters"]["LoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionView"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getIncomeConsent: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    grantIncomeConsent: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    revokeIncomeConsent: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMyAssessments: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fair checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    runFairLoanCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunAssessmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The fair check card */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssessment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessmentId: components["parameters"]["AssessmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fair check card */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    disputeAssessment: {
+        parameters: {
+            query?: {
+                /** @deprecated */
+                memberId?: string;
+            };
+            header?: never;
+            path: {
+                assessmentId: components["parameters"]["AssessmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisputeAssessmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The fair check card */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listDeskFairChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fair checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    recordOfficerDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessmentId: components["parameters"]["AssessmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfficerDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description The fair check card */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FairCheckCard"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    suggestSavingsPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoachSuggestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoachSuggestion"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    receivePayPalWebhookLegacyPath: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description accepted | duplicate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "accepted" | "duplicate";
+                    };
+                };
+            };
+            /** @description invalid-webhook (signature failed; never stored) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+}

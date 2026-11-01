@@ -4,9 +4,11 @@ springModulith = "1.2.4"
 jooq = "3.19.11"
 jqwik = "1.8.5"
 archunit = "1.3.0"
+nimbusJose = "9.40"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "springBoot" }
 spring-modulith-starter = { module = "org.springframework.modulith:spring-modulith-starter-core", version.ref = "springModulith" }
 jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 archunit = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbusJose" }

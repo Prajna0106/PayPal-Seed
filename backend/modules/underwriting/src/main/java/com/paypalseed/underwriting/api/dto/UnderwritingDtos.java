@@ -41,6 +41,13 @@ public final class UnderwritingDtos {
     ) {
     }
 
+    /**
+     * Where the member's latest fair check stands, in words a member may see: no score, no tier and no reasons.
+     * {@code decision} is {@code PENDING}, {@code APPROVED}, {@code ADJUSTED} or {@code DECLINED}.
+     */
+    public record AssessmentStatusView(UUID assessmentId, String decision, boolean memberDisputed, Instant createdAt) {
+    }
+
     public record FairCheckCardView(
         UUID assessmentId,
         UUID memberId,

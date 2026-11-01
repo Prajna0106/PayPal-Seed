@@ -122,10 +122,10 @@ public class LoanRecalculator {
                     continue; // F5 grace hold: a human is still deciding; days past due and the bucket still move
                 }
                 Instalment inst = schedule.instalment(seq);
-                if (projections.recordMissed(loan.id(), schedule.version(), seq, inst.dueDate(), asOf,
-                        missAttribution(loanHolds, schedule.version(), seq))) {
+                String attribution = missAttribution(loanHolds, schedule.version(), seq);
+                if (projections.recordMissed(loan.id(), schedule.version(), seq, inst.dueDate(), asOf, attribution)) {
                     events.publishEvent(new LendingEvents.InstalmentMissed(Ids.newId(), loan.id(), loan.memberId(), asOf,
-                            schedule.version(), seq, inst.dueDate()));
+                            schedule.version(), seq, inst.dueDate(), attribution));
                 }
             }
         }

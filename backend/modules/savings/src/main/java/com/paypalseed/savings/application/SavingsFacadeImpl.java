@@ -2,6 +2,7 @@ package com.paypalseed.savings.application;
 
 import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.savings.api.SavingsFacade;
+import com.paypalseed.savings.api.dto.MemberGoalView;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
 import com.paypalseed.savings.application.ports.SavingsGoalRepository;
 import com.paypalseed.savings.application.usecases.PauseResumeGoalUseCase;
@@ -11,6 +12,7 @@ import com.paypalseed.savings.domain.model.SavingsGoal;
 import com.paypalseed.savings.domain.model.SavingsStreak;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -79,5 +81,15 @@ public class SavingsFacadeImpl implements SavingsFacade {
             totalSavedBalanceCents,
             eligible
         );
+    }
+
+    @Override
+    public List<MemberGoalView> goalsOfMember(String memberId) {
+        return repository.findByMemberId(memberId).stream()
+            .sorted(Comparator.comparing(SavingsGoal::getCreatedAt).reversed())
+            .map(g -> new MemberGoalView(g.getId(), g.getName(), g.getStatus().name(), g.getTargetAmount().cents(),
+                g.getCurrentBalance().cents(), g.getMonthlyAmount().cents(), g.getMonthlyAmount().currency(),
+                g.getTargetDate()))
+            .toList();
     }
 }

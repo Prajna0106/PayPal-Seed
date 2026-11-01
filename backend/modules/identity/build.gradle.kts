@@ -1,6 +1,7 @@
-// Module: identity (member, staff, consent (grant/revoke), wallet preference, language)
+// Module: identity (members keyed by PayPal payer id, staff, consent ledger, language, wallet preference)
 plugins {
     `java-library`
+    id("jooq-module")
 }
 
 dependencies {

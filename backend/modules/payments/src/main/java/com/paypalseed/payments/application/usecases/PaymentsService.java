@@ -15,10 +15,17 @@ import com.paypalseed.payments.api.PaymentsFacade;
 import com.paypalseed.payments.api.dto.PaymentsDtos.CapturedOrder;
 import com.paypalseed.payments.api.dto.PaymentsDtos.CheckoutOrder;
 import com.paypalseed.payments.api.dto.PaymentsDtos.CreateOrder;
+import com.paypalseed.payments.api.dto.PaymentsDtos.IncomeCredit;
 import com.paypalseed.payments.api.dto.PaymentsDtos.MandateView;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionView;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsTopUp;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
 import com.paypalseed.payments.api.dto.PaymentsDtos.StartMandate;
+import com.paypalseed.payments.api.dto.PaymentsDtos.StartSavingsSubscription;
 import com.paypalseed.payments.api.events.PaymentEvents;
 import com.paypalseed.payments.api.events.PaymentEvents.Source;
 import com.paypalseed.payments.application.ports.PayPalException;
@@ -65,9 +72,14 @@ class PaymentsService implements PaymentsFacade {
     private final MoneyFacts facts;
     private final BusinessClock clock;
     private final ApplicationEventPublisher events;
+    private final PaypalCatalogService catalog;
+    private final SavingsCollectionService savings;
+    private final PayoutService payoutService;
+    private final IncomeService income;
 
     PaymentsService(PayPalGateway paypal, PayPalCommandExecutor executor, MandateRepository mandates, MoneyRegistry registry,
-                    MoneyFacts facts, BusinessClock clock, ApplicationEventPublisher events) {
+                    MoneyFacts facts, BusinessClock clock, ApplicationEventPublisher events, PaypalCatalogService catalog,
+                    SavingsCollectionService savings, PayoutService payoutService, IncomeService income) {
         this.paypal = paypal;
         this.executor = executor;
         this.mandates = mandates;
@@ -75,6 +87,10 @@ class PaymentsService implements PaymentsFacade {
         this.facts = facts;
         this.clock = clock;
         this.events = events;
+        this.catalog = catalog;
+        this.savings = savings;
+        this.payoutService = payoutService;
+        this.income = income;
     }
 
     @Override
@@ -206,7 +222,7 @@ class PaymentsService implements PaymentsFacade {
                 "loan:" + c.loanId() + ":" + c.purpose(), "SEED-PAY-" + Integer.toHexString(c.idempotencyKey().hashCode())
                         + "-" + c.loanId().toString().substring(0, 8), "Seed loan payment");
         Order order = executor.run("CREATE_ORDER", c.loanId(), "order:" + c.loanId() + ":" + c.idempotencyKey(),
-                Map.of("amountCents", c.amountCents(), "purpose", c.purpose()), Order.class,
+                new Fingerprints.Order(c.amountCents(), c.purpose()), Order.class,
                 rid -> paypal.createOrder(request, rid));
         registry.recordOrder(order.id(), c.loanId(), c.purpose().name(), c.amountCents(), order.status());
         return new CheckoutOrder(order.id(), order.status(), order.approveUrl(), c.amountCents());
@@ -311,7 +327,7 @@ class PaymentsService implements PaymentsFacade {
             }
             long take = Math.min(remaining, captured.refundableCents());
             String key = "refund:" + c.loanId() + ":" + c.idempotencyKey() + ":" + part++;
-            Refund refund = executor.run("REFUND", c.loanId(), key, Map.of("parent", captured.paypalTxnId(), "amountCents", take),
+            Refund refund = executor.run("REFUND", c.loanId(), key, new Fingerprints.Refund(captured.paypalTxnId(), take),
                     Refund.class, rid -> "SALE".equals(captured.kind())
                             ? paypal.refundSale(captured.paypalTxnId(), take, rid)
                             : paypal.refundCapture(captured.paypalTxnId(), take, "SEED-RF-" + Math.abs(key.hashCode()), rid));
@@ -324,6 +340,77 @@ class PaymentsService implements PaymentsFacade {
             remaining -= take;
         }
         return new RefundResult(ids, c.amountCents());
+    }
+
+    @Override
+    @Transactional
+    public PaypalCatalog ensureSavingsPlan() {
+        return catalog.ensure().catalog();
+    }
+
+    @Override
+    @Transactional
+    public SavingsSubscriptionView createSavingsSubscription(StartSavingsSubscription command) {
+        return savings.createSubscription(command);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SavingsSubscriptionView> savingsSubscriptionOf(UUID goalId) {
+        return savings.subscriptionOf(goalId);
+    }
+
+    @Override
+    @Transactional
+    public void suspendSavingsSubscription(UUID goalId, String requestId, String reason) {
+        savings.suspend(goalId, requestId, reason);
+    }
+
+    @Override
+    @Transactional
+    public void activateSavingsSubscription(UUID goalId, String requestId, String reason) {
+        savings.activate(goalId, requestId, reason);
+    }
+
+    @Override
+    @Transactional
+    public Optional<String> reviseSavingsSubscription(UUID goalId, long monthlyCents, String requestId) {
+        return savings.revise(goalId, monthlyCents, requestId);
+    }
+
+    @Override
+    @Transactional
+    public void cancelSavingsSubscription(UUID goalId, String requestId, String reason) {
+        savings.cancel(goalId, requestId, reason);
+    }
+
+    @Override
+    @Transactional
+    public CheckoutOrder createSavingsTopUp(SavingsTopUp command) {
+        return savings.createTopUp(command);
+    }
+
+    @Override
+    @Transactional
+    public CapturedOrder captureSavingsTopUp(UUID goalId, String orderId) {
+        return savings.captureTopUp(goalId, orderId);
+    }
+
+    @Override
+    @Transactional
+    public PayoutView sendPayout(SendPayout command) {
+        return payoutService.send(command);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PayoutView> payoutOf(String referenceId) {
+        return payoutService.find(referenceId);
+    }
+
+    @Override
+    public List<IncomeCredit> incomeTransactions(String accountReference, LocalDate from, LocalDate to) {
+        return income.incomeTransactions(accountReference, from, to);
     }
 
     private static MandateView view(Mandate m) {
