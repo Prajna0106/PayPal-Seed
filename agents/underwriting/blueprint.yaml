@@ -1,5 +1,14 @@
 name: underwriting-agent
-model: gemini-1.5-pro
-role: read-only
-tools:
-  - openapi_spec: ../shared/agent-tools.yaml
+version: 1.0.0
+model: openrouter/primary-chain
+role: read-only-narrator
+feature: F3-fair-loan-check
+runtime_entry: com.paypalseed.agentgateway.application.usecases.UnderwritingAgentRunner
+kill_switch_scope: underwriting-agent
+max_output_tokens: 600
+timeout_seconds: 12
+grounding:
+  enforce_allowed_dollar_figures: true
+  forbid_credit_score_and_fee_terms: true
+  fallback_mode: deterministic_template
+tools: []
