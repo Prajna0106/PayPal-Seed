@@ -149,9 +149,9 @@ public final class LendingDtos {
         boolean hasActiveLoan,
         int completedLoansOnTime,
         List<String> reasons,
-        /** The level of the member's credit record that was taken into account (NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY). */
+        // The level of the member's credit record that was taken into account (NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY).
         String recordLevel,
-        /** Which limit applied and why, in plain words. Never a score. */
+        // Which limit applied and why, in plain words. Never a score.
         String limitReason
     ) {
         /** The view before the credit record took part: a NEW record and no explanation beyond {@code reasons}. */
@@ -186,7 +186,7 @@ public final class LendingDtos {
         List<String> sizingReasons,
         Instant createdAt,
         Instant updatedAt,
-        /** Why the last payout did not complete the disbursement (a PayPal reason name); null when there is none. */
+        // Why the last payout did not complete the disbursement (a PayPal reason name); null when there is none.
         String payoutIssue
     ) {
     }

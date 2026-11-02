@@ -7,6 +7,9 @@ runtime_entry: com.paypalseed.agentgateway.application.usecases.SavingsCoachAgen
 kill_switch_scope: coach-agent
 max_output_tokens: 400
 timeout_seconds: 10
+evals:
+  dataset: evals/eval-dataset.json
+  injection_corpus: ../shared/evals/injection-corpus.json
 grounding:
   enforce_allowed_dollar_figures: true
   require_saving_and_loan_figures_in_en: true

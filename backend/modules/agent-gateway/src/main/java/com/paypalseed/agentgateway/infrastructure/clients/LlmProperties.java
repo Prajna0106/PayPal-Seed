@@ -15,7 +15,7 @@ public record LlmProperties(
         @DefaultValue("true") boolean enabled,
         @DefaultValue("https://openrouter.ai/api/v1") String baseUrl,
         @DefaultValue("") String apiKey,
-        @DefaultValue("google/gemini-3.1-flash-lite") List<String> models,
+        @DefaultValue("google/gemini-2.0-flash-001,meta-llama/llama-3.3-70b-instruct,mistralai/mistral-small-24b-instruct-2501") List<String> models,
         @DefaultValue("20000000") long dailyBudgetMicroUsd,
         @DefaultValue("8") int maxConcurrent,
         @DefaultValue("20s") Duration callTimeout,
