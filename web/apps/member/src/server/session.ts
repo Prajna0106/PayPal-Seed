@@ -8,9 +8,8 @@ import { env } from "./env";
 import { signToken, verifyToken } from "./session-token";
 
 /**
- * Demo sign-in session. Real member login (Log in with PayPal) belongs to the identity feature; until then the
- * signed cookie carries which member this browser acts as. The backend trusts identity headers only in its
- * dev/demo profiles.
+ * Which member this browser acts as, in a signed cookie set after Log in with PayPal or a demo sign-in. Each backend
+ * call signs a short actor token from it (ADR 0016). A demo session stops working when demo sign-in is off.
  */
 export const SESSION_COOKIE = "seed_session";
 const MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -19,6 +18,7 @@ const memberSessionSchema = z.object({
   kind: z.literal("member"),
   memberId: z.uuid(),
   displayName: z.string().max(60),
+  demo: z.boolean().optional(),
 });
 
 export type MemberSession = z.infer<typeof memberSessionSchema>;
@@ -26,7 +26,7 @@ export type MemberSession = z.infer<typeof memberSessionSchema>;
 export async function parseSession(token: string | undefined): Promise<MemberSession | null> {
   const payload = await verifyToken(token, env.SESSION_SECRET);
   const parsed = memberSessionSchema.safeParse(payload);
-  return parsed.success ? parsed.data : null;
+  return parsed.success && (env.demoLogin || !parsed.data.demo) ? parsed.data : null;
 }
 
 /** The current member, or `null`. Deduplicated per request. */

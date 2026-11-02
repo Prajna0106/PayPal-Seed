@@ -80,7 +80,7 @@ Built:
 
 Pending, member app:
 
-- [ ] **P0 Log in with PayPal** button and callback (replaces "Start Ana's story"; keep the demo path behind a flag).
+- [x] **P0 Log in with PayPal** button and callback. The demo path is behind `SEED_DEMO_LOGIN`, off by default in production.
 - [ ] **P0 Home**: Seed balance, goals and streak, loan and next payment, record level, recent Seed activity.
 - [ ] **P0 Savings**: create a goal, approve the subscription in PayPal, top up, pause, resume, withdraw; coach suggestion.
 - [ ] **P0 Eligibility and apply**: what is unlocked and why; consent screen; fair-check result in plain words; schedule preview; accept; cooling-off.
@@ -143,8 +143,8 @@ Built: signed `seed_session` cookie in both apps; route protection in `proxy.ts`
 
 Pending:
 
-- [ ] **P0 Log in with PayPal** on the web side (OpenID Connect authorization code flow, server side): after the callback the web server calls `POST /internal/members/login`, then signs a member actor token with `SEED_ACTOR_TOKEN_SECRETS`. Set the app's return URL and scopes. Keep the demo login behind a flag.
-- [ ] **P0 Web servers sign actor tokens** instead of sending `X-Seed-*` headers (the API client already accepts a bearer token).
+- [x] **P0 Log in with PayPal** on the web side: authorization code flow with PKCE on the server, then `POST /internal/members/login`. Set `PAYPAL_LOGIN_CLIENT_ID`, `PAYPAL_LOGIN_CLIENT_SECRET`, `APP_ORIGIN` and the app's return URL.
+- [ ] **P0 Web servers sign actor tokens** instead of sending `X-Seed-*` headers. Done for the member app; the desk still sends dev headers.
 - [ ] **P2 Staff SSO** (an OIDC provider with roles from groups) instead of demo personas; the desk server then calls `PUT /internal/staff/{id}` after sign-in.
 
 ---

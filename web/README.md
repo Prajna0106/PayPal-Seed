@@ -34,7 +34,7 @@ Two Next.js 16 apps in a pnpm + Turborepo workspace. Conventions for people and 
    pnpm dev            # member on :3000, desk on :3001
    ```
 
-4. Open http://localhost:3000/login and choose **Start Ana's story**. It creates a loan, seeds four lean weeks of
+4. Open http://localhost:3000/login and choose **Start Ana's story** (shown outside production only). It creates a loan, seeds four lean weeks of
    income, moves the demo clock and runs the hardship scan, then signs you in as Ana. Open
    http://localhost:3001/login to act as an officer (Aira), a checker (Priyam) or an admin (Prajna).
 
@@ -51,7 +51,15 @@ pnpm gen:api        # after a contract change: regenerates packages/api-client/s
 
 - The browser never calls the backend. Pages and Server Actions call it from the server through
   `@paypal-seed/api-client`, with the identity taken from a signed, httpOnly session cookie.
-- Sessions are demo sign-ins until the identity feature lands: the member app signs in as a member id, the desk as
-  one of three fixed personas. `proxy.ts` redirects signed-out visitors to `/login`.
-- `SEED_INTERNAL_TOKEN` is used only on the server: for demo seeding on the member app and for the admin-only
-  operations page on the desk.
+- Members log in with PayPal, and each backend call signs a short actor token from the session (ADR 0016). Without
+  `SEED_ACTOR_TOKEN_SECRETS`, local development sends dev headers instead. `proxy.ts` redirects signed-out visitors to
+  `/login`.
+- Ana's story and the member id box need no login, so they work only with `SEED_DEMO_LOGIN` (on by default outside
+  production, off in production).
+- The desk is still demo sign-in only, as one of three fixed personas.
+- `SEED_INTERNAL_TOKEN` is used only on the server: to finish a login, for demo seeding on the member app and for the
+  admin-only operations page on the desk.
+
+To try a real login on this machine, run `bash scripts/dev-member-login.sh`. It needs Java 21 (on `JAVA_HOME` if set,
+otherwise on `PATH`), and `PAYPAL_LOGIN_CLIENT_ID`, `PAYPAL_LOGIN_CLIENT_SECRET` and `SEED_INTERNAL_TOKEN` in
+`apps/member/.env.local`. Then log in at http://127.0.0.1:3000/login.
