@@ -3,8 +3,11 @@
 import { isProblem, problemMessage } from "@paypal-seed/api-client";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { env } from "@/server/env";
 import { endSession, startSession } from "@/server/session";
 import { seedAnaStory } from "./server/seed-ana";
+
+const DEMO_OFF = "The demo isn't available here. Please log in with PayPal.";
 
 export interface SignInState {
   error?: string;
@@ -12,6 +15,9 @@ export interface SignInState {
 
 /** Seeds a fresh Ana story on the backend and signs this browser in as Ana. */
 export async function startAnaStory(_previous: SignInState): Promise<SignInState> {
+  if (!env.demoLogin) {
+    return { error: DEMO_OFF };
+  }
   let memberId: string;
   try {
     ({ memberId } = await seedAnaStory());
@@ -23,18 +29,21 @@ export async function startAnaStory(_previous: SignInState): Promise<SignInState
         : "We could not reach the Seed backend. Check that it is running on SEED_API_URL.",
     };
   }
-  await startSession({ kind: "member", memberId, displayName: "Ana" });
+  await startSession({ kind: "member", memberId, displayName: "Ana", demo: true });
   redirect("/app");
 }
 
 const memberIdSchema = z.object({ memberId: z.uuid({ message: "Enter a member id (a UUID)." }) });
 
 export async function signInWithMemberId(_previous: SignInState, formData: FormData): Promise<SignInState> {
+  if (!env.demoLogin) {
+    return { error: DEMO_OFF };
+  }
   const parsed = memberIdSchema.safeParse({ memberId: String(formData.get("memberId") ?? "").trim() });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Enter a member id." };
   }
-  await startSession({ kind: "member", memberId: parsed.data.memberId, displayName: "Member" });
+  await startSession({ kind: "member", memberId: parsed.data.memberId, displayName: "Member", demo: true });
   redirect("/app");
 }
 
