@@ -2,7 +2,7 @@
 
 import { isProblem, problemMessage, unwrap } from "@paypal-seed/api-client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { memberApi } from "@/server/api";
 
@@ -46,6 +46,7 @@ export async function chooseOption(_previous: ChooseState, formData: FormData): 
       payNowCents: result.payNowCents ?? null,
     };
   } catch (error) {
+    unstable_rethrow(error);
     if (isProblem(error, "hardship-offer-stale")) {
       revalidatePath(`/app/loans/${loanId}/help`);
       return { status: "stale" };
@@ -76,6 +77,7 @@ export async function declineOffer(_previous: DeclineState, formData: FormData):
     revalidatePath("/app");
     return { status: "declined" };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("[hardship] decline failed", error);
     return { status: "error", message: isProblem(error) ? problemMessage(error) : "We could not record that. Please try again." };
   }
@@ -109,6 +111,7 @@ export async function askForHelp(_previous: AskState, formData: FormData): Promi
       }),
     );
   } catch (error) {
+    unstable_rethrow(error);
     console.error("[hardship] ask for help failed", error);
     return { status: "error", message: isProblem(error) ? problemMessage(error) : "We could not send your request. Please try again." };
   }
