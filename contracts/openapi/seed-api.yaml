@@ -557,6 +557,28 @@ paths:
         '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/KillSwitchState' } } } }
         '403': { $ref: '#/components/responses/Problem' }
 
+  /api/v1/desk/analyst/briefing:
+    get:
+      tags: [desk]
+      summary: Morning portfolio risk briefing and operational queue priorities (roles OFFICER, CHECKER or ADMIN)
+      security: [ { staffSession: [] } ]
+      responses:
+        '200':
+          description: Briefing
+          content: { application/json: { schema: { $ref: '#/components/schemas/DeskBriefing' } } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/members/me/trust-record:
+    get:
+      tags: [schedule]
+      summary: The signed-in member's portable credit record certificate and trust explanation
+      security: [ { memberSession: [] } ]
+      responses:
+        '200':
+          description: Trust record
+          content: { application/json: { schema: { $ref: '#/components/schemas/TrustRecord' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+
   # ---------------------------------------------------------------- Identity (ADR 0012)
   /api/v1/members/me:
     get:
@@ -1563,8 +1585,6 @@ paths:
       responses:
         '200': { description: accepted | duplicate, content: { application/json: { schema: { type: object, properties: { status: { type: string, enum: [accepted, duplicate] } } } } } }
         '422': { description: invalid-webhook (signature failed; never stored), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
-
-
 components:
   securitySchemes:
     memberSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of a member (ADR 0016). Dev, test and demo profiles accept X-Seed-Member-Id instead' }
@@ -1848,6 +1868,47 @@ components:
         reason: { type: string }
         trippedBy: { type: string, enum: [OFFICER, AUTO_VALIDATOR_REJECTIONS, AUTO_GROUNDING_FAILURES, AUTO_BUDGET, AUTO_INJECTION_CANARY] }
         circuits: { type: object, additionalProperties: { type: string }, description: Model id to breaker state }
+
+    DeskBriefing:
+      type: object
+      required: [businessDate, activeLoansCount, totalOutstandingCents, healthyLoansCount, atRiskLoansCount, casesPendingReviewCount, oldestCaseHours, slaBreachesCount, reserveBalanceCents, reserveCoverageRatio, executiveSummary, queuePriorities, riskObservations, recommendedStaffingFocus, modelGenerated]
+      properties:
+        businessDate: { type: string, format: date }
+        activeLoansCount: { type: integer }
+        totalOutstandingCents: { type: integer }
+        healthyLoansCount: { type: integer }
+        atRiskLoansCount: { type: integer }
+        casesPendingReviewCount: { type: integer }
+        oldestCaseHours: { type: integer }
+        slaBreachesCount: { type: integer }
+        reserveBalanceCents: { type: integer }
+        reserveCoverageRatio: { type: number }
+        executiveSummary: { type: string }
+        queuePriorities: { type: array, items: { type: string } }
+        riskObservations: { type: array, items: { type: string } }
+        recommendedStaffingFocus: { type: string }
+        modelGenerated: { type: boolean }
+
+    TrustRecord:
+      type: object
+      required: [memberId, currentTier, nextTier, currentLimitCents, nextLimitCents, onTimeRepaymentsCount, streakMonths, totalSavedCents, totalRepaidCents, summaryEn, summaryEs, certificateAttestation, milestoneAdvice, verificationHash, issuedAt, modelGenerated]
+      properties:
+        memberId: { type: string, format: uuid }
+        currentTier: { type: string }
+        nextTier: { type: string }
+        currentLimitCents: { type: integer }
+        nextLimitCents: { type: integer }
+        onTimeRepaymentsCount: { type: integer }
+        streakMonths: { type: integer }
+        totalSavedCents: { type: integer }
+        totalRepaidCents: { type: integer }
+        summaryEn: { type: string }
+        summaryEs: { type: string }
+        certificateAttestation: { type: string }
+        milestoneAdvice: { type: string }
+        verificationHash: { type: string }
+        issuedAt: { type: string, format: date }
+        modelGenerated: { type: boolean }
 
     # ---- module schemas (ADRs 0012 to 0021)
     Language: { type: string, enum: [en, es] }

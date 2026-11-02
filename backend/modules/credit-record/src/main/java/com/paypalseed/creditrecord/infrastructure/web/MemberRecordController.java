@@ -6,6 +6,8 @@ import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.RecordView;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.ShareCreated;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.ShareDetail;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.ShareView;
+import com.paypalseed.creditrecord.application.usecases.GetTrustRecordUseCase;
+import com.paypalseed.creditrecord.application.usecases.GetTrustRecordUseCase.TrustRecordResponse;
 import com.paypalseed.creditrecord.application.usecases.RecordQueries;
 import com.paypalseed.creditrecord.application.usecases.ShareService;
 import com.paypalseed.platform.security.Actor;
@@ -45,10 +47,17 @@ class MemberRecordController {
 
     private final RecordQueries queries;
     private final ShareService shares;
+    private final GetTrustRecordUseCase trustRecord;
 
-    MemberRecordController(RecordQueries queries, ShareService shares) {
+    MemberRecordController(RecordQueries queries, ShareService shares, GetTrustRecordUseCase trustRecord) {
         this.queries = queries;
         this.shares = shares;
+        this.trustRecord = trustRecord;
+    }
+
+    @GetMapping("/api/v1/members/me/trust-record")
+    TrustRecordResponse trustRecord(Actor actor) {
+        return trustRecord.getTrustRecord(actor.requireMember());
     }
 
     @GetMapping("/api/v1/members/me/record")

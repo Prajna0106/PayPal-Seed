@@ -9,7 +9,9 @@ dependencies {
     implementation(project(":platform:kernel"))
     implementation(project(":platform:persistence"))
     implementation(project(":platform:messaging"))
+    implementation(project(":platform:security"))
     implementation(project(":engines:rules"))
+    testImplementation("org.mockito:mockito-core")
     testImplementation(project(":platform:testing"))
     // jOOQ settings carry JAXB annotations; javac warns (and -Werror fails) without them when a test builds a Configuration.
     testCompileOnly("jakarta.xml.bind:jakarta.xml.bind-api")

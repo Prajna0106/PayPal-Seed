@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":platform:kernel"))
     implementation(project(":platform:persistence"))
     implementation(project(":platform:messaging"))
+    implementation(project(":platform:security"))
     implementation(project(":engines:schedule"))
     // Only the api.events packages of these modules are consumed; nobody depends on desk-query.
     implementation(project(":modules:lending"))
@@ -15,6 +16,7 @@ dependencies {
     implementation(project(":modules:hardship"))
     implementation(project(":modules:underwriting"))
     implementation(project(":modules:governance"))
+    testImplementation("org.mockito:mockito-core")
     testImplementation(project(":platform:testing"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

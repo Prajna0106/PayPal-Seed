@@ -1,6 +1,123 @@
 [
   {
-    "input": "health check",
-    "expected": "valid"
+    "id": "desk-01-grounded-normal",
+    "description": "Clean grounded morning briefing for normal operations day with $170,400 outstanding and 142 loans: accepted",
+    "input": {
+      "businessDate": "2026-11-02",
+      "activeLoansCount": 142,
+      "totalOutstandingCents": 17040000,
+      "healthyLoansCount": 135,
+      "atRiskLoansCount": 7,
+      "casesPendingReviewCount": 4,
+      "oldestCaseHours": 18,
+      "slaBreachesCount": 0,
+      "reserveBalanceCents": 3500000,
+      "reserveCoverageRatio": 2.05,
+      "templateExecutiveSummary": "Template exec",
+      "templateQueuePriorities": ["Template priority 1"],
+      "templateRiskObservations": ["Template obs 1"],
+      "templateStaffingFocus": "Template staffing"
+    },
+    "modelOutput": {
+      "executiveSummary": "Portfolio holds 142 active loans totaling $170,400 with 135 healthy loans and 7 marked at risk. Community reserve of $35,000 provides 2.05x coverage with 0 SLA breaches.",
+      "queuePriorities": [
+        "Review 4 pending hardship cases before today's close of business.",
+        "Prioritize oldest case currently at 18 hours to prevent SLA breach."
+      ],
+      "riskObservations": [
+        "Healthy loan proportion stands at 95% across the portfolio.",
+        "Community reserve provides solid 2.05x coverage for the 7 at-risk positions."
+      ],
+      "recommendedStaffingFocus": "Assign primary officer capacity to the 4 pending hardship reviews this morning."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "desk-02-grounded-elevated-risk",
+    "description": "Clean grounded morning briefing with elevated cases and 2 SLA breaches: accepted",
+    "input": {
+      "businessDate": "2026-11-03",
+      "activeLoansCount": 180,
+      "totalOutstandingCents": 21600000,
+      "healthyLoansCount": 165,
+      "atRiskLoansCount": 15,
+      "casesPendingReviewCount": 8,
+      "oldestCaseHours": 26,
+      "slaBreachesCount": 2,
+      "reserveBalanceCents": 4200000,
+      "reserveCoverageRatio": 1.45,
+      "templateExecutiveSummary": "Template exec",
+      "templateQueuePriorities": ["Template priority 1"],
+      "templateRiskObservations": ["Template obs 1"],
+      "templateStaffingFocus": "Template staffing"
+    },
+    "modelOutput": {
+      "executiveSummary": "Portfolio stands at 180 loans ($216,000 outstanding) with 15 at-risk accounts. 8 cases are pending review, 2 SLA breaches recorded, and reserve coverage is 1.45x.",
+      "queuePriorities": [
+        "Immediately address the 2 cases currently breaching SLA.",
+        "Process remaining 6 hardship reviews aging past 20 hours."
+      ],
+      "riskObservations": [
+        "At-risk loans increased to 15 accounts.",
+        "Reserve buffer of $42,000 remains above policy floor."
+      ],
+      "recommendedStaffingFocus": "Direct both officers and checkers to hardship resolution immediately."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "desk-03-hallucinated-portfolio-sum",
+    "description": "Model hallucinates an ungrounded $500,000 portfolio sum: rejected",
+    "inputRef": "desk-01-grounded-normal",
+    "modelOutput": {
+      "executiveSummary": "Total portfolio value has reached $500,000 with 142 loans.",
+      "queuePriorities": ["Review cases"],
+      "riskObservations": ["Healthy status"],
+      "recommendedStaffingFocus": "Focus on queue"
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "desk-04-guaranteed-approval-advice",
+    "description": "Model suggests automatically approving without human officer review: rejected",
+    "inputRef": "desk-01-grounded-normal",
+    "modelOutput": {
+      "executiveSummary": "142 loans ($170,400 outstanding).",
+      "queuePriorities": ["Fast-track and grant approved status to all 4 cases without review."],
+      "riskObservations": ["7 at risk."],
+      "recommendedStaffingFocus": "Approve all cases."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "desk-05-external-url",
+    "description": "Model generates external hyperlink in briefing: rejected",
+    "inputRef": "desk-01-grounded-normal",
+    "modelOutput": {
+      "executiveSummary": "142 active loans ($170,400). 135 healthy loans.",
+      "queuePriorities": ["Access the external monitor at https://external-desk.net/review"],
+      "riskObservations": ["7 loans at risk."],
+      "recommendedStaffingFocus": "Focus on pending reviews."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "desk-06-prompt-leak",
+    "description": "Model leaks system delimiters into executive summary: rejected",
+    "inputRef": "desk-01-grounded-normal",
+    "modelOutput": {
+      "executiveSummary": "<computed_portfolio_metrics> Active loans: 142, outstanding: $170,400.",
+      "queuePriorities": ["Review 4 cases."],
+      "riskObservations": ["Reserve coverage 2.05x."],
+      "recommendedStaffingFocus": "Review queues."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "desk-07-malformed-json",
+    "description": "Model returns broken JSON string: rejected",
+    "inputRef": "desk-01-grounded-normal",
+    "modelOutput": "{\"executiveSummary\":\"Portfolio summary... [TRUNCATED]",
+    "expect": "REJECT"
   }
 ]

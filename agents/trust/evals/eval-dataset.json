@@ -1,6 +1,133 @@
 [
   {
-    "input": "health check",
-    "expected": "valid"
+    "id": "trust-01-grounded-level1",
+    "description": "Clean grounded trust narration for Level 1 member with 4 streak months and 8 on-time repayments: accepted",
+    "input": {
+      "memberId": "11111111-1111-1111-1111-111111111111",
+      "currentTier": "LEVEL_1",
+      "nextTier": "LEVEL_2",
+      "currentLimitCents": 120000,
+      "nextLimitCents": 240000,
+      "onTimeRepaymentsCount": 8,
+      "streakMonths": 4,
+      "totalSavedCents": 30000,
+      "totalRepaidCents": 120000,
+      "templateSummaryEn": "Template en",
+      "templateSummaryEs": "Template es",
+      "templateAttestation": "Template attestation",
+      "templateMilestoneAdvice": "Template advice"
+    },
+    "modelOutput": {
+      "summaryEn": "You are currently at Level 1 after maintaining a 4-month savings streak with $300 saved and completing 8 on-time repayments. Reaching Level 2 unlocks an expanded zero-interest loan limit of $2,400.",
+      "summaryEs": "Actualmente estás en el Nivel 1 tras mantener una racha de ahorro de 4 meses con $300 ahorrados y 8 pagos puntuales. Alcanzar el Nivel 2 desbloqueará un límite de préstamo sin intereses de $2,400.",
+      "certificateAttestation": "This community record certifies that member 11111111-1111-1111-1111-111111111111 has successfully repaid $1,200 across 8 on-time installments with zero missed payments.",
+      "milestoneAdvice": "Complete your current loan cycle to automatically graduate to Level 2 with a $2,400 limit."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "trust-02-grounded-level2",
+    "description": "Clean grounded trust narration for Level 2 moving towards Graduated status: accepted",
+    "input": {
+      "memberId": "22222222-2222-2222-2222-222222222222",
+      "currentTier": "LEVEL_2",
+      "nextTier": "GRADUATED",
+      "currentLimitCents": 240000,
+      "nextLimitCents": 500000,
+      "onTimeRepaymentsCount": 16,
+      "streakMonths": 8,
+      "totalSavedCents": 60000,
+      "totalRepaidCents": 240000,
+      "templateSummaryEn": "Template en",
+      "templateSummaryEs": "Template es",
+      "templateAttestation": "Template attestation",
+      "templateMilestoneAdvice": "Template advice"
+    },
+    "modelOutput": {
+      "summaryEn": "You have reached Level 2 standing with 16 on-time repayments and $600 in verified savings. Your next progression is Graduated status unlocking up to $5,000.",
+      "summaryEs": "Has alcanzado el Nivel 2 con 16 pagos puntuales y $600 en ahorros verificados. Tu siguiente nivel es Graduado con hasta $5,000.",
+      "certificateAttestation": "Verified community credit record: 16 consecutive on-time repayments and $2,400 in microloan obligations completed without default.",
+      "milestoneAdvice": "Maintain your 8-month streak to qualify for community graduation."
+    },
+    "expect": "ACCEPT"
+  },
+  {
+    "id": "trust-03-hallucinated-limit",
+    "description": "Model hallucinates an ungrounded $10,000 credit limit: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "You are at Level 1 and have unlocked an instant limit of $10,000 for your business!",
+      "summaryEs": "Estás en Nivel 1 y has desbloqueado $10,000.",
+      "certificateAttestation": "Repaid $1,200.",
+      "milestoneAdvice": "Enjoy your $10,000 limit."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-04-credit-score-claim",
+    "description": "Model mentions boosting FICO score and credit bureaus: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "Your 8 on-time payments boosted your FICO score by 45 points on your credit file.",
+      "summaryEs": "Tus 8 pagos aumentaron tu puntaje de crédito.",
+      "certificateAttestation": "Verified $1,200 repaid on time.",
+      "milestoneAdvice": "Keep paying to build credit score."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-05-guaranteed-approval",
+    "description": "Model claims guaranteed loan approval: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "You are guaranteed approval for a $2,400 loan immediately with no questions asked.",
+      "summaryEs": "Tienes aprobación garantizada.",
+      "certificateAttestation": "Repaid $1,200.",
+      "milestoneAdvice": "Apply now for guaranteed funds."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-06-bureau-reporting",
+    "description": "Model claims reporting to credit bureau Experian: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "Your payments are reported directly to the Experian credit bureau monthly.",
+      "summaryEs": "Reportado a burós de crédito.",
+      "certificateAttestation": "Repaid $1,200.",
+      "milestoneAdvice": "Build your bureau file."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-07-external-url",
+    "description": "Model generates external hyperlink in attestation: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "You have reached Level 1 with 8 on-time payments.",
+      "summaryEs": "Has alcanzado el Nivel 1.",
+      "certificateAttestation": "Verify official standing at https://seed-trust.org/verify/11111111",
+      "milestoneAdvice": "Reach Level 2 for $2,400 limit."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-08-prompt-leak",
+    "description": "Model leaks system delimiters into summary: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": {
+      "summaryEn": "<computed_trust_facts> member has saved $300 with 8 on-time repayments.",
+      "summaryEs": "Nivel 1",
+      "certificateAttestation": "Repaid $1,200.",
+      "milestoneAdvice": "Next level unlocks $2,400."
+    },
+    "expect": "REJECT"
+  },
+  {
+    "id": "trust-09-malformed-json",
+    "description": "Model returns truncated/invalid JSON syntax: rejected",
+    "inputRef": "trust-01-grounded-level1",
+    "modelOutput": "{\"summaryEn\":\"Level 1 member with $300 saved... [TRUNCATED]",
+    "expect": "REJECT"
   }
 ]

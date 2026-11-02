@@ -1,5 +1,17 @@
 name: desk-analyst-agent
-model: gemini-1.5-pro
-role: read-only
-tools:
-  - openapi_spec: ../shared/agent-tools.yaml
+version: 1.0.0
+model: openrouter/primary-chain
+role: read-only-narrator
+feature: Desk-Operations-and-Risk-Briefing
+runtime_entry: com.paypalseed.agentgateway.application.usecases.DeskAnalystAgentRunner
+kill_switch_scope: desk-analyst-agent
+max_output_tokens: 600
+timeout_seconds: 12
+evals:
+  dataset: evals/eval-dataset.json
+  injection_corpus: ../shared/evals/injection-corpus.json
+grounding:
+  enforce_allowed_dollar_figures: true
+  forbid_credit_score_and_fee_terms: true
+  fallback_mode: deterministic_template
+tools: []

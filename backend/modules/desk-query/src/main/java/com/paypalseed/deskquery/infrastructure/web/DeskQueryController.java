@@ -6,6 +6,8 @@ import com.paypalseed.deskquery.api.dto.DeskQueryDtos.LoanRow;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Page;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.PortfolioSummary;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Workload;
+import com.paypalseed.deskquery.application.usecases.GetDeskBriefingUseCase;
+import com.paypalseed.deskquery.application.usecases.GetDeskBriefingUseCase.DeskBriefingResponse;
 import com.paypalseed.deskquery.application.usecases.GridQueries;
 import com.paypalseed.deskquery.application.usecases.PortfolioQueries;
 import com.paypalseed.platform.security.Actor;
@@ -27,10 +29,18 @@ class DeskQueryController {
 
     private final GridQueries grids;
     private final PortfolioQueries portfolio;
+    private final GetDeskBriefingUseCase getDeskBriefing;
 
-    DeskQueryController(GridQueries grids, PortfolioQueries portfolio) {
+    DeskQueryController(GridQueries grids, PortfolioQueries portfolio, GetDeskBriefingUseCase getDeskBriefing) {
         this.grids = grids;
         this.portfolio = portfolio;
+        this.getDeskBriefing = getDeskBriefing;
+    }
+
+    @GetMapping("/api/v1/desk/analyst/briefing")
+    ResponseEntity<DeskBriefingResponse> briefing(Actor actor) {
+        staff(actor);
+        return noStore(getDeskBriefing.getBriefing());
     }
 
     @GetMapping("/api/v1/desk/applications")
