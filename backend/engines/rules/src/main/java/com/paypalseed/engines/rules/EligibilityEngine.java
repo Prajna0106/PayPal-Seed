@@ -81,6 +81,16 @@ public final class EligibilityEngine {
         }
     }
 
+    /** Why a request was allowed or not, in the order the rules are checked. */
+    public enum SizingOutcome {
+        APPROVED,
+        NOT_ELIGIBLE,
+        AMOUNT_NOT_ALLOWED,
+        TERM_OUT_OF_RANGE,
+        ABOVE_LIMIT,
+        INSTALMENT_ABOVE_CAP
+    }
+
     public record SizingDecision(
         boolean allowed,
         long requestedPrincipalCents,
@@ -89,9 +99,11 @@ public final class EligibilityEngine {
         long maxMonthlyInstalmentCents,
         long suggestedPrincipalCents,
         int suggestedTermMonths,
-        List<String> reasons
+        List<String> reasons,
+        SizingOutcome outcome
     ) {
         public SizingDecision {
+            Objects.requireNonNull(outcome, "outcome is required");
             reasons = List.copyOf(reasons);
         }
     }
@@ -259,7 +271,8 @@ public final class EligibilityEngine {
                 eval.maxMonthlyInstalmentCents(),
                 0L,
                 0,
-                reasons
+                reasons,
+                SizingOutcome.NOT_ELIGIBLE
             );
         }
 
@@ -280,7 +293,8 @@ public final class EligibilityEngine {
                 maxMonthly,
                 suggestedPrincipal,
                 fallbackTerm,
-                reasons
+                reasons,
+                SizingOutcome.AMOUNT_NOT_ALLOWED
             );
         }
 
@@ -303,7 +317,8 @@ public final class EligibilityEngine {
                 maxMonthly,
                 suggestedPrincipal,
                 clampedTerm,
-                reasons
+                reasons,
+                SizingOutcome.TERM_OUT_OF_RANGE
             );
         }
 
@@ -334,7 +349,8 @@ public final class EligibilityEngine {
                 maxMonthly,
                 suggestedPrincipal,
                 suggestedTerm,
-                reasons
+                reasons,
+                SizingOutcome.ABOVE_LIMIT
             );
         }
 
@@ -363,7 +379,8 @@ public final class EligibilityEngine {
                     maxMonthly,
                     requestedPrincipalCents,
                     suggestedTerm,
-                    reasons
+                    reasons,
+                    SizingOutcome.INSTALMENT_ABOVE_CAP
                 );
             } else {
                 long maxAtLongestTerm = SizingRule.maxSafePrincipalCents(maxMonthly, tier.maxTermMonths(), limit);
@@ -384,7 +401,8 @@ public final class EligibilityEngine {
                     maxMonthly,
                     maxAmountAtRequestedTerm,
                     requestedTermMonths,
-                    reasons
+                    reasons,
+                    SizingOutcome.INSTALMENT_ABOVE_CAP
                 );
             }
         }
@@ -406,7 +424,8 @@ public final class EligibilityEngine {
             maxMonthly,
             requestedPrincipalCents,
             requestedTermMonths,
-            reasons
+            reasons,
+            SizingOutcome.APPROVED
         );
     }
 

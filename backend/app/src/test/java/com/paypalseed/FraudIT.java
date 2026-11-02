@@ -550,9 +550,11 @@ class FraudIT extends IntegrationTest {
         assertThat(open.path("rows").get(0).path("flagId").asText()).isEqualTo(flagIds.get(2).toString());
         assertThat(open.path("rows").get(1).path("flagId").asText()).isEqualTo(flagIds.get(0).toString());
         assertThat(open.path("rows").get(0).path("signalCodes")).isNotEmpty();
+        assertThat(open.path("flagThreshold").asInt()).as("the configured threshold travels with the page").isEqualTo(40);
         assertThat(open.path("rows").get(0).fieldNames()).toIterable().doesNotContain("note", "staffId");
 
         JsonNode cleared = body(staff(get("/api/v1/desk/fraud/flags").param("status", "REVIEWED_CLEAR"), UUID.randomUUID(), "CHECKER"), 200);
+        assertThat(cleared.path("flagThreshold").asInt()).isEqualTo(40);
         assertThat(cleared.findValuesAsText("flagId")).contains(flagIds.get(1).toString()).doesNotContain(flagIds.get(0).toString());
 
         JsonNode firstPage = body(staff(get("/api/v1/desk/fraud/flags").param("limit", "1"), UUID.randomUUID(), "ADMIN"), 200);
