@@ -1,22 +1,37 @@
 import "server-only";
 
+import { ApiProblem } from "@paypal-seed/api-client";
 import { z } from "zod";
 import { env } from "@/server/env";
 
-/** Remembers one login attempt between leaving for PayPal and coming back. */
 export const LOGIN_COOKIE = "seed_login";
 
-/** Must match a return URL saved on the PayPal app exactly. */
 export const PAYPAL_CALLBACK = `${env.APP_ORIGIN}/api/auth/paypal/callback`;
 
 const TIMEOUT_MS = 10_000;
 
-/** Which message the login page shows. */
 export class PayPalLoginError extends Error {
   constructor(readonly reason: "rejected" | "identity" | "unavailable") {
     super(`PayPal login failed: ${reason}`);
     this.name = "PayPalLoginError";
   }
+}
+
+const BAD_IDENTITY_CODES = new Set(["invalid-payer-id", "validation-failed"]);
+
+export function loginFailureReason(error: unknown): string {
+  if (error instanceof PayPalLoginError) {
+    return error.reason;
+  }
+  if (!(error instanceof ApiProblem)) {
+    console.warn(`[paypal-login] member login failed: ${error instanceof Error ? error.name : "unknown"}`);
+    return "unavailable";
+  }
+  console.warn(`[paypal-login] member login returned HTTP ${error.status} (${error.code})`);
+  if (error.status >= 500) {
+    return "unavailable";
+  }
+  return BAD_IDENTITY_CODES.has(error.code) ? "identity" : "refused";
 }
 
 const tokenSchema = z.object({ access_token: z.string().min(1) });
@@ -36,11 +51,7 @@ export interface PayPalIdentity {
   locale?: string;
 }
 
-/**
- * Log in with PayPal, server to server (ADR 0012). The token response has no ID token, so identity comes from userinfo.
- * The token carries the app's payment scopes, so it is dropped as soon as this returns. A code works once and a failed
- * attempt uses it up, so nothing here retries. Logs hold statuses and debug ids only: never codes, tokens or names.
- */
+/** A code works once and a failed attempt uses it up, so nothing here retries. */
 export async function identifyWithPayPal(code: string, codeVerifier: string): Promise<PayPalIdentity> {
   if (!env.PAYPAL_LOGIN_CLIENT_ID || !env.PAYPAL_LOGIN_CLIENT_SECRET) {
     throw new PayPalLoginError("unavailable");
@@ -86,7 +97,6 @@ async function exchangeCode(code: string, codeVerifier: string, clientId: string
   return token.data.access_token;
 }
 
-/** A 4xx means PayPal said no; anything else means PayPal couldn't be reached or broke. */
 async function call(step: string, whenRefused: "rejected" | "identity", url: string, init: RequestInit): Promise<Response> {
   let response: Response;
   try {

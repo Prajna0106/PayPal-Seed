@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 const SCOPE = "openid email profile https://uri.paypal.com/services/paypalattributes";
 const TEN_MINUTES = 600;
 
-/** Remembers this login attempt in a short-lived cookie, then sends the browser to PayPal. */
 export async function GET() {
   // On this machine PayPal returns to 127.0.0.1, so a login started on localhost would lose its cookie.
   const host = (await headers()).get("host");

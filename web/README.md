@@ -60,6 +60,6 @@ pnpm gen:api        # after a contract change: regenerates packages/api-client/s
 - `SEED_INTERNAL_TOKEN` is used only on the server: to finish a login, for demo seeding on the member app and for the
   admin-only operations page on the desk.
 
-To try a real login on this machine, run `bash scripts/dev-member-login.sh`. It needs `PAYPAL_LOGIN_CLIENT_ID`,
-`PAYPAL_LOGIN_CLIENT_SECRET` and `SEED_INTERNAL_TOKEN` in `apps/member/.env.local`. Then log in at
-http://127.0.0.1:3000/login.
+To try a real login on this machine, run `bash scripts/dev-member-login.sh`. It needs Java 21 (on `JAVA_HOME` if set,
+otherwise on `PATH`), and `PAYPAL_LOGIN_CLIENT_ID`, `PAYPAL_LOGIN_CLIENT_SECRET` and `SEED_INTERNAL_TOKEN` in
+`apps/member/.env.local`. Then log in at http://127.0.0.1:3000/login.

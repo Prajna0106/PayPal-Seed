@@ -4,6 +4,7 @@ import { isActorTokenSecrets } from "@paypal-seed/api-client/actor-token";
 import { z } from "zod";
 
 const DEV_SESSION_SECRET = "dev-only-session-secret-do-not-use-in-production";
+const DEV_APP_ORIGIN = "http://127.0.0.1:3000";
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -12,7 +13,7 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32).optional(),
   SEED_ACTOR_TOKEN_SECRETS: z.string().refine(isActorTokenSecrets, "must start with kid:secret, with 32 or more characters of secret").optional(),
   SEED_DEMO_LOGIN: z.enum(["true", "false"]).optional(),
-  APP_ORIGIN: z.url().default("http://127.0.0.1:3000"),
+  APP_ORIGIN: z.url().optional(),
   PAYPAL_WEB_URL: z.url().default("https://www.sandbox.paypal.com"),
   PAYPAL_API_URL: z.url().default("https://api-m.sandbox.paypal.com"),
   PAYPAL_LOGIN_CLIENT_ID: z.string().optional(),
@@ -40,11 +41,15 @@ if (!parsed.data.SEED_ACTOR_TOKEN_SECRETS && parsed.data.NODE_ENV === "productio
   throw new Error("SEED_ACTOR_TOKEN_SECRETS is required in production: the backend accepts nothing else from this app.");
 }
 
+if (!parsed.data.APP_ORIGIN && parsed.data.NODE_ENV === "production" && !isBuild) {
+  throw new Error("APP_ORIGIN is required in production: PayPal returns the member to it after a login.");
+}
+
 /** Validated server environment. Never import this from client components. */
 export const env = {
   ...parsed.data,
   SESSION_SECRET: parsed.data.SESSION_SECRET ?? DEV_SESSION_SECRET,
+  APP_ORIGIN: parsed.data.APP_ORIGIN ?? DEV_APP_ORIGIN,
   isProduction: parsed.data.NODE_ENV === "production",
-  // Demo sign-in has no password, so it is off in production unless a demo deployment asks for it.
   demoLogin: parsed.data.SEED_DEMO_LOGIN ? parsed.data.SEED_DEMO_LOGIN === "true" : parsed.data.NODE_ENV !== "production",
 } as const;

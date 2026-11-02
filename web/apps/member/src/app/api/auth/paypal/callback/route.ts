@@ -2,11 +2,10 @@ import { unwrap } from "@paypal-seed/api-client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
-import { identifyWithPayPal, LOGIN_COOKIE, PayPalLoginError } from "@/features/auth/server/paypal-login";
+import { identifyWithPayPal, LOGIN_COOKIE, loginFailureReason } from "@/features/auth/server/paypal-login";
 import { internalApi } from "@/server/api";
 import { startSession } from "@/server/session";
 
-/** PayPal sends the browser back here. The state check proves this browser is the one that started the login. */
 export async function GET(request: NextRequest) {
   const store = await cookies();
   const [expectedState, verifier] = store.get(LOGIN_COOKIE)?.value.split(".") ?? [];
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest) {
   redirect(failure ? `/login?error=${failure}` : "/app");
 }
 
-/** Returns why the login failed, or nothing once the session has started. */
 async function logIn(code: string, verifier: string): Promise<string | undefined> {
   try {
     const identity = await identifyWithPayPal(code, verifier);
@@ -40,6 +38,6 @@ async function logIn(code: string, verifier: string): Promise<string | undefined
     });
     return undefined;
   } catch (error) {
-    return error instanceof PayPalLoginError ? error.reason : "unavailable";
+    return loginFailureReason(error);
   }
 }

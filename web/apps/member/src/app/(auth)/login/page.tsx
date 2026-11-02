@@ -14,6 +14,7 @@ const LOGIN_ERRORS: Record<string, string> = {
   cancelled: "You cancelled the login at PayPal.",
   rejected: "PayPal didn't accept that login. Please try again.",
   identity: "PayPal couldn't share your details. Please log in with a personal PayPal account, not a business one.",
+  refused: "We couldn't log you in. If this keeps happening, please contact us.",
   unavailable: "We can't log you in right now. Please try again in a few minutes.",
   "slow-down": "Too many attempts. Please wait a minute and try again.",
   "session-ended": "You were logged out to keep your account safe. Please log in again.",
