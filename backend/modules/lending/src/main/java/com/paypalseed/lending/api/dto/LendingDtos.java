@@ -80,6 +80,59 @@ public final class LendingDtos {
                               String collectionMode, String bucket, int dpd, int currentVersion) {
     }
 
+    /**
+     * A member's own loan as the Home page needs it. {@code nextDue} is the oldest instalment of the current
+     * schedule with money still owed, and is null when the loan is not active or nothing is owed.
+     * {@code autopay} says the loan is collected by autopay; the mandate's own state is payments' to tell.
+     * Carries no days past due, bucket or risk fact.
+     */
+    public record MemberLoanView(UUID loanId, String status, long principalCents, long outstandingCents, NextDue nextDue,
+                                 boolean autopay) {
+    }
+
+    public record NextDue(int seq, LocalDate dueDate, long amountCents, long remainingCents) {
+    }
+
+    /** A member's own application: what they asked for and where it stands. No officer ids, no sizing reasons. */
+    public record MemberApplicationView(UUID applicationId, String status, long requestedAmountCents, int termMonths,
+                                        Instant coolingOffExpiresAt, String payoutIssue) {
+    }
+
+    /**
+     * The reserve paid {@code amountCents} of a loan. The ledger entry {@code journalEntryId} already credits the loan's
+     * receivable, so lending applies the money to the schedule and posts nothing. {@code approvalRef} is the
+     * idempotency key; {@code businessDate} is the date reserve booked the cover on, and the date it counts from.
+     */
+    public record ReserveCover(UUID loanId, long amountCents, String approvalRef, UUID journalEntryId, LocalDate businessDate,
+                               Instant occurredAt) {
+        public ReserveCover {
+            Objects.requireNonNull(loanId, "loanId");
+            Objects.requireNonNull(approvalRef, "approvalRef");
+            Objects.requireNonNull(journalEntryId, "journalEntryId");
+            Objects.requireNonNull(businessDate, "businessDate");
+            Objects.requireNonNull(occurredAt, "occurredAt");
+            if (amountCents <= 0) {
+                throw new IllegalArgumentException("a cover is a positive amount");
+            }
+        }
+    }
+
+    public enum CoverOutcome {
+        /** The cover was applied (all of it, or the part the loan still owed). */
+        APPLIED,
+        /** This approvalRef was applied before; nothing changed. */
+        ALREADY_APPLIED,
+        /** The loan owed nothing when the cover arrived (it was paid in the meantime); nothing was applied. */
+        NOTHING_DUE
+    }
+
+    /**
+     * {@code appliedCents} went to the schedule; {@code unusedCents} is the part of the cover the loan no longer owed.
+     * The ledger credited the whole cover, so a non-zero {@code unusedCents} is a difference the desk must look at.
+     */
+    public record CoverResult(CoverOutcome outcome, long appliedCents, long unusedCents, long outstandingCents) {
+    }
+
     /** Feature 2: Member's current microloan ladder tier and deterministic sizing bounds. */
     public record EligibilityView(
         UUID memberId,
@@ -95,8 +148,19 @@ public final class LendingDtos {
         long monthlySavingCents,
         boolean hasActiveLoan,
         int completedLoansOnTime,
-        List<String> reasons
+        List<String> reasons,
+        /** The level of the member's credit record that was taken into account (NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY). */
+        String recordLevel,
+        /** Which limit applied and why, in plain words. Never a score. */
+        String limitReason
     ) {
+        /** The view before the credit record took part: a NEW record and no explanation beyond {@code reasons}. */
+        public EligibilityView(UUID memberId, boolean eligible, String tier, int tierLevel, long tierLimitCents, long maxLoanCents,
+                               long maxMonthlyInstalmentCents, int minTermMonths, int maxTermMonths, int currentSavingStreakMonths,
+                               long monthlySavingCents, boolean hasActiveLoan, int completedLoansOnTime, List<String> reasons) {
+            this(memberId, eligible, tier, tierLevel, tierLimitCents, maxLoanCents, maxMonthlyInstalmentCents, minTermMonths,
+                maxTermMonths, currentSavingStreakMonths, monthlySavingCents, hasActiveLoan, completedLoansOnTime, reasons, "NEW", "");
+        }
     }
 
     /** Feature 2: Representation of a savings-linked microloan application. */
@@ -121,7 +185,9 @@ public final class LendingDtos {
         Instant coolingOffExpiresAt,
         List<String> sizingReasons,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        /** Why the last payout did not complete the disbursement (a PayPal reason name); null when there is none. */
+        String payoutIssue
     ) {
     }
 }

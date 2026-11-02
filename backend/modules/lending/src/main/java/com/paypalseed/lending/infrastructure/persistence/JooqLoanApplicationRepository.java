@@ -68,6 +68,9 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             .set(LOAN_APPLICATION.COOLING_OFF_EXPIRES_AT, app.getCoolingOffExpiresAt())
             .set(LOAN_APPLICATION.CREATED_AT, app.getCreatedAt())
             .set(LOAN_APPLICATION.UPDATED_AT, app.getUpdatedAt())
+            .set(LOAN_APPLICATION.PAYOUT_ISSUE, app.getPayoutIssue())
+            .set(LOAN_APPLICATION.PAYOUT_ATTEMPTS, app.getPayoutAttempts())
+            .set(LOAN_APPLICATION.LAST_OFFICER_ID, app.getLastOfficerId())
             .onConflict(LOAN_APPLICATION.ID).doUpdate()
             .set(LOAN_APPLICATION.STATUS, DSL.excluded(LOAN_APPLICATION.STATUS))
             .set(LOAN_APPLICATION.FIRST_APPROVER_ID, DSL.excluded(LOAN_APPLICATION.FIRST_APPROVER_ID))
@@ -80,6 +83,9 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             .set(LOAN_APPLICATION.DISBURSED_AT, DSL.excluded(LOAN_APPLICATION.DISBURSED_AT))
             .set(LOAN_APPLICATION.COOLING_OFF_EXPIRES_AT, DSL.excluded(LOAN_APPLICATION.COOLING_OFF_EXPIRES_AT))
             .set(LOAN_APPLICATION.UPDATED_AT, DSL.excluded(LOAN_APPLICATION.UPDATED_AT))
+            .set(LOAN_APPLICATION.PAYOUT_ISSUE, DSL.excluded(LOAN_APPLICATION.PAYOUT_ISSUE))
+            .set(LOAN_APPLICATION.PAYOUT_ATTEMPTS, DSL.excluded(LOAN_APPLICATION.PAYOUT_ATTEMPTS))
+            .set(LOAN_APPLICATION.LAST_OFFICER_ID, DSL.excluded(LOAN_APPLICATION.LAST_OFFICER_ID))
             .execute();
 
         return app;
@@ -89,6 +95,14 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
     public Optional<LoanApplication> findById(UUID id) {
         return dsl.selectFrom(LOAN_APPLICATION)
             .where(LOAN_APPLICATION.ID.eq(id))
+            .fetchOptional(this::map);
+    }
+
+    @Override
+    public Optional<LoanApplication> findByIdForUpdate(UUID id) {
+        return dsl.selectFrom(LOAN_APPLICATION)
+            .where(LOAN_APPLICATION.ID.eq(id))
+            .forUpdate()
             .fetchOptional(this::map);
     }
 
@@ -136,6 +150,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             r.getDisbursedAt(),
             r.getCoolingOffExpiresAt()
         );
+        app.restorePayoutState(r.getPayoutIssue(), r.getPayoutAttempts(), r.getLastOfficerId());
         return app;
     }
 

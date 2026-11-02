@@ -1,9 +1,14 @@
 package com.paypalseed.lending.api;
 
+import com.paypalseed.lending.api.dto.LendingDtos.CoverResult;
+import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
+import com.paypalseed.lending.api.dto.LendingDtos.MemberApplicationView;
+import com.paypalseed.lending.api.dto.LendingDtos.MemberLoanView;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
 import com.paypalseed.lending.api.dto.LendingDtos.ReschedulePreview;
 import com.paypalseed.lending.api.dto.LendingDtos.RescheduleRequest;
+import com.paypalseed.lending.api.dto.LendingDtos.ReserveCover;
 import com.paypalseed.lending.api.dto.LendingDtos.RiskFacts;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
 import com.paypalseed.lending.api.dto.LendingDtos.Slot;
@@ -49,4 +54,20 @@ public interface LendingFacade {
     /** Active loans whose oldest owed instalment is due in {@code [asOf - graceDays, asOf + leadDays]}. */
     List<UUID> hardshipScanCandidates(LocalDate asOf, int leadDays, int graceDays, int shardGroup, int shardCount,
                                       UUID after, int limit);
+
+    /** What the member can borrow now, by lending's own rules. Reads savings, income and the credit record; writes nothing. */
+    EligibilityView eligibilityOf(UUID memberId);
+
+    /** The member's loans, any status, newest first. Scoped to the member by construction; no risk facts. */
+    List<MemberLoanView> loansOfMember(UUID memberId);
+
+    /** The member's applications, newest first. No officer ids and no sizing reasons. */
+    List<MemberApplicationView> applicationsOfMember(UUID memberId);
+
+    /**
+     * Applies money the reserve already moved to this loan in the ledger, as a repayment from {@code RESERVE}.
+     * Idempotent on {@code approvalRef}; takes at most what the loan still owes; posts nothing to the ledger.
+     * Joins the caller's transaction when there is one.
+     */
+    CoverResult applyReserveCover(ReserveCover cover);
 }

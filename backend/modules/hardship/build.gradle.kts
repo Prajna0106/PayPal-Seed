@@ -12,4 +12,5 @@ dependencies {
     implementation(project(":modules:governance"))
     implementation(project(":modules:underwriting"))
     testImplementation(project(":platform:testing"))
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

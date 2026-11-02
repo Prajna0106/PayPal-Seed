@@ -34,6 +34,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -113,6 +114,8 @@ public abstract class IntegrationTest {
     protected InboxProcessor inbox;
     @Autowired
     protected FakeLlm llm;
+    @Autowired
+    private IncompleteEventPublications incompleteEvents;
 
     @BeforeEach
     void resetFakes() {
@@ -127,11 +130,17 @@ public abstract class IntegrationTest {
                 "payout-" + Ids.newId()));
     }
 
-    /** Lets every asynchronous consequence finish: inbox drained, no incomplete event publication left. */
+    /**
+     * Lets every asynchronous consequence finish: inbox drained, no incomplete event publication left.
+     * A listener that lost a race (a reversal that ran before its payment was recorded) leaves its publication
+     * incomplete; production re-submits those from {@code BackgroundJobs}, which tests switch off, so this waits the
+     * same way: stale incomplete publications are re-submitted while it polls.
+     */
     protected void settle() {
         try {
             await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(50)).until(() -> {
                 inbox.drain(500);
+                incompleteEvents.resubmitIncompletePublicationsOlderThan(Duration.ofSeconds(1));
                 Integer incomplete = jdbc.sql("SELECT COUNT(*) FROM event_publication WHERE completion_date IS NULL")
                         .query(Integer.class).single();
                 return incomplete == 0 && inbox.drain(500) == 0;

@@ -1,5 +1,8 @@
 package com.paypalseed.payments.application.ports;
 
+import com.paypalseed.payments.api.dto.PaymentsDtos.FundingSource;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutWallet;
+import com.paypalseed.payments.api.dto.PaymentsDtos.RecipientType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +19,7 @@ public interface PayPalGateway {
                         Optional<String> approveUrl, Optional<String> customId) {
     }
 
+    /** {@code startTime} may be null: the subscription then starts when the payer approves it. */
     record CreateSubscription(long quantity, String customId, Instant startTime, String returnUrl, String cancelUrl) {
     }
 
@@ -26,7 +30,11 @@ public interface PayPalGateway {
     record Order(String id, String status, Optional<String> approveUrl) {
     }
 
-    record CreateOrder(long amountCents, String customId, String invoiceId, String description) {
+    /** {@code funding} picks the payment source; Venmo is available on Orders only, never on Subscriptions. */
+    record CreateOrder(long amountCents, String customId, String invoiceId, String description, FundingSource funding) {
+        public CreateOrder(long amountCents, String customId, String invoiceId, String description) {
+            this(amountCents, customId, invoiceId, description, FundingSource.PAYPAL);
+        }
     }
 
     record Capture(String id, String status, long amountCents, long feeCents, Instant createTime) {
@@ -38,7 +46,72 @@ public interface PayPalGateway {
     record Refund(String id, String status, long amountCents) {
     }
 
+    // ---- Billing catalog (Catalog Products v1, Billing Plans v1) ----
+
+    record Product(String id, String name) {
+    }
+
+    record Plan(String id, String productId, String name, String status) {
+    }
+
+    /** A monthly plan that bills {@code unitPriceCents} times the subscription quantity, with no end date. */
+    record CreatePlan(String productId, String name, String description, long unitPriceCents) {
+    }
+
+    List<Product> listProducts();
+
+    Product createProduct(String name, String description, String requestId);
+
+    List<Plan> listPlans(String productId);
+
+    Plan createPlan(CreatePlan request, String requestId);
+
+    // ---- Payouts (Payouts v1) ----
+
+    /**
+     * One payout item in its own batch. {@code transactionStatus} is PayPal's word (SUCCESS, PENDING, FAILED,
+     * UNCLAIMED, RETURNED, BLOCKED, ONHOLD, REFUNDED, REVERSED) and empty while the batch has no item yet.
+     * {@code batchStatus} is NEW, PENDING, PROCESSING, SUCCESS, DENIED or CANCELED.
+     */
+    record PayoutItem(String batchId, String batchStatus, Optional<String> itemId, Optional<String> transactionStatus,
+                      Optional<String> transactionId, long feeCents, Optional<String> errorName, Optional<String> errorMessage) {
+    }
+
+    /** {@code senderBatchId} is PayPal's own duplicate guard; {@code recipientType} and {@code wallet} are sent as is. */
+    record CreatePayout(String senderBatchId, String senderItemId, RecipientType recipientType, String receiver,
+                        PayoutWallet wallet, long amountCents, String note) {
+    }
+
+    PayoutItem createPayout(CreatePayout request, String requestId);
+
+    PayoutItem getPayoutItem(String payoutItemId);
+
+    /** The batch header plus its first item; Seed sends one item per batch. */
+    PayoutItem getPayoutBatch(String payoutBatchId);
+
+    // ---- Transaction Search (Reporting v1) ----
+
+    /**
+     * Reports what the credentials' account can see. {@code onBehalfOfPayerId} is the third-party (partner)
+     * path: the call then reads that merchant's account through a {@code PayPal-Auth-Assertion}, and only
+     * works when PayPal granted Seed that permission.
+     */
+    record SearchTransactions(Instant from, Instant to, Optional<String> onBehalfOfPayerId) {
+    }
+
+    /** Amounts are signed: credits positive, fees and refunds negative, as PayPal reports them. */
+    record SearchedTransaction(String transactionId, String eventCode, String status, Instant initiatedAt, long amountCents,
+                               long feeCents, Optional<String> referenceTransactionId, Optional<String> payerAccountId,
+                               boolean payerIsPerson, String subject) {
+    }
+
+    /** One window of at most 31 days; pages are followed internally. */
+    List<SearchedTransaction> searchTransactions(SearchTransactions query);
+
     Subscription createSubscription(CreateSubscription request, String requestId);
+
+    /** Same as {@link #createSubscription} on an explicit plan (the savings plan). */
+    Subscription createSubscriptionOnPlan(String planId, CreateSubscription request, String requestId);
 
     Subscription getSubscription(String subscriptionId);
 

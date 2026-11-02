@@ -16,6 +16,15 @@ public final class HardshipDtos {
                               int points, String reasonCategory, boolean outreachAllowed, boolean acceptsProposal) {
     }
 
+    /**
+     * What a member may see of their own open case: which payment it is about and whether options are waiting for a
+     * choice. No risk level, points, signals, reason category or origin. {@code offerWaiting} is true while Seed has
+     * options ready and the member has not chosen yet.
+     */
+    public record MemberCaseView(UUID caseId, UUID loanId, String status, LocalDate dueDate, long amountAtStakeCents,
+                                 boolean offerWaiting) {
+    }
+
     public record SignalView(String code, int points, Map<String, Long> evidence) {
     }
 

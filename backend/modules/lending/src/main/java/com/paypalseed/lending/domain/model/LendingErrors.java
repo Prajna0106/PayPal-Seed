@@ -45,6 +45,8 @@ public final class LendingErrors {
             ErrorCode.conflict("maker-checker-same-officer", "Two different loan officers must approve a microloan");
     public static final ErrorCode APPLICATION_INVALID_STATE =
             ErrorCode.conflict("application-invalid-state", "Loan application is not in a valid state for this action");
+    public static final ErrorCode PAYOUT_RECIPIENT_MISSING = ErrorCode.conflict("payout-recipient-missing",
+            "There is no PayPal account on file to pay this loan into");
     public static final ErrorCode COOLING_OFF_EXPIRED =
             ErrorCode.conflict("cooling-off-expired", "The 48-hour cooling-off return window has expired");
 

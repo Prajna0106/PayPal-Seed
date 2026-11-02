@@ -1,5 +1,6 @@
 package com.paypalseed.underwriting.api;
 
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.AssessmentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
@@ -31,6 +32,11 @@ public interface UnderwritingFacade {
     }
 
     default Optional<FairCheckCardView> findAssessment(UUID assessmentId) {
+        return Optional.empty();
+    }
+
+    /** The member's newest assessment as a status a member may see; empty when none was ever run. */
+    default Optional<AssessmentStatusView> latestAssessmentStatus(UUID memberId) {
         return Optional.empty();
     }
 
