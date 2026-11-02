@@ -11,7 +11,7 @@ import {
   unwrapOrNull,
 } from "@paypal-seed/api-client";
 import { isTimelinePayload, type TimelinePayload } from "@paypal-seed/timeline/types";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { memberApi } from "@/server/api";
 import { type Instalment, type InstalmentStatus, isSettled, type Plan, type Transaction } from "../model";
 
@@ -80,6 +80,7 @@ export async function getLoanDetail(loanId: string): Promise<LoanDetail> {
       help: helpState(hardship),
     };
   } catch (error) {
+    unstable_rethrow(error);
     // Another member's loan and a missing loan both answer 404 (the backend never confirms a loan exists).
     if (error instanceof ApiProblem && error.status === 404) {
       notFound();
@@ -94,6 +95,7 @@ export async function getPlan(loanId: string): Promise<Plan> {
   try {
     return toPlan(await unwrap(api.GET("/api/v1/loans/{loanId}/schedule", { params: { path: { loanId } } })));
   } catch (error) {
+    unstable_rethrow(error);
     if (error instanceof ApiProblem && error.status === 404) {
       notFound();
     }

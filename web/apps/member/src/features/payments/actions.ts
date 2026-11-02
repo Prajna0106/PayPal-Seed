@@ -3,6 +3,7 @@
 import { isProblem, problemMessage, unwrap } from "@paypal-seed/api-client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { unstable_rethrow } from "next/navigation";
 import { memberApi } from "@/server/api";
 import { isDueNow } from "../loans/model";
 import { toPlan } from "../loans/server/queries";
@@ -55,6 +56,7 @@ export async function createPaymentOrder(input: { loanId: string; choice: PayCho
     }
     return { ok: true, orderId: order.orderId };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("[payments] create order failed", error);
     return { ok: false, message: isProblem(error) ? problemMessage(error) : "We could not start the payment. Please try again." };
   }
@@ -76,6 +78,7 @@ export async function capturePaymentOrder(input: { loanId: string; orderId: stri
     revalidatePath("/app");
     return { ok: true, amountCents: captured.amountCents ?? 0 };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("[payments] capture failed", error);
     return {
       ok: false,
