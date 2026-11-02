@@ -2,7 +2,7 @@ import "server-only";
 
 import { ApiProblem, type HardshipOption, type HardshipView, unwrap, unwrapOrNull } from "@paypal-seed/api-client";
 import type { Locale } from "@paypal-seed/i18n";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { memberApi } from "@/server/api";
 import type { OptionLabel, Summary } from "../copy";
 
@@ -49,6 +49,7 @@ export async function getHardshipPage(loanId: string, locale: Locale): Promise<H
       lastChange: change?.version && change.createdOn ? { version: change.version, createdOn: change.createdOn } : null,
     };
   } catch (error) {
+    unstable_rethrow(error);
     if (error instanceof ApiProblem && error.status === 404) {
       notFound();
     }
