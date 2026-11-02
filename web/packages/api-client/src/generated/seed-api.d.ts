@@ -1460,6 +1460,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/desk/analyst/briefing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Morning portfolio risk briefing and operational queue priorities (roles OFFICER, CHECKER or ADMIN)
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Briefing */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeskBriefing"];
+                    };
+                };
+                403: components["responses"]["Problem"];
+            };
+        };
+    };
+    "/api/v1/members/me/trust-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in member's portable credit record certificate and trust explanation
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Trust record */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrustRecord"];
+                    };
+                };
+                401: components["responses"]["Problem"];
+            };
+        };
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1796,6 +1860,44 @@ export interface components {
             circuits?: {
                 [key: string]: string;
             };
+        };
+        DeskBriefing: {
+            /** Format: date */
+            businessDate: string;
+            activeLoansCount: number;
+            totalOutstandingCents: number;
+            healthyLoansCount: number;
+            atRiskLoansCount: number;
+            casesPendingReviewCount: number;
+            oldestCaseHours: number;
+            slaBreachesCount: number;
+            reserveBalanceCents: number;
+            reserveCoverageRatio: number;
+            executiveSummary: string;
+            queuePriorities: string[];
+            riskObservations: string[];
+            recommendedStaffingFocus: string;
+            modelGenerated: boolean;
+        };
+        TrustRecord: {
+            /** Format: uuid */
+            memberId: string;
+            currentTier: string;
+            nextTier: string;
+            currentLimitCents: number;
+            nextLimitCents: number;
+            onTimeRepaymentsCount: number;
+            streakMonths: number;
+            totalSavedCents: number;
+            totalRepaidCents: number;
+            summaryEn: string;
+            summaryEs: string;
+            certificateAttestation: string;
+            milestoneAdvice: string;
+            verificationHash: string;
+            /** Format: date */
+            issuedAt: string;
+            modelGenerated: boolean;
         };
     };
     responses: {
