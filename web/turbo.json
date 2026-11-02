@@ -1,13 +1,33 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["SEED_API_URL", "SEED_INTERNAL_TOKEN", "SESSION_SECRET", "NEXT_PUBLIC_PAYPAL_CLIENT_ID"],
+  "globalEnv": [
+    "SEED_API_URL",
+    "SEED_INTERNAL_TOKEN",
+    "SESSION_SECRET",
+    "NEXT_PUBLIC_PAYPAL_CLIENT_ID",
+    "SEED_ACTOR_TOKEN_SECRETS",
+    "SEED_DEMO_LOGIN",
+    "APP_ORIGIN",
+    "PAYPAL_WEB_URL",
+    "PAYPAL_API_URL",
+    "PAYPAL_LOGIN_CLIENT_ID",
+    "PAYPAL_LOGIN_CLIENT_SECRET"
+  ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": [
+        "^typecheck"
+      ]
     },
     "lint": {},
     "dev": {

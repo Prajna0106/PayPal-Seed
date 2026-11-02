@@ -1,13 +1,29 @@
 import { GradientOrb } from "@paypal-seed/ui/brand/gradient-orb";
 import { Wordmark } from "@paypal-seed/ui/brand/wordmark";
+import { Button } from "@paypal-seed/ui/components/button";
 import { Separator } from "@paypal-seed/ui/components/separator";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AnaStoryForm, MemberIdForm } from "@/features/auth/components/sign-in-forms";
+import { env } from "@/server/env";
 
-export const metadata: Metadata = { title: "Demo sign-in" };
+export const metadata: Metadata = { title: "Log in" };
 
-export default function LoginPage() {
+const LOGIN_ERRORS: Record<string, string> = {
+  expired: "That login expired. Please try again.",
+  cancelled: "You cancelled the login at PayPal.",
+  rejected: "PayPal didn't accept that login. Please try again.",
+  identity: "PayPal couldn't share your details. Please log in with a personal PayPal account, not a business one.",
+  refused: "We couldn't log you in. If this keeps happening, please contact us.",
+  unavailable: "We can't log you in right now. Please try again in a few minutes.",
+  "slow-down": "Too many attempts. Please wait a minute and try again.",
+  "session-ended": "You were logged out to keep your account safe. Please log in again.",
+};
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  const message = error ? (LOGIN_ERRORS[error] ?? LOGIN_ERRORS.unavailable) : null;
+
   return (
     <main className="relative isolate grid min-h-dvh place-items-center overflow-hidden px-6 py-16">
       <GradientOrb tone="peach" blend="lavender" className="-top-32 -left-24 -z-10 size-[34rem]" />
@@ -17,23 +33,33 @@ export default function LoginPage() {
           <Wordmark />
         </Link>
         <div className="flex flex-col gap-2">
-          <h1 className="text-display-lg text-ink">Step into the demo</h1>
-          <p className="text-body">
-            Real sign-in with PayPal arrives with the identity feature. For now, start a fresh story or continue as a
-            member you already created.
-          </p>
+          <h1 className="text-display-lg text-ink">Welcome to Seed</h1>
+          <p className="text-body">Log in with your PayPal account to see your savings and loans.</p>
         </div>
-        <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-medium text-ink">Ana, home baker</h2>
-            <p className="text-sm text-body">
-              Saved $75 a month, borrowed $1,200 for a mixer. This month her sales dropped by half.
+        <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
+          {message ? (
+            <p role="alert" className="text-sm text-danger">
+              {message}
             </p>
-          </div>
-          <AnaStoryForm />
-          <Separator />
-          <MemberIdForm />
+          ) : null}
+          {/* A plain link on purpose: a prefetch would start a login nobody asked for. */}
+          <Button asChild size="lg" className="w-full">
+            <a href="/api/auth/paypal/start">Log in with PayPal</a>
+          </Button>
         </section>
+        {env.demoLogin ? (
+          <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-medium text-ink">Or try the demo as Ana, home baker</h2>
+              <p className="text-sm text-body">
+                Saved $75 a month, borrowed $1,200 for a mixer. This month her sales dropped by half.
+              </p>
+            </div>
+            <AnaStoryForm />
+            <Separator />
+            <MemberIdForm />
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -28,10 +28,11 @@ export type HardshipCaseDetail = Schemas["HardshipCaseDetail"];
 export type KillSwitchState = Schemas["KillSwitchState"];
 export type Problem = Schemas["Problem"];
 
-/** Who a request is made as. The backend reads identity only from these headers (dev/demo profiles). */
+/** Who a request is made as: a signed actor token (ADR 0016), or dev headers that only the dev and demo profiles read. */
 export type SeedIdentity =
   | { kind: "member"; memberId: string }
   | { kind: "staff"; staffId: string; roles: readonly StaffRole[] }
+  | { kind: "actor"; token: string }
   | { kind: "internal"; token: string }
   | { kind: "anonymous" };
 

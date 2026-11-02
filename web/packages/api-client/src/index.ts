@@ -24,6 +24,7 @@ export function identityHeaders(identity: SeedIdentity): Record<string, string> 
       return { "X-Seed-Member-Id": identity.memberId };
     case "staff":
       return { "X-Seed-Staff-Id": identity.staffId, "X-Seed-Staff-Roles": identity.roles.join(",") };
+    case "actor":
     case "internal":
       return { Authorization: `Bearer ${identity.token}` };
     case "anonymous":

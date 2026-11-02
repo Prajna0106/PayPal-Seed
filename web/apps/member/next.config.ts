@@ -15,6 +15,8 @@ const securityHeaders = [
 const lowMemory = process.env.SEED_LOW_MEMORY === "1";
 
 const nextConfig: NextConfig = {
+  // A request log would include PayPal's one-time login codes.
+  logging: { incomingRequests: false },
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,

@@ -98,7 +98,7 @@ async function register(memberId: string, disbursedOn: string): Promise<LoanSumm
 
 async function scheduleOf(memberId: string, loan: LoanSummary): Promise<ScheduleView> {
   return unwrap(
-    memberApiFor(memberId).GET("/api/v1/loans/{loanId}/schedule", {
+    (await memberApiFor(memberId)).GET("/api/v1/loans/{loanId}/schedule", {
       params: { path: { loanId: required(loan.loanId, "loanId") } },
     }),
   );
