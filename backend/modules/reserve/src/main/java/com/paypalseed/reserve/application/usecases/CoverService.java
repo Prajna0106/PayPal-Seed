@@ -17,6 +17,7 @@ import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.Ids;
+import com.paypalseed.reserve.api.dto.ReserveDtos.CoverApproval;
 import com.paypalseed.reserve.api.dto.ReserveDtos.CoverDecisionResult;
 import com.paypalseed.reserve.api.dto.ReserveDtos.CoverRequestPage;
 import com.paypalseed.reserve.api.dto.ReserveDtos.CoverRequestView;
@@ -52,6 +53,7 @@ public class CoverService {
 
     private static final String LOAN_ACTIVE = "ACTIVE";
     private static final int MAX_PAGE = 200;
+    private static final Set<String> SIGNING_ROLES = Set.of("MAKER", "CHECKER");
 
     private final CoverRepository covers;
     private final FundRepository funds;
@@ -87,7 +89,7 @@ public class CoverService {
             if (!prior.get().requestHash().equals(hash)) {
                 throw new DomainException(CommonErrors.IDEMPOTENCY_KEY_REUSED, "This Idempotency-Key was used for another request");
             }
-            return view(prior.get());
+            return toView(prior.get());
         }
         // Held to the end of the transaction: serialises requests, so the yearly cap and the balance cannot be raced.
         FundState fund = funds.lock();
@@ -112,7 +114,7 @@ public class CoverService {
                 clock.now().plus(settings.decisionSla()), true));
         covers.setApprovalRequest(id, approval);
         events.publishEvent(new CoverRequested(Ids.newId(), id, command.memberId(), command.loanId(), command.amountCents(), today));
-        return view(covers.find(id).orElseThrow());
+        return toView(covers.find(id).orElseThrow());
     }
 
     /**
@@ -184,7 +186,7 @@ public class CoverService {
         List<CoverRow> rows = covers.page(statuses == null ? List.of() : statuses, before, size + 1);
         boolean more = rows.size() > size;
         List<CoverRow> shown = more ? rows.subList(0, size) : rows;
-        return new CoverRequestPage(shown.stream().map(CoverService::view).toList(),
+        return new CoverRequestPage(shown.stream().map(this::toView).toList(),
                 more ? shown.get(shown.size() - 1).id() : null);
     }
 
@@ -251,8 +253,19 @@ public class CoverService {
         return "reserve-cover:" + coverId;
     }
 
-    static CoverRequestView view(CoverRow c) {
+    /**
+     * The row with who has signed and when the decision is due, both read from the approval request governance keeps
+     * (one read per row; a page is at most {@value #MAX_PAGE}). Only approvals by a maker or a checker count as signatures.
+     */
+    private CoverRequestView toView(CoverRow c) {
+        Optional<ApprovalView> approval = c.approvalRequestId() == null ? Optional.empty()
+                : governance.request(c.approvalRequestId());
+        List<CoverApproval> signed = approval.map(a -> a.decisions().stream()
+                .filter(d -> d.decision() == Decision.APPROVE && SIGNING_ROLES.contains(d.role()))
+                .map(d -> new CoverApproval(d.role(), d.staffId(), d.decidedAt()))
+                .toList()).orElse(List.of());
         return new CoverRequestView(c.id(), c.memberId(), c.loanId(), c.amountCents(), c.reasonCode(), c.hardshipCaseId(),
-                c.status(), c.approvalRequestId(), c.requestedOn(), c.closedReason(), c.journalEntryId());
+                c.status(), c.approvalRequestId(), c.requestedOn(), c.closedReason(), c.journalEntryId(),
+                approval.map(ApprovalView::slaDueAt).orElse(null), signed);
     }
 }

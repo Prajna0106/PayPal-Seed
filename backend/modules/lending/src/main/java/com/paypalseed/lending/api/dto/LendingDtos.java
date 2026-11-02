@@ -163,6 +163,42 @@ public final class LendingDtos {
         }
     }
 
+    /** One instalment of an application preview. */
+    public record PreviewInstalment(int seq, LocalDate dueDate, long amountCents) {
+    }
+
+    /**
+     * What a loan would look like if the member applied now, nothing stored. When {@code valid}, {@code instalments} is
+     * the exact schedule disbursement on {@code assumedDisbursementDate} would create; otherwise it is empty and
+     * {@code reasons} say in plain words what to change, with {@code suggestedAmountCents} and
+     * {@code suggestedTermMonths} as a safe alternative when there is one. {@code outcome} is APPROVED, NOT_ELIGIBLE,
+     * AMOUNT_NOT_ALLOWED, TERM_OUT_OF_RANGE, ABOVE_LIMIT or INSTALMENT_ABOVE_CAP. The loan is 0% with no fees, so
+     * {@code totalRepayableCents} is the amount asked for. If the loan is paid out on a later day the due dates are
+     * recomputed from that day.
+     */
+    public record ApplicationPreviewView(
+        boolean valid,
+        String outcome,
+        long requestedAmountCents,
+        int termMonths,
+        int dueDay,
+        LocalDate assumedDisbursementDate,
+        long monthlyInstalmentCents,
+        long totalRepayableCents,
+        LocalDate firstDueDate,
+        List<PreviewInstalment> instalments,
+        List<String> reasons,
+        Long suggestedAmountCents,
+        Integer suggestedTermMonths,
+        long limitCents,
+        long maxMonthlyInstalmentCents
+    ) {
+        public ApplicationPreviewView {
+            instalments = List.copyOf(instalments);
+            reasons = List.copyOf(reasons);
+        }
+    }
+
     /** Feature 2: Representation of a savings-linked microloan application. */
     public record LoanApplicationView(
         UUID id,

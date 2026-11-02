@@ -11,7 +11,7 @@ import { advanceDemoClock, runCloseOfBusiness, runHardshipScan, verifyAuditChain
 
 const initial: ActionResult = { status: "idle" };
 
-function useResultToast(state: ActionResult) {
+export function useResultToast(state: ActionResult) {
   useEffect(() => {
     if (state.status === "ok") {
       toast.success(state.message);
@@ -21,7 +21,7 @@ function useResultToast(state: ActionResult) {
   }, [state]);
 }
 
-function Result({ state }: { state: ActionResult }) {
+export function Result({ state }: { state: ActionResult }) {
   return (
     <p aria-live="polite" className={state.status === "error" ? "min-h-5 text-sm text-danger" : "min-h-5 text-sm text-body"}>
       {state.status === "idle" ? "" : state.message}
@@ -29,7 +29,7 @@ function Result({ state }: { state: ActionResult }) {
   );
 }
 
-function Shell({ title, description, icon, children }: { title: string; description: string; icon: ReactNode; children: ReactNode }) {
+export function Shell({ title, description, icon, children }: { title: string; description: string; icon: ReactNode; children: ReactNode }) {
   return (
     <Card>
       <CardHeader>

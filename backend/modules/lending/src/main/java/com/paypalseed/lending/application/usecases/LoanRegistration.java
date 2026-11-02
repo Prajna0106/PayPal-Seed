@@ -17,6 +17,7 @@ import com.paypalseed.lending.infrastructure.persistence.LoanRepository;
 import com.paypalseed.lending.infrastructure.persistence.ScheduleRepository;
 import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.platform.kernel.Ids;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,14 @@ public class LoanRegistration {
         this.events = events;
     }
 
+    /**
+     * The schedule version 1 a loan gets when it is disbursed. The application preview calls this too, so what a
+     * member is shown before applying is the schedule the same arguments produce at disbursement.
+     */
+    public static Schedule originalSchedule(long principalCents, int instalmentCount, int dueDay, LocalDate disbursedOn) {
+        return ScheduleGenerator.generate(principalCents, instalmentCount, dueDay, disbursedOn, RepaymentPolicy.V1);
+    }
+
     @Transactional
     public UUID register(RegisterDisbursedLoan command) {
         var existing = loans.idByDisbursementRef(command.disbursementRef());
@@ -50,8 +59,8 @@ public class LoanRegistration {
             return existing.get();
         }
         RepaymentPolicy policy = RepaymentPolicy.V1;
-        Schedule schedule = ScheduleGenerator.generate(command.principalCents(), command.instalmentCount(),
-                command.dueDay(), command.disbursedOn(), policy);
+        Schedule schedule = originalSchedule(command.principalCents(), command.instalmentCount(), command.dueDay(),
+                command.disbursedOn());
         UUID loanId = Ids.newId();
         LoanRow loan = new LoanRow(loanId, command.memberId(), command.principalCents(), command.instalmentCount(),
                 command.dueDay(), command.disbursedOn(), policy.version(), LoanStatus.ACTIVE, CollectionMode.MANUAL, 1,
