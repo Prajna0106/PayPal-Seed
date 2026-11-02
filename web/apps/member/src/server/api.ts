@@ -28,7 +28,6 @@ export const memberApi = cache(async (): Promise<SeedClient> => {
   return client;
 });
 
-/** Signs an actor token when a secret is set (always in production); a local backend with none reads dev headers. */
 export async function memberApiWithoutRedirect(memberId: string): Promise<SeedClient> {
   const secrets = env.SEED_ACTOR_TOKEN_SECRETS;
   return createSeedClient({

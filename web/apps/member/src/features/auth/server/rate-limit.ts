@@ -6,10 +6,6 @@ const WINDOW_MS = 60_000;
 const MAX_ATTEMPTS = 10;
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
-/**
- * Counts login attempts per address. The backend's lockout protects one account; this slows someone trying many.
- * It lives in this server's memory, so it resets on restart and counts per instance: enough for one web server.
- */
 export async function tooManyAttempts(): Promise<boolean> {
   const forwarded = (await headers()).get("x-forwarded-for");
   // The last hop is the one our own proxy added; earlier ones are whatever the caller sent.

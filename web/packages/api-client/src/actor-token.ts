@@ -1,6 +1,5 @@
 import type { StaffRole } from "./types";
 
-/** Short on purpose (ADR 0016): the session cookie is what lasts, and it signs a new token whenever one is needed. */
 const LIFETIME_SECONDS = 60;
 const FIRST_KEY = /^([A-Za-z0-9._-]{1,32}):([^,]{32,})/;
 const encoder = new TextEncoder();
@@ -19,12 +18,10 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** Whether `SEED_ACTOR_TOKEN_SECRETS` starts with a usable `kid:secret` entry. The first entry is the one that signs. */
 export function isActorTokenSecrets(secrets: string): boolean {
   return FIRST_KEY.test(secrets);
 }
 
-/** Signs the token the backend expects on `/api/**` (ADR 0016). Server-only: the secret must never reach a browser. */
 export async function signActorToken(secrets: string, actor: ActorClaims): Promise<string> {
   const entry = FIRST_KEY.exec(secrets);
   if (!entry) {
