@@ -3,6 +3,7 @@ package com.paypalseed.underwriting.application.usecases;
 import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.underwriting.api.UnderwritingFacade;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos;
+import com.paypalseed.underwriting.api.dto.UnderwritingDtos.AssessmentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
@@ -37,20 +38,27 @@ public class IncomeSummaryService implements UnderwritingFacade {
     private final IncomeRepository income;
     private final BusinessClock clock;
     private final FairLoanCheckService fairLoanCheck;
+    private final IncomeRefresher refresher;
 
     public IncomeSummaryService(IncomeRepository income, BusinessClock clock) {
         this(income, clock, null);
+    }
+
+    public IncomeSummaryService(IncomeRepository income, BusinessClock clock, FairLoanCheckService fairLoanCheck) {
+        this(income, clock, fairLoanCheck, null);
     }
 
     @Autowired
     public IncomeSummaryService(
         IncomeRepository income,
         BusinessClock clock,
-        @Autowired(required = false) FairLoanCheckService fairLoanCheck
+        @Autowired(required = false) FairLoanCheckService fairLoanCheck,
+        @Autowired(required = false) IncomeRefresher refresher
     ) {
         this.income = income;
         this.clock = clock;
         this.fairLoanCheck = fairLoanCheck;
+        this.refresher = refresher;
     }
 
     @Override
@@ -83,6 +91,14 @@ public class IncomeSummaryService implements UnderwritingFacade {
             return fairLoanCheck.findAssessment(assessmentId);
         }
         return UnderwritingFacade.super.findAssessment(assessmentId);
+    }
+
+    @Override
+    public Optional<AssessmentStatusView> latestAssessmentStatus(UUID memberId) {
+        if (fairLoanCheck != null) {
+            return fairLoanCheck.latestAssessmentStatus(memberId);
+        }
+        return UnderwritingFacade.super.latestAssessmentStatus(memberId);
     }
 
     @Override
@@ -121,19 +137,16 @@ public class IncomeSummaryService implements UnderwritingFacade {
             return Optional.empty();
         }
         fairLoanCheck.grantConsent(memberId);
+        if (refresher != null) {
+            // Refresh before the summary is read below; a PayPal failure refuses the assessment (retryable).
+            refresher.refreshIfStale(memberId);
+        }
 
         LocalDate today = clock != null ? clock.today() : LocalDate.now();
         List<IncomeMonthDto> monthlyIncomes = new ArrayList<>();
         Optional<IncomeSummary> summary = incomeSummary(memberId, today);
         if (summary.isPresent() && summary.get().activeWeeks() > 0) {
-            List<Long> weeks = summary.get().weeklyInflowCents();
-            long m1 = weeks.subList(0, 4).stream().mapToLong(Long::longValue).sum();
-            long m2 = weeks.subList(4, 8).stream().mapToLong(Long::longValue).sum();
-            long m3 = weeks.subList(8, 13).stream().mapToLong(Long::longValue).sum() * 4L / 5L;
-            YearMonth ym = YearMonth.from(today);
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(3).toString(), m1));
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(2).toString(), m2));
-            monthlyIncomes.add(new IncomeMonthDto(ym.minusMonths(1).toString(), m3));
+            monthlyIncomes.addAll(IncomeSummaries.monthly(summary.get(), today));
         } else if (statedMonthlyIncomeCents > 0) {
             YearMonth ym = YearMonth.from(today);
             for (int i = 6; i >= 1; i--) {
@@ -161,21 +174,10 @@ public class IncomeSummaryService implements UnderwritingFacade {
     @Override
     @Transactional(readOnly = true)
     public Optional<IncomeSummary> incomeSummary(UUID memberId, LocalDate asOf) {
-        Optional<Consent> consent = income.consent(memberId).filter(Consent::active);
-        if (consent.isEmpty()) {
-            return Optional.empty();
-        }
-        LocalDate first = asOf.minusDays((long) UnderwritingDtos.SUMMARY_WEEKS * BUCKET_DAYS);
-        List<Long> buckets = new ArrayList<>(Collections.nCopies(UnderwritingDtos.SUMMARY_WEEKS, 0L));
-        for (Week week : income.weeks(memberId, first, asOf.minusDays(1))) {
-            int bucket = (int) (ChronoUnit.DAYS.between(first, week.weekStart()) / BUCKET_DAYS);
-            buckets.set(bucket, buckets.get(bucket) + week.inflowCents());
-        }
-        int active = (int) buckets.stream().filter(b -> b > 0).count();
-        return Optional.of(new IncomeSummary(buckets, consent.get().usualPaydayDow(), active));
+        return IncomeSummaries.read(income, memberId, asOf);
     }
 
-    /** Demo and sandbox seeding until F3 fetches Transaction Search; upserts the given weeks. */
+    /** Demo and sandbox seeding (the {@code SEEDED} income source); upserts the given weeks. */
     @Transactional
     public void record(UUID memberId, boolean consent, Integer usualPaydayDow, List<Week> weeks) {
         if (!consent) {

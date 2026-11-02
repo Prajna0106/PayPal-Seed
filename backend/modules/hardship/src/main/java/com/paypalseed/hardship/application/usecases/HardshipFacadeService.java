@@ -4,11 +4,13 @@ import com.paypalseed.engines.rules.hardship.GroundingChecker;
 import com.paypalseed.hardship.api.HardshipFacade;
 import com.paypalseed.hardship.api.dto.HardshipDtos.AgentOutcome;
 import com.paypalseed.hardship.api.dto.HardshipDtos.CaseContext;
+import com.paypalseed.hardship.api.dto.HardshipDtos.MemberCaseView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.OptionView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.PriorCaseView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.SignalView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.SignalsView;
 import com.paypalseed.hardship.domain.model.CaseRow;
+import com.paypalseed.hardship.domain.model.CaseStatus;
 import com.paypalseed.hardship.domain.model.HardshipErrors;
 import com.paypalseed.hardship.domain.model.OfferModel.OptionRow;
 import com.paypalseed.hardship.infrastructure.persistence.CaseRepository;
@@ -58,6 +60,15 @@ class HardshipFacadeService implements HardshipFacade {
                     c.targetDueDate(), c.targetAmountCents(), scanDate, c.riskLevel(), c.points(), c.reasonCategory(),
                     outreachAllowed, !c.status().terminal());
         });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<MemberCaseView> openCaseOf(UUID memberId) {
+        return cases.latestOpenForMember(memberId)
+                .filter(c -> !(c.origin() == CaseRow.Origin.PROACTIVE_SCAN && c.status() == CaseStatus.DETECTED))
+                .map(c -> new MemberCaseView(c.id(), c.loanId(), c.status().name(), c.targetDueDate(), c.targetAmountCents(),
+                        c.status() == CaseStatus.OUTREACH_SENT || c.status() == CaseStatus.OFFER_VIEWED));
     }
 
     @Override

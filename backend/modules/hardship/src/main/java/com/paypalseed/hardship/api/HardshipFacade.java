@@ -3,6 +3,7 @@ package com.paypalseed.hardship.api;
 import com.paypalseed.engines.rules.hardship.GroundingChecker;
 import com.paypalseed.hardship.api.dto.HardshipDtos.AgentOutcome;
 import com.paypalseed.hardship.api.dto.HardshipDtos.CaseContext;
+import com.paypalseed.hardship.api.dto.HardshipDtos.MemberCaseView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.OptionView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.PriorCaseView;
 import com.paypalseed.hardship.api.dto.HardshipDtos.SignalsView;
@@ -17,6 +18,12 @@ import java.util.UUID;
 public interface HardshipFacade {
 
     Optional<CaseContext> caseContext(UUID caseId);
+
+    /**
+     * The member's newest case that is not finished, as the member may see it. A case Seed opened from a scan and has
+     * not yet contacted the member about is not shown: the member was never told, and says nothing about them yet.
+     */
+    Optional<MemberCaseView> openCaseOf(UUID memberId);
 
     /** The scorecard result the case was opened on, with the evidence numbers behind each signal. */
     SignalsView signals(UUID caseId);

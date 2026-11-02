@@ -13,8 +13,10 @@ import java.util.UUID;
  * Aggregate Root representing a member's savings-linked microloan application (Blueprint §5).
  *
  * <p>Lifecycle:
- * {@code SUBMITTED -> PENDING_SECOND_APPROVAL -> APPROVED -> DISBURSED (-> CANCELLED_COOLING_OFF)}
- * or {@code REJECTED}.
+ * {@code SUBMITTED -> PENDING_SECOND_APPROVAL -> APPROVED -> DISBURSING -> DISBURSED (-> CANCELLED_COOLING_OFF)}
+ * or {@code REJECTED}. {@code DISBURSING} means the payout is with PayPal: the loan is registered only when
+ * the payout succeeds, and a payout that fails for good puts the application back to {@code APPROVED} with the
+ * reason in {@code payoutIssue}, ready to be sent again. Nothing can cancel or reject an application in between.
  */
 public class LoanApplication {
 
@@ -24,6 +26,8 @@ public class LoanApplication {
         SUBMITTED,
         PENDING_SECOND_APPROVAL,
         APPROVED,
+        /** The payout to the member has been asked of PayPal and has not finished. */
+        DISBURSING,
         DISBURSED,
         REJECTED,
         CANCELLED_COOLING_OFF
@@ -57,6 +61,9 @@ public class LoanApplication {
     private String disbursementRef;
     private Instant disbursedAt;
     private Instant coolingOffExpiresAt;
+    private String payoutIssue;
+    private int payoutAttempts;
+    private UUID lastOfficerId;
     private final Instant createdAt;
     private Instant updatedAt;
 
@@ -125,6 +132,13 @@ public class LoanApplication {
         this.coolingOffExpiresAt = coolingOffExpiresAt;
     }
 
+    /** Restores what a stored application knows beyond the original lifecycle fields. */
+    public void restorePayoutState(String payoutIssue, int payoutAttempts, UUID lastOfficerId) {
+        this.payoutIssue = payoutIssue;
+        this.payoutAttempts = payoutAttempts;
+        this.lastOfficerId = lastOfficerId;
+    }
+
     public static LoanApplication submit(
         UUID memberId,
         String purpose,
@@ -166,6 +180,7 @@ public class LoanApplication {
         Objects.requireNonNull(officerId, "officerId is required");
         Objects.requireNonNull(now, "now is required");
 
+        this.lastOfficerId = officerId;
         if (this.status == ApplicationStatus.SUBMITTED) {
             this.firstApproverId = officerId;
             this.firstApprovedAt = now;
@@ -204,6 +219,7 @@ public class LoanApplication {
             );
         }
         this.rejectionReason = reason != null ? reason.trim() : "Declined during desk review";
+        this.lastOfficerId = officerId;
         this.status = ApplicationStatus.REJECTED;
         this.updatedAt = now;
     }
@@ -215,18 +231,76 @@ public class LoanApplication {
         return "loan-" + this.id + "-disb";
     }
 
-    public void markDisbursed(UUID registeredLoanId, String batchId, Instant now) {
-        Objects.requireNonNull(registeredLoanId, "registeredLoanId is required");
-        Objects.requireNonNull(batchId, "batchId is required");
-        Objects.requireNonNull(now, "now is required");
+    /**
+     * The reference of the current payout at PayPal. The first is the application id; PayPal spends a reference when
+     * it refuses a payout, so every later attempt gets a suffix. Payout events are matched on it, which keeps a late
+     * report about an earlier attempt away from the current one.
+     */
+    public String payoutReference() {
+        return payoutAttempts <= 1 ? id.toString() : id + "-a" + payoutAttempts;
+    }
 
+    /**
+     * The payout has been asked of PayPal. From here the application cannot be rejected or cancelled: the money may
+     * already be on its way. Asking again while {@code DISBURSING} is allowed and changes nothing.
+     */
+    public void startDisbursement(UUID officerId, Instant now) {
+        Objects.requireNonNull(now, "now is required");
+        if (this.status == ApplicationStatus.DISBURSING) {
+            return;
+        }
         if (this.status != ApplicationStatus.APPROVED) {
             throw new DomainException(
                 LendingErrors.APPLICATION_INVALID_STATE,
                 "Loan application must have two-person approval (APPROVED) before disbursement; current status: " + this.status
             );
         }
+        if (officerId != null) {
+            this.lastOfficerId = officerId;
+        }
+        this.disbursementRef = expectedDisbursementBatchId();
+        this.payoutIssue = null;
+        this.payoutAttempts++;
+        this.status = ApplicationStatus.DISBURSING;
+        this.updatedAt = now;
+    }
 
+    /**
+     * The payout failed for good, or came back unclaimed: the application is approved again, with the reason where
+     * an officer can read it, and can be disbursed once more.
+     */
+    public void payoutFailed(String reason, Instant now) {
+        Objects.requireNonNull(now, "now is required");
+        if (this.status != ApplicationStatus.DISBURSING) {
+            throw new DomainException(
+                LendingErrors.APPLICATION_INVALID_STATE,
+                "Only a disbursing application can have its payout fail; current status: " + this.status
+            );
+        }
+        this.payoutIssue = reason == null || reason.isBlank() ? "PAYOUT_FAILED" : reason.trim();
+        this.status = ApplicationStatus.APPROVED;
+        this.updatedAt = now;
+    }
+
+    /** Notes what PayPal said without changing the state (for example money held for a recipient with no account yet). */
+    public void notePayoutIssue(String issue, Instant now) {
+        this.payoutIssue = issue;
+        this.updatedAt = now;
+    }
+
+    public void markDisbursed(UUID registeredLoanId, String batchId, Instant now) {
+        Objects.requireNonNull(registeredLoanId, "registeredLoanId is required");
+        Objects.requireNonNull(batchId, "batchId is required");
+        Objects.requireNonNull(now, "now is required");
+
+        if (this.status != ApplicationStatus.APPROVED && this.status != ApplicationStatus.DISBURSING) {
+            throw new DomainException(
+                LendingErrors.APPLICATION_INVALID_STATE,
+                "Loan application must have two-person approval (APPROVED) before disbursement; current status: " + this.status
+            );
+        }
+
+        this.payoutIssue = null;
         this.loanId = registeredLoanId;
         this.disbursementRef = batchId;
         this.disbursedAt = now;
@@ -278,6 +352,9 @@ public class LoanApplication {
     public String getDisbursementRef() { return disbursementRef; }
     public Instant getDisbursedAt() { return disbursedAt; }
     public Instant getCoolingOffExpiresAt() { return coolingOffExpiresAt; }
+    public String getPayoutIssue() { return payoutIssue; }
+    public int getPayoutAttempts() { return payoutAttempts; }
+    public UUID getLastOfficerId() { return lastOfficerId; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

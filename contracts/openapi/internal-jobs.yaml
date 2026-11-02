@@ -1,16 +1,26 @@
 openapi: 3.1.0
 info:
   title: PayPal Seed Internal Jobs API
-  version: 1.2.0
+  version: 2.0.0
   description: |
-    Idempotent backend triggers for Render Workflows and the worker role. Every route requires
-    `Authorization: Bearer <SEED_INTERNAL_TOKEN>` (service role). Close of business runs business dates
-    strictly in order (ADR 0007).
+    Idempotent backend triggers for Render Workflows and the worker role, and the calls the web servers make with the
+    service token (member login, staff upsert). Every route requires `Authorization: Bearer <SEED_INTERNAL_TOKEN>`
+    (service role); an actor token on these routes is refused with 401, and a service token on `/api/**` too.
+    Close of business runs business dates strictly in order (ADR 0007). Errors are RFC 9457 problems.
 security:
   - serviceToken: []
+tags:
+  - name: jobs
+    description: Close of business, hardship scan and sweep, mandate reconcile, audit chain
+  - name: identity-internal
+    description: Calls the web servers make after Log in with PayPal and staff sign-in
+  - name: paypal-catalog
+    description: PayPal product and plan bootstrap
 paths:
   /internal/jobs/cob/{date}/start:
     post:
+      tags: [jobs]
+      operationId: startCob
       summary: Start close of business for a date (returns the existing run if already started)
       parameters:
         - { name: date, in: path, required: true, schema: { type: string, format: date } }
@@ -21,6 +31,8 @@ paths:
         '422': { description: cob-in-the-future }
   /internal/jobs/cob/{date}/shards/{shard}:
     post:
+      tags: [jobs]
+      operationId: runCobShard
       summary: Close up to maxLoans loans of one shard; call again until done
       parameters:
         - { name: date, in: path, required: true, schema: { type: string, format: date } }
@@ -37,20 +49,28 @@ paths:
                               processed: { type: integer }, skipped: { type: integer }, failed: { type: integer } }
   /internal/jobs/cob/{date}/finish:
     post:
+      tags: [jobs]
+      operationId: finishCob
       summary: Close loans skipped while locked; mark the run COMPLETED or DEGRADED
       parameters: [ { name: date, in: path, required: true, schema: { type: string, format: date } } ]
       responses: { '200': { description: Run } }
   /internal/jobs/cob/catch-up:
     post:
+      tags: [jobs]
+      operationId: catchUpCob
       summary: Close every date after the last closed one up to `to` (default today), in order
       parameters: [ { name: to, in: query, schema: { type: string, format: date } } ]
       responses: { '200': { description: Runs } }
   /internal/jobs/mandates/reconcile:
     post:
+      tags: [jobs]
+      operationId: reconcileMandates
       summary: "Daily safety net: reconcile every active autopay mandate with its schedule (ADR 0005)"
       responses: { '200': { description: Number of loans queued } }
   /internal/loans/disbursed:
     post:
+      tags: [jobs]
+      operationId: registerDisbursedLoan
       summary: Register a disbursed loan (F2 hand-over); idempotent on disbursementRef
       requestBody:
         required: true
@@ -82,6 +102,8 @@ paths:
                   status: { type: string }
   /internal/loans/{loanId}/reschedules:
     post:
+      tags: [jobs]
+      operationId: applyReschedule
       summary: Apply an approved hardship option as a new schedule version (F5 governance calls this)
       parameters: [ { name: loanId, in: path, required: true, schema: { type: string, format: uuid } } ]
       requestBody:
@@ -102,6 +124,8 @@ paths:
         '422': { description: A rescheduling rule refused the request (problem code names the rule) }
   /internal/jobs/hardship/scan:
     post:
+      tags: [jobs]
+      operationId: scanHardship
       summary: Score one keyset page of one shard group and open hardship cases at LIKELY_MISS or above (F5)
       description: |
         Looks only at active loans whose oldest owed instalment is due in the next 10 days or is in grace.
@@ -137,6 +161,8 @@ paths:
                   done: { type: boolean }
   /internal/jobs/hardship/sweep:
     post:
+      tags: [jobs]
+      operationId: sweepHardshipTimers
       summary: Fire due hardship case timers (agent deadline, offer reminder and expiry, hold check and expiry, SLA 50/80/breach)
       description: The worker role also runs it every 30 s (`seed.jobs.hardship-sweep-ms`). Each timer fires once.
       parameters: [ { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } } ]
@@ -144,6 +170,8 @@ paths:
         '200': { description: Timers fired, content: { application/json: { schema: { type: object, properties: { fired: { type: integer } } } } } }
   /internal/jobs/governance/verify-audit-chain:
     post:
+      tags: [jobs]
+      operationId: verifyAuditChain
       summary: Recompute the governance audit hash chain end to end; a break is a Sev-1 alert
       responses:
         '200':
@@ -158,6 +186,8 @@ paths:
                   firstBrokenSeq: { type: [integer, 'null'] }
   /internal/underwriting/members/{memberId}/income:
     put:
+      tags: [jobs]
+      operationId: putMemberIncome
       summary: Seed consented weekly income for a member (demo and sandbox; F3 replaces it with PayPal Transaction Search)
       parameters: [ { name: memberId, in: path, required: true, schema: { type: string, format: uuid } } ]
       requestBody:
@@ -193,9 +223,146 @@ paths:
                   activeWeeks: { type: integer }
   /internal/demo-clock/advance:
     post:
+      tags: [jobs]
+      operationId: advanceDemoClock
       summary: Demo profile only. Move the shared business date forward
       parameters: [ { name: days, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 400 } } ]
       responses: { '200': { description: New business date } }
+  /internal/members/login:
+    post:
+      tags: [identity-internal]
+      operationId: loginWithPayPal
+      summary: Create or find the member for a PayPal payer id (called by the web server after Log in with PayPal)
+      description: |
+        First login creates the member. Later logins return the same member id and set `lastLoginAt`.
+        Absent or blank fields never erase stored values. A locale other than `en` or `es` is ignored.
+      security: [ { serviceToken: [] } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PayPalLogin' } } }
+      responses:
+        '200':
+          description: The member
+          content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /internal/staff/{staffId}:
+    put:
+      tags: [identity-internal]
+      operationId: upsertStaff
+      summary: Create or replace a staff record (called by the desk server after staff sign-in)
+      security: [ { serviceToken: [] } ]
+      parameters:
+        - { name: staffId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StaffUpsert' } } }
+      responses:
+        '200':
+          description: The staff record
+          content: { application/json: { schema: { $ref: '#/components/schemas/StaffRecord' } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /internal/paypal/catalog/bootstrap:
+    post:
+      tags: [paypal-catalog]
+      operationId: bootstrapPaypalCatalog
+      summary: Find or create the Seed PayPal product and its two monthly plans
+      description: |
+        Idempotent by construction, so it takes no `Idempotency-Key`: ids set in configuration win, then ids Seed
+        recorded earlier, then a lookup by name at PayPal, and only then a create that carries a stable
+        `PayPal-Request-Id`. Calling it twice creates each object once. Both plans charge $1 per unit and
+        support quantity, so a subscription's quantity is the amount in whole dollars (ADR 0005). Set the
+        returned ids in the environment (`scripts/paypal-bootstrap.sh` prints the variable names).
+      responses:
+        '200':
+          description: The product and plans that now exist
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaypalCatalog' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'paypal-rejected (PayPal refused a create; details.paypalIssue says why)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: 'dependency-unavailable (PayPal unreachable; call again, the creates are replay-safe)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 components:
   securitySchemes:
-    serviceToken: { type: http, scheme: bearer }
+    serviceToken: { type: http, scheme: bearer, description: SEED_INTERNAL_TOKEN (service role), held by the web servers and the job runner only }
+  responses:
+    Problem:
+      description: RFC 9457 problem
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    # Copies of the shapes in seed-api.yaml, so this file stands alone for the generator.
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, examples: ['https://problems.paypal-seed.dev/consent-version-stale'] }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    Language: { type: string, enum: [en, es] }
+    WalletPreference: { type: string, enum: [PAYPAL, VENMO] }
+    StaffRole: { type: string, enum: [OFFICER, CHECKER, ADMIN] }
+    PayPalLogin:
+      type: object
+      required: [paypalPayerId]
+      properties:
+        paypalPayerId: { type: string, minLength: 1, maxLength: 64, description: "`sub` / payer_id from Log in with PayPal" }
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 120 }
+        verified: { type: boolean, description: PayPal says the account is verified }
+        locale: { type: string, maxLength: 16, examples: [es-MX], description: "Only the language part is used; unsupported languages are ignored" }
+    LoginResult:
+      type: object
+      required: [created, member]
+      properties:
+        created: { type: boolean, description: true on the first login of this payer id }
+        member: { $ref: '#/components/schemas/MemberProfile' }
+    MemberProfile:
+      type: object
+      required: [memberId, language, walletPreference, paypalVerified, createdAt, lastLoginAt]
+      properties:
+        memberId: { type: string, format: uuid }
+        email: { type: [string, 'null'] }
+        displayName: { type: [string, 'null'] }
+        language: { $ref: '#/components/schemas/Language' }
+        walletPreference: { $ref: '#/components/schemas/WalletPreference' }
+        paypalVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time }
+    StaffUpsert:
+      type: object
+      required: [displayName, roles]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, maxLength: 254 }
+        roles: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/StaffRole' } }
+        active: { type: boolean, default: true }
+    StaffRecord:
+      type: object
+      required: [staffId, displayName, roles, active]
+      properties:
+        staffId: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: [string, 'null'] }
+        roles: { type: array, items: { $ref: '#/components/schemas/StaffRole' } }
+        active: { type: boolean }
+    PaypalCatalog:
+      type: object
+      required: [productId, savingsPlanId, loanPlanId, createdProduct, createdSavingsPlan, createdLoanPlan]
+      properties:
+        productId: { type: string, description: 'PayPal catalog product id (PROD-...); set as SEED_PAYPAL_PRODUCT_ID' }
+        savingsPlanId: { type: string, description: 'Monthly $1 x quantity plan for savings deposits; set as SEED_PAYPAL_SAVINGS_PLAN_ID' }
+        loanPlanId: { type: string, description: 'Monthly $1 x quantity plan for loan autopay; set as PAYPAL_LOAN_PLAN_ID' }
+        createdProduct: { type: boolean, description: true only when this call created the product }
+        createdSavingsPlan: { type: boolean }
+        createdLoanPlan: { type: boolean }
