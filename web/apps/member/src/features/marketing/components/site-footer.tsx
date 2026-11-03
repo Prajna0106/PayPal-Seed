@@ -24,6 +24,7 @@ const COLUMNS: ReadonlyArray<{ title: string; links: ReadonlyArray<FooterLink> }
       { label: "Guardrails", href: "#trust" },
       { label: "Questions", href: "#faq" },
       { label: "Built with", href: "#built-with" },
+      { label: "Safety fund", href: "/fund" },
     ],
   },
   {
@@ -47,6 +48,13 @@ function FooterAnchor({ link }: { link: FooterLink }): ReactNode {
   if (link.href === "/login") {
     return (
       <Link href="/login" className={className}>
+        {link.label}
+      </Link>
+    );
+  }
+  if (link.href === "/fund") {
+    return (
+      <Link href="/fund" className={className}>
         {link.label}
       </Link>
     );

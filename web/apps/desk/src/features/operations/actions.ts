@@ -91,6 +91,50 @@ export async function runHardshipScan(_previous: ActionResult): Promise<ActionRe
   );
 }
 
+type Api = Awaited<ReturnType<typeof adminInternalApi>>;
+
+/** Pages through the scan until the backend says it is done; the page cap stops a runaway loop. */
+async function scanAllShards(api: Api): Promise<{ scanned: number; opened: number; failed: number }> {
+  let after: string | undefined;
+  let scanned = 0;
+  let opened = 0;
+  let failed = 0;
+  for (let page = 0; page < 50; page++) {
+    const result = await unwrap(
+      api.POST("/internal/jobs/hardship/scan", {
+        body: { shardGroup: 0, shardCount: 1, limit: 500, ...(after ? { after } : {}) },
+      }),
+    );
+    scanned += result.scanned ?? 0;
+    opened += result.opened ?? 0;
+    failed += result.failed ?? 0;
+    if (result.done || !result.nextAfter) {
+      break;
+    }
+    after = result.nextAfter;
+  }
+  return { scanned, opened, failed };
+}
+
+/** Demo tool: only the scan, so the officer can show cases appearing before any timer fires. */
+export async function runScanOnly(_previous: ActionResult): Promise<ActionResult> {
+  return asAdmin(
+    async () => scanAllShards(await adminInternalApi()),
+    (r) => `Scanned ${r.scanned} loans, opened ${r.opened} case${r.opened === 1 ? "" : "s"}${r.failed ? `, ${r.failed} failed` : ""}.`,
+  );
+}
+
+/** Demo tool: only the timer sweep (offer reminders and expiry, holds, SLA warnings). */
+export async function runSweepOnly(_previous: ActionResult): Promise<ActionResult> {
+  return asAdmin(
+    async () => {
+      const api = await adminInternalApi();
+      return unwrap(api.POST("/internal/jobs/hardship/sweep", { params: { query: { limit: 500 } } }));
+    },
+    (r) => `Fired ${r.fired ?? 0} timer${r.fired === 1 ? "" : "s"}.`,
+  );
+}
+
 /** Closes every business date up to today, in order (the daily close's catch-up). */
 export async function runCloseOfBusiness(_previous: ActionResult): Promise<ActionResult> {
   return asAdmin(

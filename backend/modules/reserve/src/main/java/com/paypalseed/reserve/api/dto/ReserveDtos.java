@@ -1,5 +1,6 @@
 package com.paypalseed.reserve.api.dto;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -47,9 +48,20 @@ public final class ReserveDtos {
         }
     }
 
+    /** One signature on a cover request: {@code role} is MAKER or CHECKER, {@code staffId} the officer. No free text. */
+    public record CoverApproval(String role, UUID staffId, Instant decidedAt) {
+    }
+
+    /**
+     * {@code slaDueAt} is when the officers' decision is overdue (the time of the request plus the decision SLA), null
+     * if the approval request cannot be read. {@code approvals} lists who has signed so far, oldest first.
+     */
     public record CoverRequestView(UUID id, UUID memberId, UUID loanId, long amountCents, String reasonCode,
                                    UUID hardshipCaseId, CoverStatus status, UUID approvalRequestId, LocalDate requestedOn,
-                                   String closedReason, UUID journalEntryId) {
+                                   String closedReason, UUID journalEntryId, Instant slaDueAt, List<CoverApproval> approvals) {
+        public CoverRequestView {
+            approvals = List.copyOf(approvals);
+        }
     }
 
     public record CoverRequestPage(List<CoverRequestView> rows, UUID nextBefore) {

@@ -25,6 +25,7 @@ import com.paypalseed.reserve.api.dto.ReserveDtos.DonationReceipt;
 import com.paypalseed.reserve.api.dto.ReserveDtos.ReserveSummary;
 import com.paypalseed.reserve.api.events.ReserveEvents.CoverApproved;
 import com.paypalseed.support.IntegrationTest;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
@@ -290,6 +291,10 @@ class ReserveIT extends IntegrationTest {
         ResultActions request = createCover(raiser, "OFFICER", member, loan.loanId(), 5_000, "cover-key-1");
         UUID coverId = created(request);
         request.andExpect(jsonPath("$.status").value("PENDING_APPROVAL")).andExpect(jsonPath("$.amountCents").value(5_000));
+        JsonNode raised = json.readTree(request.andReturn().getResponse().getContentAsString());
+        assertThat(raised.path("approvals")).as("nobody has signed yet").isEmpty();
+        Instant slaDueAt = Instant.parse(raised.path("slaDueAt").asText());
+        assertThat(slaDueAt).as("the request time plus the decision SLA (PT48H)").isEqualTo(clock.now().plus(Duration.ofHours(48)));
         assertThat(created(createCover(raiser, "OFFICER", member, loan.loanId(), 5_000, "cover-key-1")))
                 .as("same key, same body: the stored request").isEqualTo(coverId);
         createCover(raiser, "OFFICER", member, loan.loanId(), 6_000, "cover-key-1")
@@ -314,6 +319,12 @@ class ReserveIT extends IntegrationTest {
                 .andExpect(jsonPath("$.role").value("MAKER")).andExpect(jsonPath("$.next").value("CHECKER"))
                 .andExpect(jsonPath("$.coverStatus").value("PENDING_APPROVAL"));
         decide(coverId, maker, "OFFICER", "APPROVE", "maker-1").andExpect(status().isOk()); // idempotent replay
+        JsonNode madeByMaker = coverRow(coverId, "PENDING_APPROVAL");
+        assertThat(madeByMaker.path("approvals")).hasSize(1);
+        assertThat(madeByMaker.path("approvals").get(0).path("role").asText()).isEqualTo("MAKER");
+        assertThat(madeByMaker.path("approvals").get(0).path("staffId").asText()).isEqualTo(maker.toString());
+        assertThat(Instant.parse(madeByMaker.path("approvals").get(0).path("decidedAt").asText())).isNotNull();
+        assertThat(Instant.parse(madeByMaker.path("slaDueAt").asText())).as("the SLA does not move").isEqualTo(slaDueAt);
         decide(coverId, maker, "OFFICER,CHECKER", "APPROVE", "same-person").andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("sod-violation"));
         assertThat(reserveBalance()).as("one signature moves nothing").isEqualTo(reserveBefore);
@@ -321,6 +332,12 @@ class ReserveIT extends IntegrationTest {
 
         decide(coverId, checker, "CHECKER", "APPROVE", "checker-1").andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestStatus").value("APPROVED")).andExpect(jsonPath("$.coverStatus").value("APPROVED"));
+        JsonNode signed = coverRow(coverId, "APPROVED");
+        assertThat(signed.path("approvals")).hasSize(2);
+        assertThat(signed.path("approvals").get(0).path("role").asText()).isEqualTo("MAKER");
+        assertThat(signed.path("approvals").get(0).path("staffId").asText()).isEqualTo(maker.toString());
+        assertThat(signed.path("approvals").get(1).path("role").asText()).isEqualTo("CHECKER");
+        assertThat(signed.path("approvals").get(1).path("staffId").asText()).isEqualTo(checker.toString());
         decide(coverId, checker, "CHECKER", "APPROVE", "checker-1").andExpect(status().isOk())
                 .andExpect(jsonPath("$.coverStatus").value("APPROVED")); // replay posts nothing more
         decide(coverId, UUID.randomUUID(), "CHECKER", "APPROVE", "late").andExpect(status().isConflict());
@@ -362,6 +379,7 @@ class ReserveIT extends IntegrationTest {
         assertThat(reserveBalance()).isEqualTo(reserveBefore);
         assertThat(receivable(loan.loanId())).isEqualTo(receivableBefore);
         assertThat(coverStatus(coverId)).isEqualTo("REJECTED");
+        assertThat(coverRow(coverId, "REJECTED").path("approvals")).as("a rejection is not a signature").isEmpty();
 
         assertThat(created(createCover(officer, "OFFICER", member, loan.loanId(), 2_000, "rej-2"))).isNotEqualTo(coverId);
         assertJournalBalanced();
@@ -520,6 +538,19 @@ class ReserveIT extends IntegrationTest {
         Long difference = jdbc.sql("SELECT COALESCE(SUM(CASE side WHEN 'DEBIT' THEN amount_cents ELSE -amount_cents END), 0) FROM ledger.journal_line")
                 .query(Long.class).single();
         assertThat(difference).as("every debit has its credit").isZero();
+    }
+
+    /** The row of the desk list for one cover request, as the desk reads it. */
+    private JsonNode coverRow(UUID coverId, String status) throws Exception {
+        JsonNode page = json.readTree(mvc.perform(staff(get("/api/v1/desk/reserve/cover-requests"), UUID.randomUUID(), "CHECKER")
+                        .param("status", status).param("limit", "200"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        for (JsonNode row : page.path("rows")) {
+            if (row.path("id").asText().equals(coverId.toString())) {
+                return row;
+            }
+        }
+        throw new AssertionError("cover request " + coverId + " is not listed as " + status);
     }
 
     private String coverStatus(UUID coverId) {

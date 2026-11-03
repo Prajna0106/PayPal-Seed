@@ -1,8 +1,10 @@
 package com.paypalseed.lending.infrastructure.web;
 
+import com.paypalseed.lending.api.dto.LendingDtos.ApplicationPreviewView;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService;
+import com.paypalseed.lending.application.usecases.MicroloanApplicationService.PreviewApplicationCommand;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.SubmitApplicationCommand;
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
 import com.paypalseed.platform.kernel.CommonErrors;
@@ -16,6 +18,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -54,6 +57,16 @@ public class MicroloanController {
         WalletType payoutWallet,
         boolean fairCheckConsented,
         Long verifiedMonthlyIncomeCents
+    ) {
+    }
+
+    /** The terms are checked by the sizing rules, not by bean validation, so a term outside the range is answered in words. */
+    public record PreviewLoanApplicationRequest(
+        UUID memberId,
+        @Positive @Max(1_000_000_000L) long requestedAmountCents,
+        @Min(1) @Max(60) int termMonths,
+        @Min(1) @Max(28) Integer preferredDueDay,
+        @PositiveOrZero Long verifiedMonthlyIncomeCents
     ) {
     }
 
@@ -104,6 +117,22 @@ public class MicroloanController {
             )
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    /** What the loan would look like before the member applies; stores nothing. */
+    @PostMapping("/loans/applications/preview")
+    public ResponseEntity<ApplicationPreviewView> previewApplication(
+        Actor actor,
+        @Valid @RequestBody PreviewLoanApplicationRequest request
+    ) {
+        UUID memberId = ownMemberId(actor, request.memberId());
+        OptionalLong income = request.verifiedMonthlyIncomeCents() != null
+            ? OptionalLong.of(request.verifiedMonthlyIncomeCents())
+            : OptionalLong.empty();
+        return ResponseEntity.ok(applicationService.previewApplication(
+            memberId,
+            new PreviewApplicationCommand(request.requestedAmountCents(), request.termMonths(), request.preferredDueDay(), income)
+        ));
     }
 
     @GetMapping("/loans/applications")

@@ -61,7 +61,8 @@ public final class FraudDtos {
         }
     }
 
-    public record FlagPage(List<FlagView> rows, UUID nextBefore) {
+    /** {@code flagThreshold} is the configured score at which a flag is raised, so a row's score can be read against it. */
+    public record FlagPage(List<FlagView> rows, UUID nextBefore, int flagThreshold) {
         public FlagPage {
             rows = List.copyOf(rows);
         }
