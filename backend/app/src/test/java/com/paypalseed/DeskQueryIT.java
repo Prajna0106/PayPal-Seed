@@ -14,6 +14,7 @@ import com.paypalseed.deskquery.api.dto.DeskQueryDtos.PortfolioSummary;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Projection;
 import com.paypalseed.deskquery.application.usecases.ApplicationProjector;
 import com.paypalseed.deskquery.application.usecases.AssessmentProjector;
+import com.paypalseed.deskquery.application.usecases.DeskQuerySettings;
 import com.paypalseed.deskquery.application.usecases.LoanProjector;
 import com.paypalseed.engagement.infrastructure.persistence.ReminderRepository;
 import com.paypalseed.identity.api.IdentityFacade;
@@ -92,9 +93,18 @@ class DeskQueryIT extends IntegrationTest {
     ObjectMapper json;
     @Autowired
     IdentityFacade identity;
+    @Autowired
+    DeskQuerySettings deskSettings;
 
     private final UUID officerOne = UUID.randomUUID();
     private final UUID officerTwo = UUID.randomUUID();
+
+    /** ADR 0027: the application SLA is submittedAt + PT24H and "due soon" is PT4H, from the shipped configuration. */
+    @Test
+    void theShippedSlaSettingsAreTwentyFourHoursAndFour() {
+        assertThat(deskSettings.applicationSla()).isEqualTo(Duration.ofHours(24));
+        assertThat(deskSettings.dueSoonWindow()).isEqualTo(Duration.ofHours(4));
+    }
 
     // ---------------------------------------------------------------------------------------------------------------
     // The whole journey

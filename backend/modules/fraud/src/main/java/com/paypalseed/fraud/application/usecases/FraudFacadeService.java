@@ -40,6 +40,11 @@ class FraudFacadeService implements FraudFacade {
     }
 
     @Override
+    public void payoutRecipient(UUID memberId, String fingerprint, Instant occurredAt, String sourceKey) {
+        signals.payoutRecipient(memberId, fingerprint, occurredAt, sourceKey);
+    }
+
+    @Override
     public List<FlagView> openFlags() {
         return queries.page(List.of(FlagStatus.OPEN), null, OPEN_FLAGS_SHOWN).rows();
     }

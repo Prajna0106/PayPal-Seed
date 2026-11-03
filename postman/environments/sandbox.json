@@ -43,6 +43,18 @@
       "value": "local-dev-internal-token",
       "type": "secret",
       "enabled": true
+    },
+    {
+      "key": "adminId",
+      "value": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "agentToken",
+      "value": "",
+      "type": "secret",
+      "enabled": true
     }
   ]
 }

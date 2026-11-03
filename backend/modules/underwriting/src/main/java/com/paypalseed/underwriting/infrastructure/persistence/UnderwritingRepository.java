@@ -182,6 +182,20 @@ public class UnderwritingRepository {
             .fetch(this::mapAssessment);
     }
 
+    /** The newest assessment linked to the application, if any. */
+    public Optional<FairLoanCheckAssessment> findLatestAssessmentByApplicationId(UUID applicationId) {
+        if (dsl == null) {
+            return assessments.values().stream()
+                .filter(a -> applicationId.equals(a.getApplicationId()))
+                .max(Comparator.comparing(FairLoanCheckAssessment::getCreatedAt));
+        }
+        return dsl.selectFrom(FAIR_LOAN_CHECK_ASSESSMENT)
+            .where(FAIR_LOAN_CHECK_ASSESSMENT.APPLICATION_ID.eq(applicationId))
+            .orderBy(FAIR_LOAN_CHECK_ASSESSMENT.CREATED_AT.desc(), FAIR_LOAN_CHECK_ASSESSMENT.ID.desc())
+            .limit(1)
+            .fetchOptional(this::mapAssessment);
+    }
+
     public List<FairLoanCheckAssessment> findAllAssessments() {
         if (dsl == null) {
             return assessments.values().stream()

@@ -16,6 +16,7 @@ import com.paypalseed.fraud.infrastructure.persistence.DestinationRepository.Cha
 import com.paypalseed.fraud.infrastructure.persistence.FactRepository;
 import com.paypalseed.fraud.infrastructure.persistence.FlagRepository;
 import com.paypalseed.fraud.infrastructure.persistence.FlagRepository.FlagRow;
+import com.paypalseed.fraud.infrastructure.persistence.RecipientRepository;
 import com.paypalseed.fraud.infrastructure.persistence.SignalRepository;
 import com.paypalseed.fraud.infrastructure.persistence.SignalRepository.StoredSignal;
 import com.paypalseed.governance.api.GovernanceFacade;
@@ -50,6 +51,7 @@ public class FraudSignals {
 
     private final FactRepository facts;
     private final DestinationRepository destinations;
+    private final RecipientRepository recipients;
     private final SignalRepository signals;
     private final FlagRepository flags;
     private final ReferenceHasher hasher;
@@ -60,11 +62,13 @@ public class FraudSignals {
     private final ObjectMapper json;
     private final List<Rule> rules = RuleSet.v1();
 
-    public FraudSignals(FactRepository facts, DestinationRepository destinations, SignalRepository signals, FlagRepository flags,
+    public FraudSignals(FactRepository facts, DestinationRepository destinations, RecipientRepository recipients,
+                        SignalRepository signals, FlagRepository flags,
                         ReferenceHasher hasher, FraudSettings settings, GovernanceFacade governance, BusinessClock clock,
                         ApplicationEventPublisher events, ObjectMapper json) {
         this.facts = facts;
         this.destinations = destinations;
+        this.recipients = recipients;
         this.signals = signals;
         this.flags = flags;
         this.hasher = hasher;
@@ -110,6 +114,23 @@ public class FraudSignals {
         facts.lock("member:" + memberId);
         if (destinations.record(memberId, refHash, occurredAt) == Change.CHANGED) {
             observe(new Observation(memberId, FactKind.PAYOUT_RECIPIENT_CHANGED, occurredAt, sourceKey, null, reference, Map.of()));
+        }
+    }
+
+    /**
+     * Tells a payout to a different recipient from one to the same recipient. {@code fingerprint} is the keyed hash payments
+     * publishes with the payout request; it is hashed again here, so what is stored is not even the fingerprint. The first
+     * recipient seen is a baseline and records nothing.
+     */
+    @Transactional
+    public void payoutRecipient(UUID memberId, String fingerprint, Instant occurredAt, String sourceKey) {
+        String refHash = hasher.hash(fingerprint);
+        if (refHash == null) {
+            return;
+        }
+        facts.lock("member:" + memberId);
+        if (recipients.record(memberId, refHash, occurredAt) == Change.CHANGED) {
+            observe(new Observation(memberId, FactKind.PAYOUT_RECIPIENT_CHANGED, occurredAt, sourceKey, null, fingerprint, Map.of()));
         }
     }
 

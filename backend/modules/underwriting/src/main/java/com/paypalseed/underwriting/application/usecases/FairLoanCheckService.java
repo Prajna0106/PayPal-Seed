@@ -16,6 +16,7 @@ import com.paypalseed.underwriting.api.dto.UnderwritingDtos.AssessmentStatusView
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
 import com.paypalseed.underwriting.api.events.AssessmentChanged;
+import com.paypalseed.underwriting.application.ports.MemberConsentLedger;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment;
 import com.paypalseed.underwriting.domain.model.FairLoanCheckAssessment.OfficerDecisionType;
 import com.paypalseed.underwriting.domain.model.UnderwritingErrors;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -74,6 +76,7 @@ public class FairLoanCheckService {
     private final IncomeRefresher incomeRefresher;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
+    private final MemberConsentLedger consentLedger;
 
     public FairLoanCheckService(UnderwritingRepository repository, SavingsFacade savingsFacade) {
         this(repository, savingsFacade, null);
@@ -87,7 +90,21 @@ public class FairLoanCheckService {
         this(repository, savingsFacade, narrator, null, null, null);
     }
 
-    /** {@code incomeRefresher}, {@code events} and {@code transactions} may be null when running without a database. */
+    public FairLoanCheckService(
+        UnderwritingRepository repository,
+        SavingsFacade savingsFacade,
+        FairCheckNarrator narrator,
+        IncomeRefresher incomeRefresher,
+        ApplicationEventPublisher events,
+        PlatformTransactionManager transactions
+    ) {
+        this(repository, savingsFacade, narrator, incomeRefresher, events, transactions, null);
+    }
+
+    /**
+     * {@code incomeRefresher}, {@code events}, {@code transactions} and {@code consentLedger} may be null when running
+     * without a database or without the member's consent list.
+     */
     @Autowired
     public FairLoanCheckService(
         UnderwritingRepository repository,
@@ -95,7 +112,8 @@ public class FairLoanCheckService {
         @Autowired(required = false) FairCheckNarrator narrator,
         @Autowired(required = false) IncomeRefresher incomeRefresher,
         @Autowired(required = false) ApplicationEventPublisher events,
-        @Autowired(required = false) PlatformTransactionManager transactions
+        @Autowired(required = false) PlatformTransactionManager transactions,
+        @Autowired(required = false) MemberConsentLedger consentLedger
     ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.savingsFacade = Objects.requireNonNull(savingsFacade, "savingsFacade is required");
@@ -103,18 +121,38 @@ public class FairLoanCheckService {
         this.incomeRefresher = incomeRefresher;
         this.events = events;
         this.transaction = transactions == null ? null : new TransactionTemplate(transactions);
+        this.consentLedger = consentLedger;
     }
 
+    /**
+     * Records the consent underwriting enforces and, with it, the fair-check line of the member's consent list. Both
+     * commit together or not at all, and repeating the call changes nothing in the list.
+     */
     public ConsentStatusView grantConsent(UUID memberId) {
         Objects.requireNonNull(memberId, "memberId is required");
-        ConsentRecord saved = repository.saveConsent(memberId, true, Instant.now());
-        return toConsentView(saved);
+        return inTransaction(() -> {
+            ConsentRecord saved = repository.saveConsent(memberId, true, Instant.now());
+            if (consentLedger != null) {
+                consentLedger.fairCheckGiven(memberId);
+            }
+            return toConsentView(saved);
+        });
     }
 
+    /** Withdraws the consent and closes its lines in the member's consent list in one step. */
     public ConsentStatusView revokeConsent(UUID memberId) {
         Objects.requireNonNull(memberId, "memberId is required");
-        ConsentRecord saved = repository.saveConsent(memberId, false, Instant.now());
-        return toConsentView(saved);
+        return inTransaction(() -> {
+            ConsentRecord saved = repository.saveConsent(memberId, false, Instant.now());
+            if (consentLedger != null) {
+                consentLedger.closed(memberId);
+            }
+            return toConsentView(saved);
+        });
+    }
+
+    private <T> T inTransaction(Supplier<T> work) {
+        return transaction == null ? work.get() : transaction.execute(status -> work.get());
     }
 
     public ConsentStatusView getConsentStatus(UUID memberId) {
@@ -131,6 +169,18 @@ public class FairLoanCheckService {
     }
 
     public FairCheckCardView runFairLoanCheck(UUID memberId, RunFairCheckCommand command) {
+        return run(memberId, command, true);
+    }
+
+    /**
+     * The same check on the income already stored, for a caller that is inside a transaction and so must not wait
+     * for PayPal. It refuses (retryable) if the stored income is out of date, instead of reading PayPal or deciding on it.
+     */
+    public FairCheckCardView runFairLoanCheckOnStoredIncome(UUID memberId, RunFairCheckCommand command) {
+        return run(memberId, command, false);
+    }
+
+    private FairCheckCardView run(UUID memberId, RunFairCheckCommand command, boolean mayReadPayPal) {
         Objects.requireNonNull(memberId, "memberId is required");
         Objects.requireNonNull(command, "command is required");
 
@@ -147,8 +197,16 @@ public class FairLoanCheckService {
 
         // With the real income source the figures come from PayPal, not from the request, and a failed read refuses
         // the check (retryable) instead of falling back to numbers the member typed.
-        RunFairCheckCommand effective = incomeRefresher == null ? command
-            : incomeRefresher.verifiedMonthlyIncomes(memberId).map(command::withMonthlyIncomes).orElse(command);
+        Optional<List<IncomeMonthDto>> verified = Optional.empty();
+        if (incomeRefresher != null) {
+            if (mayReadPayPal) {
+                verified = incomeRefresher.verifiedMonthlyIncomes(memberId);
+            } else {
+                incomeRefresher.requireFresh(memberId);
+                verified = incomeRefresher.storedMonthlyIncomes(memberId);
+            }
+        }
+        RunFairCheckCommand effective = verified.map(command::withMonthlyIncomes).orElse(command);
 
         MemberSavingsSummary savings = savingsFacade.getMemberSavingsSummary(memberId.toString());
         List<MonthlyIncomePoint> incomePoints = effective.monthlyIncomes().stream()
@@ -272,6 +330,11 @@ public class FairLoanCheckService {
         return repository.findAssessmentsByMemberId(memberId).stream()
             .map(FairLoanCheckService::toCardView)
             .toList();
+    }
+
+    /** The newest fair check linked to the application, for the desk page that sits beside it. */
+    public Optional<FairCheckCardView> latestAssessmentOfApplication(UUID applicationId) {
+        return repository.findLatestAssessmentByApplicationId(applicationId).map(FairLoanCheckService::toCardView);
     }
 
     public List<FairCheckCardView> listAllAssessments() {

@@ -68,7 +68,8 @@ public class RecordQueries {
                 s.level().ladderTier().level(), s.since(), s.levelSince(), life.onTimeBps(),
                 anyEvents ? OnTimeBand.of(life.onTimeBps()).label() : null,
                 new SavingsCounts(life.onTimeSavingMonths(), life.missedSavingMonths()),
-                new LoanCounts(s.loansDisbursed(), life.loansRepaidOnPlan(), life.loansRepaidOffPlan()),
+                new LoanCounts(s.loansDisbursed(), life.loansRepaidOnPlan(), life.loansRepaidOffPlan(),
+                        s.loansCompletedWithFundHelp()),
                 new InstalmentCounts(life.instalmentsOnTime(), life.instalmentsLate(), life.openLateInstalments()),
                 s.hardshipPlans(), s.defaults(), nextStep(s.level(), s.current()), RecordLevels.POLICY_VERSION);
     }
@@ -76,7 +77,7 @@ public class RecordQueries {
     static RecordView emptyView() {
         RecordLevel level = RecordLevel.NEW;
         return new RecordView(level.name(), level.rank(), level.loanLimitCents(), level.ladderTier().level(), null, null,
-                RecordFacts.FULL_BPS, null, new SavingsCounts(0, 0), new LoanCounts(0, 0, 0),
+                RecordFacts.FULL_BPS, null, new SavingsCounts(0, 0), new LoanCounts(0, 0, 0, 0),
                 new InstalmentCounts(0, 0, 0), 0, 0, nextStep(level, RecordFacts.EMPTY), RecordLevels.POLICY_VERSION);
     }
 

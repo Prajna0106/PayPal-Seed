@@ -66,6 +66,22 @@ export function toGoal(goal: Schemas["SavingsGoal"]): Goal {
   };
 }
 
+/** One payment PayPal confirmed and Seed credited to a goal. `amountCents` is the backend's own whole-cent figure. */
+export interface Deposit {
+  source: Schemas["GoalDeposit"]["source"];
+  amountCents: number;
+  creditedAt: string;
+}
+
+export function toDeposit(deposit: Schemas["GoalDeposit"]): Deposit {
+  return { source: deposit.source, amountCents: deposit.amountCents, creditedAt: deposit.creditedAt };
+}
+
+export const DEPOSIT_SOURCE: Record<Deposit["source"], string> = {
+  SUBSCRIPTION: "Monthly deposit",
+  TOPUP: "Extra deposit",
+};
+
 export function toWithdrawal(withdrawal: Schemas["Withdrawal"]): Withdrawal {
   return {
     id: withdrawal.id,

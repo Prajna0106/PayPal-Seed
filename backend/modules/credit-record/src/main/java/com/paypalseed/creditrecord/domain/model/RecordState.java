@@ -24,6 +24,11 @@ public record RecordState(UUID memberId, RecordLevel level, LocalDate since, Loc
         settled = Set.copyOf(settled);
     }
 
+    /** Loans the safety fund paid in full: repaid, but not completed by the member (ADR 0025). */
+    public int loansCompletedWithFundHelp() {
+        return (int) settled.stream().filter(SettledKeys::isFundCompletion).count();
+    }
+
     public static RecordState initial(UUID memberId, LocalDate firstFactOn) {
         return new RecordState(memberId, RecordLevel.NEW, firstFactOn, firstFactOn, RecordFacts.EMPTY, RecordFacts.EMPTY, 0, 0,
                 0, null, null, 0, Set.of(), Set.of(), 0);

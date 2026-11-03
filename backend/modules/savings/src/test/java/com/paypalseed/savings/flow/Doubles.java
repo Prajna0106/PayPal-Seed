@@ -131,6 +131,13 @@ final class Doubles {
         String nextReason;
         RuntimeException failNextPayout;
         int subscriptionsStarted;
+        /** What PayPal says about each payout reference (ADR 0029); a reference with no entry is not a known payout. */
+        final Map<String, PayoutReport> payoutReports = new HashMap<>();
+        final List<String> payoutReads = new ArrayList<>();
+        RuntimeException failPayoutRead;
+        SubscriptionReport report;
+        RuntimeException failRead;
+        int reads;
 
         @Override
         public Subscription startSubscription(UUID memberId, UUID goalId, long monthlyCents, String requestId, String returnUrl,
@@ -146,6 +153,17 @@ final class Doubles {
         @Override
         public Optional<Subscription> subscriptionOf(UUID goalId) {
             return Optional.ofNullable(subscriptions.get(goalId));
+        }
+
+        @Override
+        public Optional<SubscriptionReport> readSubscription(UUID goalId) {
+            reads++;
+            if (failRead != null) {
+                RuntimeException e = failRead; // once, so a batch can fail on one goal and go on
+                failRead = null;
+                throw e;
+            }
+            return Optional.ofNullable(report);
         }
 
         void setStatus(UUID goalId, String status) {
@@ -190,8 +208,19 @@ final class Doubles {
         }
 
         @Override
-        public Payout sendPayout(String referenceId, long amountCents, PayoutRecipients.Recipient recipient, SavingsWallet wallet,
-                                 String note) {
+        public Optional<PayoutReport> syncPayout(String referenceId) {
+            payoutReads.add(referenceId);
+            if (failPayoutRead != null) {
+                RuntimeException e = failPayoutRead;
+                failPayoutRead = null;
+                throw e;
+            }
+            return Optional.ofNullable(payoutReports.get(referenceId));
+        }
+
+        @Override
+        public Payout sendPayout(String referenceId, UUID memberId, long amountCents, PayoutRecipients.Recipient recipient,
+                                 SavingsWallet wallet, String note) {
             calls.add("payout:" + referenceId + ":" + amountCents + ":" + wallet);
             if (failNextPayout != null) {
                 RuntimeException e = failNextPayout;

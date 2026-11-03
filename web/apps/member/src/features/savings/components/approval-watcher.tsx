@@ -6,6 +6,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { syncGoal } from "../actions";
 import type { GoalStatus } from "../model";
 
 const EVERY_MS = 3000;
@@ -28,6 +29,9 @@ export function ApprovalWatcher({ goalId, goalName, status }: { goalId: string; 
       return;
     }
     let attempts = 0;
+    // The webhook may never reach this machine, so each round also asks the backend to read PayPal directly.
+    const check = () => void syncGoal(goalId).finally(() => router.refresh());
+    check();
     const timer = window.setInterval(() => {
       attempts += 1;
       if (attempts >= ATTEMPTS) {
@@ -35,10 +39,10 @@ export function ApprovalWatcher({ goalId, goalName, status }: { goalId: string; 
         setGaveUp(true);
         return;
       }
-      router.refresh();
+      check();
     }, EVERY_MS);
     return () => window.clearInterval(timer);
-  }, [waiting, router, round]);
+  }, [waiting, router, round, goalId]);
 
   const goalHref = `/app/savings/${goalId}` as Route;
 

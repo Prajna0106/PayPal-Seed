@@ -1,15 +1,22 @@
 package com.paypalseed.savings.application;
 
+import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.savings.api.SavingsFacade;
+import com.paypalseed.savings.api.dto.DepositFact;
 import com.paypalseed.savings.api.dto.MemberGoalView;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
+import com.paypalseed.savings.application.ports.CreditedPayments;
 import com.paypalseed.savings.application.ports.SavingsGoalRepository;
+import com.paypalseed.savings.application.ports.SavingsPayments;
 import com.paypalseed.savings.application.usecases.PauseResumeGoalUseCase;
 import com.paypalseed.savings.application.usecases.RecordDepositUseCase;
 import com.paypalseed.savings.domain.model.GoalStatus;
 import com.paypalseed.savings.domain.model.SavingsGoal;
 import com.paypalseed.savings.domain.model.SavingsStreak;
+import java.time.LocalDate;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -23,15 +30,30 @@ public class SavingsFacadeImpl implements SavingsFacade {
     private final RecordDepositUseCase recordDepositUseCase;
     private final PauseResumeGoalUseCase pauseResumeGoalUseCase;
     private final SavingsGoalRepository repository;
+    private final ObjectProvider<SavingsPayments> payments;
+    private final ObjectProvider<CreditedPayments> credited;
 
     public SavingsFacadeImpl(
         RecordDepositUseCase recordDepositUseCase,
         PauseResumeGoalUseCase pauseResumeGoalUseCase,
         SavingsGoalRepository repository
     ) {
+        this(recordDepositUseCase, pauseResumeGoalUseCase, repository, null, null);
+    }
+
+    @Autowired
+    public SavingsFacadeImpl(
+        RecordDepositUseCase recordDepositUseCase,
+        PauseResumeGoalUseCase pauseResumeGoalUseCase,
+        SavingsGoalRepository repository,
+        ObjectProvider<SavingsPayments> payments,
+        ObjectProvider<CreditedPayments> credited
+    ) {
         this.recordDepositUseCase = Objects.requireNonNull(recordDepositUseCase);
         this.pauseResumeGoalUseCase = Objects.requireNonNull(pauseResumeGoalUseCase);
         this.repository = Objects.requireNonNull(repository);
+        this.payments = payments;
+        this.credited = credited;
     }
 
     @Override
@@ -89,7 +111,28 @@ public class SavingsFacadeImpl implements SavingsFacade {
             .sorted(Comparator.comparing(SavingsGoal::getCreatedAt).reversed())
             .map(g -> new MemberGoalView(g.getId(), g.getName(), g.getStatus().name(), g.getTargetAmount().cents(),
                 g.getCurrentBalance().cents(), g.getMonthlyAmount().cents(), g.getMonthlyAmount().currency(),
-                g.getTargetDate()))
+                g.getTargetDate(), nextDepositDate(g)))
             .toList();
+    }
+
+    /** Only a goal that is saving by subscription has a next deposit; PayPal's time is taken as it last reported it. */
+    private LocalDate nextDepositDate(SavingsGoal goal) {
+        SavingsPayments source = payments == null ? null : payments.getIfAvailable();
+        if (source == null || goal.getStatus() != GoalStatus.ACTIVE) {
+            return null;
+        }
+        return source.nextBillingTime(goal.getId()).map(BusinessClock::businessDateOf).orElse(null);
+    }
+
+    @Override
+    public List<String> membersWithDeposits(String afterMemberId, int limit) {
+        CreditedPayments source = credited == null ? null : credited.getIfAvailable();
+        return source == null ? List.of() : source.membersWithCredits(afterMemberId, limit);
+    }
+
+    @Override
+    public List<DepositFact> depositsOfMember(String memberId) {
+        CreditedPayments source = credited == null ? null : credited.getIfAvailable();
+        return source == null ? List.of() : source.creditsOfMember(memberId);
     }
 }

@@ -11,6 +11,7 @@ export const LOAN_STATUSES: Record<LoanStatus, { label: string; tone: StatusTone
   REPAID: { label: "Repaid", tone: "success" },
   COVERED: { label: "Covered by reserve", tone: "neutral" },
   CANCELLED: { label: "Cancelled", tone: "neutral" },
+  DISBURSEMENT_RETURNED: { label: "Payout returned", tone: "warning" },
 };
 
 /** Severity order, mildest first, the order the backend lists the buckets in. */

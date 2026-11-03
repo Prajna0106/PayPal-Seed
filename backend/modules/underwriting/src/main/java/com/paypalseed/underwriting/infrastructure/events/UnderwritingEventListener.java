@@ -6,7 +6,10 @@ import com.paypalseed.underwriting.application.usecases.IncomeConsentSync;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 
-/** Follows the member's consent ledger in identity, so withdrawing income read really stops the fair check. */
+/**
+ * Follows the member's consent ledger in identity, so withdrawing income read or the fair check really stops the
+ * fair check (ADR 0018, ADR 0026).
+ */
 @Component
 class UnderwritingEventListener {
 
@@ -20,6 +23,8 @@ class UnderwritingEventListener {
     void on(ConsentRevoked event) {
         if (event.type() == ConsentType.INCOME_READ) {
             consents.incomeReadWithdrawn(event.memberId());
+        } else if (event.type() == ConsentType.FAIR_CHECK) {
+            consents.fairCheckWithdrawn(event.memberId());
         }
     }
 }

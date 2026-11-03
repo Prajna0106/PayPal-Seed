@@ -1,0 +1,33 @@
+$kind: http-request
+name: 'HS30. Officer switches agents to TEMPLATES_ONLY'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/agents/kill-switch'
+order: 30000
+description: 'Any officer may make agents safer at once. Members then get deterministic template text and no model is called. HS34 puts the mode back, so run the whole folder.'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "scope": "GLOBAL",
+      "mode": "TEMPLATES_ONLY",
+      "reason": "Postman run: show the template path"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Mode is TEMPLATES_ONLY, tripped by an officer', () => {
+        pm.expect(body.mode).to.eql('TEMPLATES_ONLY');
+        pm.expect(body.trippedBy).to.eql('OFFICER');
+        pm.expect(body.reason).to.eql('Postman run: show the template path');
+      });

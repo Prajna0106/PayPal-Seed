@@ -40,9 +40,10 @@ public class MemberViews {
         return applications.checkEligibility(memberId, OptionalLong.empty());
     }
 
-    /** Newest disbursement first. */
+    /** Newest disbursement first. A loan whose payout came back (ADR 0024) is not shown: the member never had it. */
     public List<MemberLoanView> loans(UUID memberId) {
         return loans.byMember(memberId).stream()
+                .filter(loan -> !loan.isVoided())
                 .sorted(Comparator.comparing(LoanRow::disbursedOn).thenComparing(LoanRow::id).reversed())
                 .map(this::view)
                 .toList();

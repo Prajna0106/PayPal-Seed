@@ -33,6 +33,16 @@ public interface FraudFacade {
      */
     void payoutDestination(UUID memberId, String reference, Instant occurredAt, String sourceKey);
 
+    /**
+     * Who the member's latest payout went to, as the keyed fingerprint payments publishes with a payout request (ADR 0027;
+     * the recipient itself never reaches fraud). It is hashed again here and never stored, logged or returned as it is. The
+     * first recipient seen is a baseline and records nothing; a different one than last time records a
+     * {@code PAYOUT_RECIPIENT_CHANGED} fact, idempotent on {@code sourceKey}; the same one again records nothing. This sees
+     * a change that {@link #payoutDestination} cannot: the same wallet type with another account behind it. Runs in the
+     * caller's transaction when there is one.
+     */
+    void payoutRecipient(UUID memberId, String fingerprint, Instant occurredAt, String sourceKey);
+
     /** Open flags, newest first, at most 200. */
     List<FlagView> openFlags();
 

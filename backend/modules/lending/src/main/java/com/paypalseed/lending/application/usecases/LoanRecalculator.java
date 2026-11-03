@@ -98,6 +98,11 @@ public class LoanRecalculator {
         List<LoanTransaction> history = transactions.forLoan(loan.id());
         Allocation allocation = Allocator.allocate(schedule, history.stream().map(LoanTransaction::toMoneyEvent).toList(), policy);
         Aging aging = Aging.of(schedule, allocation, asOf, policy);
+        if (loan.isVoided() || loan.isCancelled()) {
+            // A voided or cooling-off cancelled loan (ADR 0024) owes nothing and plans nothing: the schedule is history,
+            // not a plan, so nothing is derived from it and nothing is written.
+            return new Outcome(loan, loan, schedule, allocation, aging, history);
+        }
         projections.replaceAllocation(loan.id(), schedule.version(), allocation,
                 history.stream().map(LoanTransaction::id).toList());
 
@@ -150,7 +155,7 @@ public class LoanRecalculator {
         if (repaidNow) {
             int missed = projections.missedCount(loan.id());
             events.publishEvent(new LendingEvents.LoanRepaid(Ids.newId(), loan.id(), loan.memberId(), asOf,
-                    Math.max(0, schedule.size() - missed), missed, allocation.overpaymentCents()));
+                    Math.max(0, schedule.size() - missed), missed, allocation.overpaymentCents(), reserveCovered(history)));
             attempts.cancelPlanned(loan.id(), "loan repaid");
         }
 
@@ -162,6 +167,13 @@ public class LoanRecalculator {
 
         LoanRow after = loans.find(loan.id()).orElseThrow();
         return new Outcome(loan, after, schedule, allocation, aging, history);
+    }
+
+    /** What the loss reserve paid on the loan: its receipts are applied in full, so the amounts are the cents applied. */
+    static long reserveCovered(List<LoanTransaction> history) {
+        return history.stream()
+                .filter(t -> t.type() == LoanTransaction.Type.RECEIPT && t.source() == LoanTransaction.Source.RESERVE)
+                .mapToLong(LoanTransaction::amountCents).sum();
     }
 
     /** True while an unreleased F5 hold covers this instalment on {@code asOf}. */

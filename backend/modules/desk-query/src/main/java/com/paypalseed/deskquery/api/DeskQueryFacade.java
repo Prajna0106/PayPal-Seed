@@ -1,8 +1,11 @@
 package com.paypalseed.deskquery.api;
 
+import com.paypalseed.deskquery.api.dto.DeskQueryDtos.MemberActivityItem;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.PortfolioSummary;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Projection;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Workload;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * What other modules may ask of the desk read models. Nothing depends on it yet; the Desk Analyst tools are the intended
@@ -22,4 +25,15 @@ public interface DeskQueryFacade {
     PortfolioSummary portfolioSummary();
 
     Workload workload();
+
+    /** The member's latest activity, newest first, at most {@code limit}. Only that member's; an unknown member has none. */
+    List<MemberActivityItem> memberActivity(UUID memberId, int limit);
+
+    /**
+     * Recomputes every member's saving months and streak from the deposits savings holds, in the business time zone, and
+     * returns how many members were rebuilt. It reads the money itself and not the event publication log, so it does not
+     * depend on how long the log is kept. Safe to run at any time and while deposits arrive: each member is rebuilt under
+     * the same lock the deposit listener takes. A member with no credited deposit is left as stored.
+     */
+    int rebuildSavingMonths();
 }

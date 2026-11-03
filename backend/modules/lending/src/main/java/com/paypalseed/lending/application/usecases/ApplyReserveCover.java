@@ -73,12 +73,13 @@ public class ApplyReserveCover {
         if (transactions.byPaypalTxnId(cover.approvalRef()).isPresent()) {
             return replay(cover); // a concurrent delivery won the race while we waited for the lock
         }
-        long owed = loan.status() == LoanStatus.CANCELLED
+        long owed = loan.status() == LoanStatus.CANCELLED || loan.isVoided()
                 ? 0
                 : recalculator.project(loan, List.of()).allocation().outstandingCents();
         long applied = Math.min(cover.amountCents(), owed);
         long unused = cover.amountCents() - applied;
         if (applied == 0) {
+            // The caller returns the unused cents to the fund (CoverResult.unusedCents), so the books agree again.
             log.warn("Reserve cover {} of {} cents arrived for loan {} that owes nothing; the ledger credited it, nothing applied",
                     cover.approvalRef(), cover.amountCents(), loan.id());
             return new CoverResult(CoverOutcome.NOTHING_DUE, 0, unused, owed);

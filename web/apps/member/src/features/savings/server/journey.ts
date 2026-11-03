@@ -7,8 +7,8 @@ import type { JourneyEvent, JourneyPayload, JourneyRow } from "@paypal-seed/time
 import { memberApi } from "@/server/api";
 import { requireSession } from "@/server/session";
 import { TIMELINE_STATUS_LABELS } from "@/features/loans/status";
-import { dateInProgramZone, GOAL_STATUS, type Goal, toGoal } from "../model";
-import { readHome } from "./queries";
+import { dateInProgramZone, DEPOSIT_SOURCE, type Deposit, GOAL_STATUS, type Goal, toGoal } from "../model";
+import { getGoalDeposits, readHome } from "./queries";
 
 export interface JourneyModel {
   payload: JourneyPayload;
@@ -17,9 +17,14 @@ export interface JourneyModel {
   /** Plain-language reasons the loan is not open yet, from the lending module. Empty when it is open. */
   reasons: string[];
   loanOpen: boolean;
+  /** The newest deposits across goals, for the list under the chart. Empty when none could be read. */
+  deposits: Array<Deposit & { goalName: string }>;
 }
 
 const SAVING_ROW = "saving";
+/** Enough to draw the recent history of a goal without a long wait on the page. */
+const DEPOSITS_PER_GOAL = 50;
+const DEPOSITS_LISTED = 8;
 const UNLOCK_ROW = "unlock";
 const DAY_MS = 86_400_000;
 
@@ -32,8 +37,9 @@ const GOAL_COLOUR: Partial<Record<Goal["status"], string>> = { ACTIVE: "green", 
 
 /**
  * One timeline from the first goal to the loan: the member's goals (from the day each started), the day a loan opens
- * (only when lending says it is open, never guessed) and the instalments the loan timeline already colours. The
- * deposits themselves have no list in the contract, so the saving bars run from the day the goal started.
+ * (only when lending says it is open, never guessed), the deposits PayPal confirmed and the instalments the loan
+ * timeline already colours. A goal whose deposits could not be read (or has none yet) is drawn from the day it started,
+ * so a failing call never empties the chart.
  */
 export async function getJourney(): Promise<JourneyModel> {
   const [session, api] = await Promise.all([requireSession(), memberApi()]);
@@ -49,20 +55,39 @@ export async function getJourney(): Promise<JourneyModel> {
   const events: JourneyEvent[] = [];
 
   const saving = goals.map(toGoal).filter((goal) => GOAL_COLOUR[goal.status] !== undefined);
+  const depositsByGoal = await Promise.all(saving.map((goal) => getGoalDeposits(goal.id, DEPOSITS_PER_GOAL)));
   if (saving.length > 0) {
     rows.push({ id: SAVING_ROW, name: "Saving" });
   }
-  for (const goal of saving) {
+  const listed: JourneyModel["deposits"] = [];
+  for (const [index, goal] of saving.entries()) {
     const start = dateInProgramZone(goal.createdAt);
-    events.push({
-      id: `goal-${goal.id}`,
-      rowId: SAVING_ROW,
-      startDate: start,
-      endDate: today > start ? today : addDays(start, 1),
-      name: goal.name,
-      detail: `${GOAL_STATUS[goal.status].label}. ${formatMoney(goal.savedCents)} saved so far, ${formatMoney(goal.monthlyCents)} a month.`,
-      eventColor: GOAL_COLOUR[goal.status] ?? "gray",
-    });
+    const deposits = depositsByGoal[index] ?? null;
+    for (const deposit of deposits ?? []) {
+      const day = dateInProgramZone(deposit.creditedAt);
+      events.push({
+        id: `deposit-${goal.id}-${deposit.creditedAt}-${deposit.source}`,
+        rowId: SAVING_ROW,
+        startDate: day,
+        endDate: addDays(day, 1),
+        name: formatMoney(deposit.amountCents),
+        detail: `${DEPOSIT_SOURCE[deposit.source]} of ${formatMoney(deposit.amountCents)} to ${goal.name}.`,
+        eventColor: "green",
+      });
+      listed.push({ ...deposit, goalName: goal.name });
+    }
+    if (!deposits || deposits.length === 0) {
+      // No real deposits to draw (none yet, or the list could not be read): the goal is shown from the day it started.
+      events.push({
+        id: `goal-${goal.id}`,
+        rowId: SAVING_ROW,
+        startDate: start,
+        endDate: today > start ? today : addDays(start, 1),
+        name: goal.name,
+        detail: `${GOAL_STATUS[goal.status].label}. ${formatMoney(goal.savedCents)} saved so far, ${formatMoney(goal.monthlyCents)} a month.`,
+        eventColor: GOAL_COLOUR[goal.status] ?? "gray",
+      });
+    }
     if (goal.targetDate) {
       events.push({
         id: `target-${goal.id}`,
@@ -118,5 +143,12 @@ export async function getJourney(): Promise<JourneyModel> {
     }
   }
 
-  return { payload: { rows, events }, today, reasons: loanOpen ? [] : (eligibility?.reasons ?? []), loanOpen };
+  listed.sort((a, b) => b.creditedAt.localeCompare(a.creditedAt));
+  return {
+    payload: { rows, events },
+    today,
+    reasons: loanOpen ? [] : (eligibility?.reasons ?? []),
+    loanOpen,
+    deposits: listed.slice(0, DEPOSITS_LISTED),
+  };
 }

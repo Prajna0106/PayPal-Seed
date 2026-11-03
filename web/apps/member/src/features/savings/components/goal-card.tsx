@@ -7,8 +7,11 @@ import Link from "next/link";
 import { GOAL_STATUS, type Goal, progressPercent, WALLET_LABEL } from "../model";
 import { ApprovalNote } from "./approval-note";
 
-/** When the next deposit happens, in the words a member needs. The backend sends no date, so none is shown. */
-export function nextDepositText(goal: Goal): string {
+/** When the next deposit happens: PayPal's date when the backend has one, otherwise the words a member needs. */
+export function nextDepositText(goal: Goal, nextDepositDate: string | null): string {
+  if (nextDepositDate) {
+    return formatBusinessDate(nextDepositDate, "short");
+  }
   switch (goal.status) {
     case "ACTIVE":
       return goal.wallet === "PAYPAL" ? "PayPal takes it each month" : "When you add money";
@@ -28,7 +31,15 @@ export function monthsInARow(months: number): string {
 }
 
 /** One goal on the savings list. The whole card opens the goal; the PayPal link sits above it. */
-export function GoalCard({ goal, streakMonths }: { goal: Goal; streakMonths: number | null }) {
+export function GoalCard({
+  goal,
+  streakMonths,
+  nextDepositDate = null,
+}: {
+  goal: Goal;
+  streakMonths: number | null;
+  nextDepositDate?: string | null;
+}) {
   const status = GOAL_STATUS[goal.status];
   const href = `/app/savings/${goal.id}` as Route;
   const pending = goal.status === "PENDING_APPROVAL";
@@ -63,7 +74,7 @@ export function GoalCard({ goal, streakMonths }: { goal: Goal; streakMonths: num
             <Fact label="Saved so far" value={formatMoney(goal.savedCents)} />
             <Fact label="Each month" value={formatMoney(goal.monthlyCents)} />
             {showStreak ? <Fact label="Saving streak" value={monthsInARow(streakMonths)} /> : null}
-            <Fact label="Next deposit" value={nextDepositText(goal)} />
+            <Fact label="Next deposit" value={nextDepositText(goal, nextDepositDate)} />
             <Fact label="Wallet" value={WALLET_LABEL[goal.wallet]} />
             {goal.targetDate ? <Fact label="Target date" value={formatBusinessDate(goal.targetDate, "medium")} /> : null}
           </dl>

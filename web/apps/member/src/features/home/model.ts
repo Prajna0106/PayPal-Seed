@@ -8,6 +8,8 @@ export type CreditRecordSection = Schemas["CreditRecordSection"];
 export type HardshipSection = Schemas["HardshipSection"];
 export type ActiveLoan = Schemas["ActiveLoanCard"];
 export type OpenApplication = Schemas["OpenApplicationCard"];
+export type ActivityItem = Schemas["HomeActivityItem"];
+export type ActivityKind = ActivityItem["kind"];
 export type HomeSectionName = Schemas["HomeSectionName"];
 export type HomeSectionErrorCode = Schemas["HomeSectionErrorCode"];
 

@@ -1,0 +1,32 @@
+$kind: http-request
+name: 'HS11. Desk evidence panel'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}'
+order: 11000
+description: 'Officers see the evidence: signals with the numbers that fired them, the four options, the narratives with their source. Members never see the score or level.'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has summary, policyVersion, signals, options, narratives', () => ['summary', 'policyVersion', 'signals', 'options', 'narratives'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('Summary is this case and loan', () => {
+        pm.expect(body.summary.caseId).to.eql(pm.collectionVariables.get('hardshipCaseId'));
+        pm.expect(body.summary.loanId).to.eql(pm.collectionVariables.get('hardshipLoanId'));
+      });
+      pm.test('The 52% income drop fired a signal with evidence', () => {
+        const sig = body.signals.find(s => s.code === 'INCOME_DROP_SEVERE');
+        pm.expect(sig, 'INCOME_DROP_SEVERE').to.be.an('object');
+        pm.expect(sig.evidence).to.be.an('object');
+      });
+      pm.test('Options A to D', () => pm.expect(body.options.map(o => o.label).sort()).to.eql(['A', 'B', 'C', 'D']));
+      pm.test('Every option carries its snapshotHash', () => body.options.forEach(o => pm.expect(o.snapshotHash).to.be.a('string').and.not.empty));
+      pm.test('Nothing is chosen yet', () => pm.expect(body.chosenOption).to.eql(null));
+      pm.test('Narratives name their source', () => body.narratives.forEach(n => pm.expect(['TEMPLATE', 'AI', 'AI_SHADOW']).to.include(n.source)));

@@ -1,0 +1,47 @@
+$kind: http-request
+name: 'HS01. Register a disbursed loan (service)'
+method: POST
+url: '{{baseUrl}}/internal/loans/disbursed'
+order: 1000
+description: 'Starts the F5 story: a new member (Ana) with a $1,200 loan over 8 months due on the 20th. Creates the member id and a unique disbursementRef, clears the ids of any earlier run. Needs a dev, test or demo backend with SEED_INTERNAL_TOKEN.'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "memberId": "{{hardshipMemberId}}",
+      "principalCents": 120000,
+      "instalmentCount": 8,
+      "dueDay": 20,
+      "disbursedOn": "{{hardshipDisbursedOn}}",
+      "disbursementRef": "{{hardshipDisbursementRef}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // A fresh member and loan per run keeps every later step independent of earlier data.
+      ['hardshipLoanId', 'hardshipCaseId', 'hardshipOfferId', 'hardshipOptionBId', 'hardshipOfferRevision', 'hardshipCaseStatus',
+       'hardshipScanDate', 'hardshipAdvanceDays', 'hardshipIncomeBody'].forEach(k => pm.collectionVariables.set(k, ''));
+      pm.collectionVariables.set('hardshipMemberId', pm.variables.replaceIn('{{$guid}}'));
+      pm.collectionVariables.set('hardshipDisbursementRef', 'postman-ana-' + pm.variables.replaceIn('{{$guid}}'));
+      const d = new Date();
+      const p = n => String(n).padStart(2, '0');
+      pm.collectionVariables.set('hardshipDisbursedOn', d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 201', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.test('Has loanId, memberId, principalCents, outstandingCents, status', () => ['loanId', 'memberId', 'principalCents', 'outstandingCents', 'status'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('Loan belongs to the new member and is $1,200', () => {
+        pm.expect(body.memberId).to.eql(pm.collectionVariables.get('hardshipMemberId'));
+        pm.expect(body.principalCents).to.eql(120000);
+      });
+      pm.collectionVariables.set('hardshipLoanId', body.loanId);
+examples: './.resources/HS01. Register a disbursed loan (service).resources/examples/'

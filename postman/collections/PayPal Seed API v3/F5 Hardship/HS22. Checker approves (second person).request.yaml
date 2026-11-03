@@ -1,0 +1,40 @@
+$kind: http-request
+name: 'HS22. Checker approves (second person)'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/decision'
+order: 22000
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{checkerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'CHECKER'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Idempotency-Key'
+    value: '{{hardshipCheckerKey}}'
+    description: 'One key per user action; reuse it only to replay the same request.'
+body:
+  type: json
+  content: |-
+    {
+      "decision": "APPROVE",
+      "reasonCode": "INCOME_DROP_VERIFIED",
+      "note": "Second review agrees.",
+      "evidenceViewedMs": 30000
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('hardshipCheckerKey', 'postman-checker-' + pm.variables.replaceIn('{{$guid}}'));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('The checker closes the request as approved', () => {
+        pm.expect(body.role).to.eql('CHECKER');
+        pm.expect(body.requestStatus).to.eql('APPROVED');
+        pm.expect(body.next).to.eql(null);
+      });

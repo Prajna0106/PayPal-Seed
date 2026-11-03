@@ -8,7 +8,7 @@ export interface RecordPageData {
   record: RecordView;
   history: { items: HistoryItem[]; nextBefore: number | null };
   shares: ShareView[];
-  /** Whether the member has agreed to share their record (ADR 0012). The credit-record module does not enforce it. */
+  /** Whether the member has agreed to share their record (ADR 0012). The backend also enforces it when a link is made (ADR 0025). */
   sharingAllowed: boolean;
 }
 

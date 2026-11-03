@@ -1,0 +1,24 @@
+$kind: http-request
+name: 'HS04. Seed 13 weeks of consented income (service)'
+method: PUT
+url: '{{baseUrl}}/internal/underwriting/members/{{hardshipMemberId}}/income'
+order: 4000
+description: 'Demo and sandbox income seed. Body is built by HS02: consent true, 9 weeks of 20000 cents then 4 weeks of 9600 cents, ending the day before the scan date.'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {{hardshipIncomeBody}}
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Thirteen weekly figures, oldest first', () => pm.expect(body.weeklyInflowCents).to.be.an('array').with.lengthOf(13));
+      pm.test('Has usualPaydayDow and activeWeeks', () => ['usualPaydayDow', 'activeWeeks'].forEach(k => pm.expect(body).to.have.property(k)));

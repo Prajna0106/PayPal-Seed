@@ -37,8 +37,23 @@ public final class LendingDtos {
         }
     }
 
+    /**
+     * {@code reserveCoveredCents} is the part of {@code paidCents} that came from the loss reserve (repayment source
+     * {@code RESERVE}); the rest was paid by the member. Zero when the reserve paid nothing on this instalment.
+     */
     public record InstalmentLine(int seq, LocalDate dueDate, long amountCents, long paidCents, long remainingCents,
-                                 String status, LocalDate paidOn) {
+                                 String status, LocalDate paidOn, long reserveCoveredCents) {
+        public InstalmentLine {
+            if (reserveCoveredCents < 0 || reserveCoveredCents > paidCents) {
+                throw new IllegalArgumentException("reserveCoveredCents must be between 0 and paidCents");
+            }
+        }
+
+        /** An instalment the reserve paid nothing on. */
+        public InstalmentLine(int seq, LocalDate dueDate, long amountCents, long paidCents, long remainingCents,
+                              String status, LocalDate paidOn) {
+            this(seq, dueDate, amountCents, paidCents, remainingCents, status, paidOn, 0);
+        }
     }
 
     public record ScheduleView(UUID loanId, int version, String reason, LocalDate businessDate, long principalCents,
@@ -174,7 +189,8 @@ public final class LendingDtos {
      * {@code suggestedTermMonths} as a safe alternative when there is one. {@code outcome} is APPROVED, NOT_ELIGIBLE,
      * AMOUNT_NOT_ALLOWED, TERM_OUT_OF_RANGE, ABOVE_LIMIT or INSTALMENT_ABOVE_CAP. The loan is 0% with no fees, so
      * {@code totalRepayableCents} is the amount asked for. If the loan is paid out on a later day the due dates are
-     * recomputed from that day.
+     * recomputed from that day. {@code incomeStale} is true when the member's PayPal income could not be brought up to date for
+     * this preview, so the answer rests on the income stored earlier; submitting is the call that refuses in that case.
      */
     public record ApplicationPreviewView(
         boolean valid,
@@ -191,7 +207,8 @@ public final class LendingDtos {
         Long suggestedAmountCents,
         Integer suggestedTermMonths,
         long limitCents,
-        long maxMonthlyInstalmentCents
+        long maxMonthlyInstalmentCents,
+        boolean incomeStale
     ) {
         public ApplicationPreviewView {
             instalments = List.copyOf(instalments);

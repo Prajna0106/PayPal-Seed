@@ -1,0 +1,22 @@
+$kind: http-example
+name: '409 hardship-offer-stale'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/hardship/cases/{{hardshipCaseId}}/choice'
+  method: POST
+response:
+  statusCode: 409
+  statusText: 'Conflict'
+  headers:
+    - key: Content-Type
+      value: 'application/problem+json'
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://problems.paypal-seed.dev/hardship-offer-stale",
+        "title": "Offer is stale",
+        "status": 409,
+        "code": "hardship-offer-stale",
+        "detail": "A newer offer replaced this one"
+      }

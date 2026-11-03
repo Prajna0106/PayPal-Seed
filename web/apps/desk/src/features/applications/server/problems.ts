@@ -10,6 +10,8 @@ const MESSAGES: Record<string, string> = {
     "This application changed since you opened it. It has been reloaded: check where it stands, then try again.",
   "payout-recipient-missing": "The member has no PayPal account on file to pay out to.",
   "dependency-unavailable": "PayPal could not be reached. Nothing changed. Try again in a moment.",
+  "payout-not-found": "There is no payout to check yet for this application.",
+  "paypal-rejected": "PayPal did not answer that check. Nothing changed. Try again in a moment.",
   "assessment-not-found": "That fair check could not be found.",
   "invalid-officer-decision": "That decision is not valid. Check the amount, the term and the reason.",
   "desk-query-invalid-cursor": "The list changed while you were scrolling. Refresh it to start again.",
