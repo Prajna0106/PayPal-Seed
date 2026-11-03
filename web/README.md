@@ -51,10 +51,13 @@ pnpm gen:api        # after a contract change: regenerates packages/api-client/s
 
 - The browser never calls the backend. Pages and Server Actions call it from the server through
   `@paypal-seed/api-client`, with the identity taken from a signed, httpOnly session cookie.
-- Members log in with PayPal. Staff log in with their email and a password. Admins add staff on the desk's Staff page;
-  `scripts/create-staff.sh` is only for the first admin. `proxy.ts` redirects signed-out visitors to `/login`.
-- Each backend call signs a short actor token from the session (ADR 0016). Without `SEED_ACTOR_TOKEN_SECRETS`, local
-  development sends dev headers instead, which only the backend's dev and demo profiles read.
+- Members log in with PayPal. Staff log in with their email and a password. Admins manage staff on the desk's Staff
+  page; `scripts/create-staff.sh` is only for the first admin or a lost password. `proxy.ts` redirects signed-out
+  visitors to `/login`, and someone whose password an admin chose to Your login first.
+- Each backend call signs a short actor token from the session (ADR 0016). The desk signs staff tokens with its own
+  `SEED_STAFF_ACTOR_TOKEN_SECRETS` and logs staff in with its own `SEED_STAFF_SERVICE_TOKEN`, which the member app never
+  holds (ADR 0023). Without a secret, local development sends dev headers instead, which only the backend's dev and
+  demo profiles read.
 - Ana's story, the member id box and the desk personas need no password, so they work only with `SEED_DEMO_LOGIN`
   (on by default outside production, off in production).
 - `SEED_INTERNAL_TOKEN` is used only on the server: to finish a login, for demo seeding on the member app and for the

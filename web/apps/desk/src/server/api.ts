@@ -28,17 +28,24 @@ export const staffApi = cache(async (): Promise<SeedClient> => {
 });
 
 export async function staffApiWithoutRedirect(session: StaffSession): Promise<SeedClient> {
-  const secrets = env.SEED_ACTOR_TOKEN_SECRETS;
+  const secrets = env.staffTokenSecrets;
+  const claims = { type: "staff", id: session.staffId, roles: session.roles, authTime: session.startedAt } as const;
   return createSeedClient({
     baseUrl: env.SEED_API_URL,
     identity: secrets
-      ? { kind: "actor", token: await signActorToken(secrets, { type: "staff", id: session.staffId, roles: session.roles }) }
+      ? { kind: "actor", token: await signActorToken(secrets, claims) }
       : { kind: "staff", staffId: session.staffId, roles: session.roles },
   });
 }
 
-export function internalLoginApi(): InternalClient {
-  return createInternalClient({ baseUrl: env.SEED_API_URL, token: env.SEED_INTERNAL_TOKEN });
+/** The staff login and account routes. Their token is the desk's alone: the member app can't reach them. */
+export function staffAccountsApi(): InternalClient {
+  return createInternalClient({ baseUrl: env.SEED_API_URL, token: env.SEED_STAFF_SERVICE_TOKEN });
+}
+
+/** What the directory says this person may do right now. */
+export async function currentAccess() {
+  return unwrap((await staffApi()).GET("/api/v1/auth/staff/me"));
 }
 
 /**
@@ -48,7 +55,7 @@ export function internalLoginApi(): InternalClient {
  */
 export async function adminInternalApi(): Promise<InternalClient> {
   const session = await requireSession();
-  const access = await unwrap((await staffApi()).GET("/api/v1/auth/staff/me"));
+  const access = await currentAccess();
   if (!hasRole(session, "ADMIN") || !access.roles.includes("ADMIN")) {
     throw new Error("Operations need the ADMIN role.");
   }

@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>the internal service token opens {@code /internal/**} and nothing else;</li>
+ *   <li>the staff service token, which only the desk and the first-admin script hold, opens the staff login and
+ *       account routes and nothing else (ADR 0023);</li>
  *   <li>a signed actor token opens {@code /api/**} as the member or staff member it names, and
  *       nothing else.</li>
  * </ul>
@@ -31,8 +34,9 @@ import org.springframework.stereotype.Component;
  * they are honoured only when {@code seed.security.dev-header-auth=true}, and only when no bearer
  * credential is present (a token always wins). Startup refuses that flag outside dev, test and demo.
  *
- * <p>Staff are then checked against the directory: someone suspended is refused, and a role they have lost no longer
- * counts, whatever the token says. People the directory doesn't know keep what the token says.
+ * <p>Staff are then checked against the directory: someone suspended is refused, a role they have lost no longer
+ * counts, and a desk session that began before their sessions were ended is refused. Staff the directory doesn't know
+ * are refused too, unless dev headers are on.
  */
 @Component
 public class ActorAuthentication {
@@ -42,19 +46,34 @@ public class ActorAuthentication {
     static final String STAFF_ROLES_HEADER = "X-Seed-Staff-Roles";
     private static final String BEARER = "Bearer ";
     private static final Logger log = LoggerFactory.getLogger(ActorAuthentication.class);
+    private static final UUID STAFF_ACCOUNTS_ID = UUID.nameUUIDFromBytes("staff-accounts".getBytes(StandardCharsets.UTF_8));
+
+    private record Credential(Actor actor, Instant authTime, boolean signed) {
+    }
 
     private final byte[] internalTokenDigest;
+    private final byte[] staffServiceTokenDigest;
     private final boolean devHeaders;
     private final ActorTokenVerifier actorTokens;
     private final ObjectProvider<StaffAccessLookup> staffDirectory;
 
+    public ActorAuthentication(String internalToken, boolean devHeaders, ActorTokenVerifier actorTokens,
+                               ObjectProvider<StaffAccessLookup> staffDirectory) {
+        this(internalToken, "", devHeaders, actorTokens, staffDirectory);
+    }
+
     @Autowired
     public ActorAuthentication(@Value("${seed.security.internal-token:}") String internalToken,
+                               @Value("${seed.security.staff-service-token:}") String staffServiceToken,
                                @Value("${seed.security.dev-header-auth:false}") boolean devHeaders,
                                ActorTokenVerifier actorTokens,
                                ObjectProvider<StaffAccessLookup> staffDirectory) {
+        if (!staffServiceToken.isEmpty() && staffServiceToken.equals(internalToken)) {
+            throw new IllegalStateException("seed.security.staff-service-token must differ from seed.security.internal-token");
+        }
         // Compare digests so neither the content nor the length of the secret leaks through timing.
         this.internalTokenDigest = internalToken.length() >= 16 ? sha256(internalToken) : null;
+        this.staffServiceTokenDigest = staffServiceToken.length() >= 16 ? sha256(staffServiceToken) : null;
         this.devHeaders = devHeaders;
         this.actorTokens = actorTokens;
         this.staffDirectory = staffDirectory;
@@ -64,25 +83,37 @@ public class ActorAuthentication {
         return credentialActor(request).flatMap(this::withCurrentAccess);
     }
 
-    private Optional<Actor> withCurrentAccess(Actor actor) {
+    private Optional<Actor> withCurrentAccess(Credential credential) {
+        Actor actor = credential.actor();
+        if (actor.type() != Actor.Type.STAFF) {
+            return Optional.of(actor);
+        }
         StaffAccessLookup directory = staffDirectory == null ? null : staffDirectory.getIfAvailable();
-        if (actor.type() != Actor.Type.STAFF || directory == null) {
-            return Optional.of(actor);
+        Optional<StaffAccessLookup.StaffAccess> found = directory == null ? Optional.empty() : directory.access(actor.id());
+        if (found.isEmpty()) {
+            return devHeaders ? Optional.of(actor) : refused("UNKNOWN_STAFF");
         }
-        Optional<StaffAccessLookup.StaffAccess> access = directory.access(actor.id());
-        if (access.isEmpty()) {
-            return Optional.of(actor);
+        StaffAccessLookup.StaffAccess access = found.get();
+        if (!access.active()) {
+            return refused("SUSPENDED");
         }
-        if (!access.get().active()) {
-            log.warn("Staff credential rejected: SUSPENDED");
-            return Optional.empty();
+        if (credential.signed() && access.sessionsValidAfter() != null
+                && (credential.authTime() == null || credential.authTime().isBefore(access.sessionsValidAfter()))) {
+            return refused("SESSION_ENDED");
         }
         Set<Actor.Role> roles = EnumSet.noneOf(Actor.Role.class);
-        actor.roles().stream().filter(access.get().roles()::contains).forEach(roles::add);
-        return Optional.of(new Actor(Actor.Type.STAFF, actor.id(), roles, access.get().linkedMemberId()));
+        if (!access.passwordChangeRequired()) {
+            actor.roles().stream().filter(access.roles()::contains).forEach(roles::add);
+        }
+        return Optional.of(new Actor(Actor.Type.STAFF, actor.id(), roles, access.linkedMemberId()));
     }
 
-    private Optional<Actor> credentialActor(HttpServletRequest request) {
+    private static Optional<Actor> refused(String reason) {
+        log.warn("Staff credential rejected: {}", reason);
+        return Optional.empty();
+    }
+
+    private Optional<Credential> credentialActor(HttpServletRequest request) {
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith(BEARER)) {
             return bearer(authorization.substring(BEARER.length()), path(request));
@@ -92,7 +123,7 @@ public class ActorAuthentication {
         }
         String member = request.getHeader(MEMBER_HEADER);
         if (member != null) {
-            return parseUuid(member).map(Actor::member);
+            return parseUuid(member).map(Actor::member).map(ActorAuthentication::unsigned);
         }
         String staff = request.getHeader(STAFF_HEADER);
         if (staff != null) {
@@ -102,7 +133,7 @@ public class ActorAuthentication {
                 if (!r.isBlank()) {
                     try {
                         Actor.Role role = Actor.Role.valueOf(r.trim().toUpperCase(java.util.Locale.ROOT));
-                        if (role != Actor.Role.SERVICE && role != Actor.Role.MEMBER) {
+                        if (role != Actor.Role.SERVICE && role != Actor.Role.MEMBER && role != Actor.Role.STAFF_ACCOUNTS) {
                             roles.add(role);
                         }
                     } catch (IllegalArgumentException ignored) {
@@ -110,23 +141,34 @@ public class ActorAuthentication {
                     }
                 }
             }
-            return parseUuid(staff).map(id -> new Actor(Actor.Type.STAFF, id, roles));
+            return parseUuid(staff).map(id -> new Actor(Actor.Type.STAFF, id, roles)).map(ActorAuthentication::unsigned);
         }
         return Optional.empty();
     }
 
-    private Optional<Actor> bearer(String credential, String path) {
+    private static Credential unsigned(Actor actor) {
+        return new Credential(actor, null, false);
+    }
+
+    private Optional<Credential> bearer(String credential, String path) {
         if (credential.isEmpty()) {
             return Optional.empty();
         }
-        if (internalTokenDigest != null && MessageDigest.isEqual(sha256(credential), internalTokenDigest)) {
-            return isUnder(path, "/internal/") ? Optional.of(Actor.service("internal-jobs")) : Optional.empty();
+        byte[] digest = sha256(credential);
+        if (staffServiceTokenDigest != null && MessageDigest.isEqual(digest, staffServiceTokenDigest)) {
+            return isUnder(path, "/internal/auth/staff/") || isUnder(path, "/internal/staff/")
+                    ? Optional.of(unsigned(new Actor(Actor.Type.SERVICE, STAFF_ACCOUNTS_ID, Set.of(Actor.Role.STAFF_ACCOUNTS))))
+                    : Optional.empty();
+        }
+        if (internalTokenDigest != null && MessageDigest.isEqual(digest, internalTokenDigest)) {
+            return isUnder(path, "/internal/") ? Optional.of(unsigned(Actor.service("internal-jobs"))) : Optional.empty();
         }
         if (!isUnder(path, "/api/") || !actorTokens.enabled()) {
             return Optional.empty();
         }
         try {
-            return Optional.of(actorTokens.verify(credential));
+            ActorTokenVerifier.Verified verified = actorTokens.verifyWithSession(credential);
+            return Optional.of(new Credential(verified.actor(), verified.authTime(), true));
         } catch (ActorTokenException e) {
             // The failure class only: never the token and never its claims, which name a person.
             log.warn("Actor token rejected: {}", e.failure());

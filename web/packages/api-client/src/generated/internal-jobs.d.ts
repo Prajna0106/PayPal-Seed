@@ -245,7 +245,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Create or replace a staff record (called by the desk server after staff sign-in) */
+        /** Create or replace a staff record. A change of roles or suspension is audited */
         put: operations["upsertStaff"];
         post?: never;
         delete?: never;
@@ -287,7 +287,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a staff account, or update the one with this email. For the first admin, who has nobody to create them */
+        /**
+         * Create a staff account, or reset the password of the one with this email. For the first admin, or a lost password
+         * @description A new email becomes an account with these roles. An existing account only gets the new password, and the member
+         *     link when `memberId` is given: its roles and link are never changed or cleared here. Ends that person's
+         *     sessions and clears their lockouts. Audited.
+         */
         post: operations["saveStaffAccount"];
         delete?: never;
         options?: never;
@@ -304,7 +309,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Staff login, called by the desk's server. Five failures lock the account for 15 minutes */
+        /**
+         * Staff login, called by the desk's server
+         * @description Five failures from one client address within 15 minutes lock that address for 15 minutes; fifty across all
+         *     addresses lock the account. Every refusal looks the same.
+         */
         post: operations["staffPasswordLogin"];
         delete?: never;
         options?: never;
@@ -321,6 +330,8 @@ export interface components {
             staffId: string;
             displayName: string;
             roles: ("OFFICER" | "CHECKER" | "ADMIN")[];
+            /** @description They must choose their own password before doing anything else */
+            passwordChangeRequired: boolean;
         };
         Problem: {
             /**
@@ -388,6 +399,15 @@ export interface components {
             email?: string | null;
             roles: components["schemas"]["StaffRole"][];
             active: boolean;
+            /** @description Whether this person has a password. Demo personas and directory rows don't */
+            canLogIn: boolean;
+            /**
+             * Format: uuid
+             * @description Their own member account. Filled in for admins only
+             */
+            linkedMemberId?: string | null;
+            /** @description True until they choose their own password. Filled in for admins only */
+            passwordChangeRequired?: boolean | null;
         };
         PaypalCatalog: {
             /** @description PayPal catalog product id (PROD-...); set as SEED_PAYPAL_PRODUCT_ID */
@@ -926,7 +946,7 @@ export interface operations {
                      * @description Their own member account if they have one
                      */
                     memberId?: string;
-                    password?: string;
+                    password: string;
                 };
             };
         };
@@ -940,6 +960,8 @@ export interface operations {
                     "application/json": {
                         /** Format: uuid */
                         staffId: string;
+                        /** @description False when an existing account only got a new password */
+                        created: boolean;
                     };
                 };
             };
@@ -947,6 +969,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     staffPasswordLogin: {
@@ -961,6 +984,8 @@ export interface operations {
                 "application/json": {
                     email: string;
                     password: string;
+                    /** @description The address the desk saw the login come from */
+                    clientAddress?: string;
                 };
             };
         };

@@ -10,7 +10,8 @@ import { signToken, verifyToken } from "./session-token";
 
 /**
  * Which staff member this browser acts as, set after a password login or a demo persona. Each backend call
- * signs a short actor token from it (ADR 0016). The backend checks the person is still active and enforces roles and
+ * signs a short actor token from it (ADR 0016), naming when the session began, so the backend can end it after a
+ * logout or a password change (ADR 0023). The backend checks the person is still active and enforces roles and
  * separation of duties. A demo session stops working when demo sign-in is off.
  */
 export const SESSION_COOKIE = "seed_desk_session";
@@ -21,10 +22,13 @@ const staffSessionSchema = z.object({
   staffId: z.uuid(),
   name: z.string().max(80),
   roles: z.array(z.enum(["OFFICER", "CHECKER", "ADMIN"])).min(1),
+  startedAt: z.number().int().positive(),
+  passwordChangeRequired: z.boolean().optional(),
   demo: z.boolean().optional(),
 });
 
 export type StaffSession = z.infer<typeof staffSessionSchema>;
+export type NewStaffSession = Omit<StaffSession, "startedAt">;
 
 export async function parseSession(token: string | undefined): Promise<StaffSession | null> {
   const parsed = staffSessionSchema.safeParse(await verifyToken(token, env.SESSION_SECRET));
@@ -49,9 +53,10 @@ export function hasRole(session: StaffSession, role: StaffRole): boolean {
   return session.roles.includes(role);
 }
 
-export async function startSession(session: StaffSession): Promise<void> {
+export async function startSession(session: NewStaffSession): Promise<void> {
   const store = await cookies();
-  store.set(SESSION_COOKIE, await signToken(staffSessionSchema.parse(session), env.SESSION_SECRET), {
+  const started = { ...session, startedAt: Math.floor(Date.now() / 1000) };
+  store.set(SESSION_COOKIE, await signToken(staffSessionSchema.parse(started), env.SESSION_SECRET), {
     httpOnly: true,
     sameSite: "lax",
     secure: env.isProduction,

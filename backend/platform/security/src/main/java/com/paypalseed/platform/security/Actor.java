@@ -26,6 +26,8 @@ public record Actor(Type type, UUID id, Set<Role> roles, UUID linkedMemberId) {
         CHECKER,
         ADMIN,
         SERVICE,
+        /** The desk's own service token: staff logins and accounts, nothing else (ADR 0023). */
+        STAFF_ACCOUNTS,
         /** Agents get read-only scopes only (ADR 0003). */
         AGENT_READ
     }

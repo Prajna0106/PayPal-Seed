@@ -679,6 +679,9 @@ paths:
       tags: [identity-desk]
       operationId: createStaff
       summary: Create a colleague's account. Admins only. An email that is already taken gets 409
+      description: |
+        The colleague must choose their own password before they can do anything else. A member account can be linked
+        to one staff login only (`member-already-linked`), so the own-case checks apply to them. Audited.
       security: [ { staffSession: [] } ]
       requestBody:
         required: true
@@ -691,6 +694,7 @@ paths:
                 email: { type: string, format: email, maxLength: 254 }
                 displayName: { type: string, maxLength: 80 }
                 roles: { type: array, minItems: 1, items: { $ref: '#/components/schemas/StaffRole' } }
+                memberId: { type: string, format: uuid, description: Their own member account if they have one }
                 password: { type: string, minLength: 12, maxLength: 128 }
       responses:
         '201':
@@ -701,7 +705,62 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/staff/{staffId}:
+    patch:
+      tags: [identity-desk]
+      operationId: changeStaffAccess
+      summary: Change someone's roles, suspend or restore them, or link or unlink their member account. Admins only
+      description: |
+        Fields left out stay as they are. Nobody can take away their own admin role or suspend themselves
+        (`staff-self-lockout`), and the last active admin can't be removed (`staff-last-admin`). Audited.
+      security: [ { staffSession: [] } ]
+      parameters:
+        - { name: staffId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roles: { type: array, minItems: 1, items: { $ref: '#/components/schemas/StaffRole' } }
+                active: { type: boolean }
+                linkMemberId: { type: string, format: uuid }
+                unlinkMember: { type: boolean }
+      responses:
+        '204': { description: Changed }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/desk/staff/{staffId}/password:
+    post:
+      tags: [identity-desk]
+      operationId: resetStaffPassword
+      summary: Give a colleague a new starting password. Admins only. Ends their sessions; they must change it. Audited
+      security: [ { staffSession: [] } ]
+      parameters:
+        - { name: staffId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '204': { description: Reset }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
 
 
   # ---------------------------------------------------------------- Credit record (ADR 0014)
@@ -1639,6 +1698,7 @@ paths:
       tags: [identity]
       operationId: changeStaffPassword
       summary: Change your own password. A wrong current password counts towards the lockout
+      description: Ends every other desk session of this person, and clears a required password change. Audited.
       security: [ { staffSession: [] } ]
       requestBody:
         required: true
@@ -1657,11 +1717,23 @@ paths:
         '403': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
 
+  /api/v1/auth/staff/logout:
+    post:
+      tags: [identity]
+      operationId: staffLogout
+      summary: End every desk session of this person, including a copied session cookie
+      security: [ { staffSession: [] } ]
+      responses:
+        '204': { description: Ended }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
   /api/v1/auth/staff/me:
     get:
       tags: [identity]
       operationId: currentStaffAccess
       summary: What this staff member may do right now, according to the directory. A suspended person gets 401
+      description: Someone who must still change their password has no roles until they do.
       security: [ { staffSession: [] } ]
       responses:
         '200':
@@ -1670,17 +1742,18 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [staffId, roles]
+                required: [staffId, roles, passwordChangeRequired]
                 properties:
                   staffId: { type: string, format: uuid }
                   roles: { type: array, items: { type: string, enum: [OFFICER, CHECKER, ADMIN] } }
+                  passwordChangeRequired: { type: boolean }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
 
 components:
   securitySchemes:
     memberSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of a member (ADR 0016). Dev, test and demo profiles accept X-Seed-Member-Id instead' }
-    staffSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of staff with roles OFFICER, CHECKER or ADMIN (ADR 0016). Dev, test and demo profiles accept X-Seed-Staff-Id and X-Seed-Staff-Roles instead' }
+    staffSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Actor token of staff with roles OFFICER, CHECKER or ADMIN, signed with the desk''s own key (ADR 0016, ADR 0023). It may carry auth_time, when the desk session began. Dev, test and demo profiles accept X-Seed-Staff-Id and X-Seed-Staff-Roles instead' }
   parameters:
     LoanId: { name: loanId, in: path, required: true, schema: { type: string, format: uuid } }
     CaseId: { name: caseId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2043,13 +2116,16 @@ components:
         revokedAt: { type: [string, 'null'], format: date-time }
     StaffRecord:
       type: object
-      required: [staffId, displayName, roles, active]
+      required: [staffId, displayName, roles, active, canLogIn]
       properties:
         staffId: { type: string, format: uuid }
         displayName: { type: string }
         email: { type: [string, 'null'] }
         roles: { type: array, items: { $ref: '#/components/schemas/StaffRole' } }
         active: { type: boolean }
+        canLogIn: { type: boolean, description: Whether this person has a password. Demo personas and directory rows don't }
+        linkedMemberId: { type: [string, 'null'], format: uuid, description: Their own member account. Filled in for admins only }
+        passwordChangeRequired: { type: [boolean, 'null'], description: True until they choose their own password. Filled in for admins only }
     RecordLevel: { type: string, enum: [NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY] }
     OnTimeBand:
       type: string

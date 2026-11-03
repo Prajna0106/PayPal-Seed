@@ -650,8 +650,50 @@ export interface paths {
         /** Staff directory (names for maker and checker columns). Officers, checkers and admins */
         get: operations["listStaff"];
         put?: never;
-        /** Create a colleague's account. Admins only. An email that is already taken gets 409 */
+        /**
+         * Create a colleague's account. Admins only. An email that is already taken gets 409
+         * @description The colleague must choose their own password before they can do anything else. A member account can be linked
+         *     to one staff login only (`member-already-linked`), so the own-case checks apply to them. Audited.
+         */
         post: operations["createStaff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/staff/{staffId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change someone's roles, suspend or restore them, or link or unlink their member account. Admins only
+         * @description Fields left out stay as they are. Nobody can take away their own admin role or suspend themselves
+         *     (`staff-self-lockout`), and the last active admin can't be removed (`staff-last-admin`). Audited.
+         */
+        patch: operations["changeStaffAccess"];
+        trace?: never;
+    };
+    "/api/v1/desk/staff/{staffId}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give a colleague a new starting password. Admins only. Ends their sessions; they must change it. Audited */
+        post: operations["resetStaffPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1658,8 +1700,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change your own password. A wrong current password counts towards the lockout */
+        /**
+         * Change your own password. A wrong current password counts towards the lockout
+         * @description Ends every other desk session of this person, and clears a required password change. Audited.
+         */
         post: operations["changeStaffPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End every desk session of this person, including a copied session cookie */
+        post: operations["staffLogout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1673,7 +1735,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What this staff member may do right now, according to the directory. A suspended person gets 401 */
+        /**
+         * What this staff member may do right now, according to the directory. A suspended person gets 401
+         * @description Someone who must still change their password has no roles until they do.
+         */
         get: operations["currentStaffAccess"];
         put?: never;
         post?: never;
@@ -2110,6 +2175,15 @@ export interface components {
             email?: string | null;
             roles: components["schemas"]["StaffRole"][];
             active: boolean;
+            /** @description Whether this person has a password. Demo personas and directory rows don't */
+            canLogIn: boolean;
+            /**
+             * Format: uuid
+             * @description Their own member account. Filled in for admins only
+             */
+            linkedMemberId?: string | null;
+            /** @description True until they choose their own password. Filled in for admins only */
+            passwordChangeRequired?: boolean | null;
         };
         /** @enum {string} */
         RecordLevel: "NEW" | "BUILDING" | "STEADY" | "TRUSTED" | "EXEMPLARY";
@@ -4429,6 +4503,11 @@ export interface operations {
                     email: string;
                     displayName: string;
                     roles: components["schemas"]["StaffRole"][];
+                    /**
+                     * Format: uuid
+                     * @description Their own member account if they have one
+                     */
+                    memberId?: string;
                     password: string;
                 };
             };
@@ -4449,7 +4528,73 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    changeStaffAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    roles?: components["schemas"]["StaffRole"][];
+                    active?: boolean;
+                    /** Format: uuid */
+                    linkMemberId?: string;
+                    unlinkMember?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    resetStaffPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Reset */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getMyRecord: {
@@ -6246,6 +6391,26 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    staffLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     currentStaffAccess: {
         parameters: {
             query?: never;
@@ -6265,6 +6430,7 @@ export interface operations {
                         /** Format: uuid */
                         staffId: string;
                         roles: ("OFFICER" | "CHECKER" | "ADMIN")[];
+                        passwordChangeRequired: boolean;
                     };
                 };
             };

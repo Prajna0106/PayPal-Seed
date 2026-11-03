@@ -3,9 +3,10 @@ info:
   title: PayPal Seed Internal Jobs API
   version: 2.0.0
   description: |
-    Idempotent backend triggers for Render Workflows and the worker role, and the calls the web servers make with the
-    service token (member login, staff upsert). Every route requires `Authorization: Bearer <SEED_INTERNAL_TOKEN>`
-    (service role); an actor token on these routes is refused with 401, and a service token on `/api/**` too.
+    Idempotent backend triggers for Render Workflows and the worker role, and the calls the web servers make with a
+    service token. Routes require `Authorization: Bearer <SEED_INTERNAL_TOKEN>` (service role), except the staff
+    login and account routes, which require the desk's own `SEED_STAFF_SERVICE_TOKEN` (ADR 0023). An actor token on
+    these routes is refused with 401, and a service token on `/api/**` too.
     Close of business runs business dates strictly in order (ADR 0007). Errors are RFC 9457 problems.
 security:
   - serviceToken: []
@@ -252,8 +253,8 @@ paths:
     put:
       tags: [identity-internal]
       operationId: upsertStaff
-      summary: Create or replace a staff record (called by the desk server after staff sign-in)
-      security: [ { serviceToken: [] } ]
+      summary: Create or replace a staff record. A change of roles or suspension is audited
+      security: [ { staffServiceToken: [] } ]
       parameters:
         - { name: staffId, in: path, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -293,15 +294,19 @@ paths:
     post:
       tags: [identity-internal]
       operationId: saveStaffAccount
-      summary: Create a staff account, or update the one with this email. For the first admin, who has nobody to create them
-      security: [ { serviceToken: [] } ]
+      summary: Create a staff account, or reset the password of the one with this email. For the first admin, or a lost password
+      description: |
+        A new email becomes an account with these roles. An existing account only gets the new password, and the member
+        link when `memberId` is given: its roles and link are never changed or cleared here. Ends that person's
+        sessions and clears their lockouts. Audited.
+      security: [ { staffServiceToken: [] } ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [email, displayName, roles]
+              required: [email, displayName, roles, password]
               properties:
                 email: { type: string, format: email, maxLength: 254 }
                 displayName: { type: string, maxLength: 80 }
@@ -313,18 +318,27 @@ paths:
           description: Saved
           content:
             application/json:
-              schema: { type: object, required: [staffId], properties: { staffId: { type: string, format: uuid } } }
+              schema:
+                type: object
+                required: [staffId, created]
+                properties:
+                  staffId: { type: string, format: uuid }
+                  created: { type: boolean, description: False when an existing account only got a new password }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
 
   /internal/auth/staff/password/login:
     post:
       tags: [identity-internal]
       operationId: staffPasswordLogin
-      summary: Staff login, called by the desk's server. Five failures lock the account for 15 minutes
-      security: [ { serviceToken: [] } ]
+      summary: Staff login, called by the desk's server
+      description: |
+        Five failures from one client address within 15 minutes lock that address for 15 minutes; fifty across all
+        addresses lock the account. Every refusal looks the same.
+      security: [ { staffServiceToken: [] } ]
       requestBody:
         required: true
         content:
@@ -335,6 +349,7 @@ paths:
               properties:
                 email: { type: string, maxLength: 254 }
                 password: { type: string, maxLength: 128 }
+                clientAddress: { type: string, maxLength: 64, description: The address the desk saw the login come from }
       responses:
         '200':
           description: The person who logged in
@@ -346,6 +361,7 @@ paths:
 components:
   securitySchemes:
     serviceToken: { type: http, scheme: bearer, description: SEED_INTERNAL_TOKEN (service role), held by the web servers and the job runner only }
+    staffServiceToken: { type: http, scheme: bearer, description: 'SEED_STAFF_SERVICE_TOKEN, held by the desk''s server and the first-admin script only. Opens the staff login and account routes and nothing else' }
   responses:
     Problem:
       description: RFC 9457 problem
@@ -353,11 +369,12 @@ components:
   schemas:
     StaffLoggedIn:
       type: object
-      required: [staffId, displayName, roles]
+      required: [staffId, displayName, roles, passwordChangeRequired]
       properties:
         staffId: { type: string, format: uuid }
         displayName: { type: string }
         roles: { type: array, items: { type: string, enum: [OFFICER, CHECKER, ADMIN] } }
+        passwordChangeRequired: { type: boolean, description: They must choose their own password before doing anything else }
     # Copies of the shapes in seed-api.yaml, so this file stands alone for the generator.
     Problem:
       type: object
@@ -410,13 +427,16 @@ components:
         active: { type: boolean, default: true }
     StaffRecord:
       type: object
-      required: [staffId, displayName, roles, active]
+      required: [staffId, displayName, roles, active, canLogIn]
       properties:
         staffId: { type: string, format: uuid }
         displayName: { type: string }
         email: { type: [string, 'null'] }
         roles: { type: array, items: { $ref: '#/components/schemas/StaffRole' } }
         active: { type: boolean }
+        canLogIn: { type: boolean, description: Whether this person has a password. Demo personas and directory rows don't }
+        linkedMemberId: { type: [string, 'null'], format: uuid, description: Their own member account. Filled in for admins only }
+        passwordChangeRequired: { type: [boolean, 'null'], description: True until they choose their own password. Filled in for admins only }
     PaypalCatalog:
       type: object
       required: [productId, savingsPlanId, loanPlanId, createdProduct, createdSavingsPlan, createdLoanPlan]

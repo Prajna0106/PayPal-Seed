@@ -19,7 +19,13 @@ export default async function AccountPage() {
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-display-md text-ink">Your login</h1>
-        <p className="text-body">If someone else set your password, change it here so that only you know it.</p>
+        {session.passwordChangeRequired ? (
+          <p role="status" className="text-body">
+            An admin chose your current password. Choose your own before you start; the desk opens once you have.
+          </p>
+        ) : (
+          <p className="text-body">Changing your password logs you out on every other device.</p>
+        )}
       </div>
       <ChangePassword />
     </div>

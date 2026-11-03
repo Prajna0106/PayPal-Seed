@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Service-token routes for the Next.js servers: member login after Log in with PayPal, and staff upsert after staff sign-in. */
+/** Service-token routes for the Next.js servers: member login after Log in with PayPal, and the staff directory for the desk. */
 @RestController
 class InternalIdentityController {
 
@@ -61,9 +61,10 @@ class InternalIdentityController {
         return new LoginResponse(result.created(), MemberIdentityController.profile(result.member()));
     }
 
+    /** Takes the staff service token: the member app's service token must not be able to hand out roles. */
     @PutMapping("/internal/staff/{staffId}")
     DeskStaffController.StaffRecord upsertStaff(Actor actor, @PathVariable UUID staffId, @Valid @RequestBody StaffRequest body) {
-        actor.requireAnyRole(Role.SERVICE);
+        actor.requireAnyRole(Role.STAFF_ACCOUNTS);
         StaffView saved = identity.upsertStaff(staffId, new StaffUpsert(body.displayName(), body.email(), roles(body.roles()),
                 body.active()));
         return DeskStaffController.record(saved);

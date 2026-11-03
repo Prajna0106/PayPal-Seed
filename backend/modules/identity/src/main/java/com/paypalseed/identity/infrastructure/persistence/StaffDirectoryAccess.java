@@ -24,8 +24,10 @@ class StaffDirectoryAccess implements StaffAccessLookup {
 
     @Override
     public Optional<StaffAccess> access(UUID staffId) {
-        return dsl.select(STAFF.ACTIVE, STAFF.ROLES, STAFF.LINKED_MEMBER_ID).from(STAFF).where(STAFF.ID.eq(staffId))
-                .fetchOptional(r -> new StaffAccess(r.value1(), roles(r.value2()), r.value3()));
+        return dsl.select(STAFF.ACTIVE, STAFF.ROLES, STAFF.LINKED_MEMBER_ID, STAFF.SESSIONS_VALID_AFTER,
+                        STAFF.PASSWORD_CHANGE_REQUIRED)
+                .from(STAFF).where(STAFF.ID.eq(staffId))
+                .fetchOptional(r -> new StaffAccess(r.value1(), roles(r.value2()), r.value3(), r.value4(), r.value5()));
     }
 
     private static Set<Role> roles(String[] names) {
