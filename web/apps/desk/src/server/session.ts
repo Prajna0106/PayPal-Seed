@@ -8,7 +8,11 @@ import { z } from "zod";
 import { env } from "./env";
 import { signToken, verifyToken } from "./session-token";
 
-/** Staff demo session: which persona this browser acts as. The backend enforces roles and separation of duties. */
+/**
+ * Which staff member this browser acts as, set after a password login or a demo persona. Each backend call
+ * signs a short actor token from it (ADR 0016). The backend checks the person is still active and enforces roles and
+ * separation of duties. A demo session stops working when demo sign-in is off.
+ */
 export const SESSION_COOKIE = "seed_desk_session";
 const MAX_AGE_SECONDS = 60 * 60 * 8;
 
@@ -17,13 +21,14 @@ const staffSessionSchema = z.object({
   staffId: z.uuid(),
   name: z.string().max(80),
   roles: z.array(z.enum(["OFFICER", "CHECKER", "ADMIN"])).min(1),
+  demo: z.boolean().optional(),
 });
 
 export type StaffSession = z.infer<typeof staffSessionSchema>;
 
 export async function parseSession(token: string | undefined): Promise<StaffSession | null> {
   const parsed = staffSessionSchema.safeParse(await verifyToken(token, env.SESSION_SECRET));
-  return parsed.success ? parsed.data : null;
+  return parsed.success && (env.demoLogin || !parsed.data.demo) ? parsed.data : null;
 }
 
 export const getSession = cache(async (): Promise<StaffSession | null> => {

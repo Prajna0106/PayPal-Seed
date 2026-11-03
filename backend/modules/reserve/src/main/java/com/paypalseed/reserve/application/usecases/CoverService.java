@@ -120,7 +120,7 @@ public class CoverService {
      * different people and the roles. The decision that closes the request as approved also pays.
      */
     @Transactional
-    public CoverDecisionResult decide(UUID coverId, UUID staffId, Set<String> roles, Decision decision, String reasonCode,
+    public CoverDecisionResult decide(UUID coverId, UUID staffId, UUID staffMemberId, Set<String> roles, Decision decision, String reasonCode,
                                       String note, long evidenceViewedMs, String idempotencyKey) {
         CoverRow cover = covers.lock(coverId).orElseThrow(() -> new DomainException(ReserveErrors.COVER_REQUEST_NOT_FOUND,
                 "No cover request " + coverId));
@@ -135,7 +135,7 @@ public class CoverService {
                 throw new DomainException(ReserveErrors.COVER_LOAN_NOT_FOUND, "No loan " + cover.loanId());
             });
         }
-        DecisionResult result = governance.decide(new Decide(cover.approvalRequestId(), staffId, roles, null, decision,
+        DecisionResult result = governance.decide(new Decide(cover.approvalRequestId(), staffId, roles, staffMemberId, decision,
                 reasonCode, note, evidenceViewedMs, snapshotHash(cover.id(), cover.memberId(), cover.loanId(), cover.amountCents()),
                 idempotencyKey));
         CoverStatus status = cover.status();

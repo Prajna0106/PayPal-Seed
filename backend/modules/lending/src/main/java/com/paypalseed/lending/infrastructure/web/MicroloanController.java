@@ -7,6 +7,8 @@ import com.paypalseed.lending.application.usecases.MicroloanApplicationService.S
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.ErrorCode;
 import com.paypalseed.platform.security.Actor;
 import com.paypalseed.platform.security.Actor.Role;
 import jakarta.validation.Valid;
@@ -39,6 +41,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1")
 public class MicroloanController {
+
+    private static final ErrorCode OWN_LOAN = new ErrorCode("sod-violation", ErrorCode.Kind.FORBIDDEN,
+        "Staff can't decide their own loan");
 
     public record SubmitLoanApplicationRequest(
         UUID memberId,
@@ -145,7 +150,8 @@ public class MicroloanController {
         Actor actor,
         @PathVariable("applicationId") UUID applicationId
     ) {
-        return ResponseEntity.ok(applicationService.approveApplication(applicationId, staff(actor).id()));
+        refuseOwnLoan(staff(actor), applicationId);
+        return ResponseEntity.ok(applicationService.approveApplication(applicationId, actor.id()));
     }
 
     @PostMapping("/desk/loans/applications/{applicationId}/reject")
@@ -155,6 +161,7 @@ public class MicroloanController {
         @RequestBody(required = false) OfficerRejectionRequest request
     ) {
         UUID officerId = staff(actor).id();
+        refuseOwnLoan(actor, applicationId);
         String reason = request != null ? request.reason() : null;
         return ResponseEntity.ok(applicationService.rejectApplication(applicationId, officerId, reason));
     }
@@ -168,7 +175,14 @@ public class MicroloanController {
         Actor actor,
         @PathVariable("applicationId") UUID applicationId
     ) {
-        return ResponseEntity.ok(applicationService.disburseApplication(applicationId, staff(actor).id()));
+        refuseOwnLoan(staff(actor), applicationId);
+        return ResponseEntity.ok(applicationService.disburseApplication(applicationId, actor.id()));
+    }
+
+    private void refuseOwnLoan(Actor actor, UUID applicationId) {
+        if (actor.isMember(applicationService.getApplication(applicationId).memberId())) {
+            throw new DomainException(OWN_LOAN, OWN_LOAN.title());
+        }
     }
 
     private static Actor staff(Actor actor) {

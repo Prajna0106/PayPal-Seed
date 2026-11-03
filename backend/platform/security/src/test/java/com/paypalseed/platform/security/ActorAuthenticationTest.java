@@ -26,7 +26,7 @@ class ActorAuthenticationTest {
     private final ActorTokenIssuer issuer = ActorTokenIssuer.signingWith(keys, clock);
 
     private ActorAuthentication auth(boolean devHeaders) {
-        return new ActorAuthentication(INTERNAL, devHeaders, verifier);
+        return new ActorAuthentication(INTERNAL, devHeaders, verifier, null);
     }
 
     private static MockHttpServletRequest request(String path, String bearer) {
@@ -126,14 +126,14 @@ class ActorAuthenticationTest {
     @Test
     void withoutASecretNoTokenIsAccepted() {
         ActorTokenVerifier none = new ActorTokenVerifier(ActorTokenKeys.none(), Duration.ofSeconds(30), clock);
-        ActorAuthentication noKeys = new ActorAuthentication(INTERNAL, true, none);
+        ActorAuthentication noKeys = new ActorAuthentication(INTERNAL, true, none, null);
         assertThat(noKeys.authenticate(request("/api/v1/loans", issuer.member(ID)))).isEmpty();
         assertThat(noKeys.authenticate(request("/internal/jobs/x", INTERNAL))).isPresent();
     }
 
     @Test
     void shortInternalTokenIsNeverAccepted() {
-        ActorAuthentication weak = new ActorAuthentication("short", false, verifier);
+        ActorAuthentication weak = new ActorAuthentication("short", false, verifier, null);
         assertThat(weak.authenticate(request("/internal/jobs/x", "short"))).isEmpty();
         assertThat(weak.authenticate(request("/internal/jobs/x", ""))).isEmpty();
     }

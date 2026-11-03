@@ -176,7 +176,7 @@ public class ApprovalFlow {
      * by governance and by the database. A stale snapshot voids the request and sends the case back to the member.
      */
     @Transactional(noRollbackFor = OfferStaleException.class)
-    public DecisionResult decide(UUID caseId, UUID staffId, Set<String> roles, Decision decision, String reasonCode,
+    public DecisionResult decide(UUID caseId, UUID staffId, UUID staffMemberId, Set<String> roles, Decision decision, String reasonCode,
                                  String note, long evidenceViewedMs, String idempotencyKey) {
         CaseRow c = cases.lock(caseId).orElseThrow(() -> new DomainException(HardshipErrors.CASE_NOT_FOUND, "No case " + caseId));
         if (c.status() != CaseStatus.PENDING_APPROVAL || c.approvalRequestId() == null) {
@@ -185,7 +185,7 @@ public class ApprovalFlow {
         OptionRow option = chosenOption(c);
         String current = currentHash(c, option);
         try {
-            return governance.decide(new Decide(c.approvalRequestId(), staffId, roles, null, decision, reasonCode, note,
+            return governance.decide(new Decide(c.approvalRequestId(), staffId, roles, staffMemberId, decision, reasonCode, note,
                     evidenceViewedMs, current, idempotencyKey));
         } catch (ApprovalStaleException e) {
             stale(c);

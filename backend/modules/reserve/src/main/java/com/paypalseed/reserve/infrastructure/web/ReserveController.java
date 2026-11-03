@@ -99,7 +99,7 @@ class ReserveController {
     CoverDecisionResult decide(Actor actor, @PathVariable UUID coverRequestId, @Valid @RequestBody DecisionBody body,
                                @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String key) {
         actor.requireAnyRole(Role.OFFICER, Role.CHECKER);
-        return covers.decide(coverRequestId, actor.id(), rolesOf(actor), body.decision(), body.reasonCode(), body.note(),
+        return covers.decide(coverRequestId, actor.id(), actor.linkedMemberId(), rolesOf(actor), body.decision(), body.reasonCode(), body.note(),
                 body.evidenceViewedMs(), key);
     }
 
