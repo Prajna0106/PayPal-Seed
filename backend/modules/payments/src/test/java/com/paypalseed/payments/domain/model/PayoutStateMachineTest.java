@@ -55,6 +55,24 @@ class PayoutStateMachineTest {
     }
 
     @Test
+    void aReadOfAnItemUsesTheSameWordsAsItsWebhook() {
+        assertThat(PayoutStateMachine.fromPaypalItem("DENIED")).contains(PayoutStatus.FAILED);
+        assertThat(PayoutStateMachine.fromPaypalItem("CANCELED")).contains(PayoutStatus.FAILED);
+        assertThat(PayoutStateMachine.fromPaypalItem("BLOCKED")).contains(PayoutStatus.BLOCKED);
+        assertThat(PayoutStateMachine.fromPaypalItem("UNCLAIMED")).contains(PayoutStatus.UNCLAIMED);
+        assertThat(PayoutStateMachine.fromPaypalItem("REVERSED")).contains(PayoutStatus.RETURNED);
+        assertThat(PayoutStateMachine.fromPaypalItem("PENDING")).contains(PayoutStatus.PENDING);
+    }
+
+    @Test
+    void aReadNeverMovesAFinalOrDeliveredPayoutBackwards() {
+        assertThat(PayoutStateMachine.apply(PayoutStatus.SUCCEEDED, PayoutStatus.PENDING)).isEmpty();
+        assertThat(PayoutStateMachine.apply(PayoutStatus.FAILED, PayoutStatus.SUCCEEDED)).isEmpty();
+        assertThat(PayoutStateMachine.apply(PayoutStatus.RETURNED, PayoutStatus.SUCCEEDED)).isEmpty();
+        assertThat(PayoutStateMachine.apply(PayoutStatus.PENDING, PayoutStatus.PENDING)).isEmpty();
+    }
+
+    @Test
     void payoutRequestsAreValidatedAtTheEdge() {
         assertThatThrownBy(() -> new SendPayout("r", 0, RecipientType.EMAIL, "a@b.test", PayoutWallet.PAYPAL, null))
                 .isInstanceOf(IllegalArgumentException.class);

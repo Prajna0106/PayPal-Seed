@@ -1187,6 +1187,8 @@ paths:
         crediting steps the webhooks use, so a webhook that arrives later or twice changes nothing. At most one read per
         goal every 5 seconds (`seed.savings.sync-min-interval`); a call inside that time, or for a goal that has no live
         subscription (expired, cancelled, completed), returns the stored goal untouched.
+        It also reads the goal's withdrawal payouts that PayPal has not reported yet and applies what PayPal says (ADR 0029),
+        whatever the state of the subscription.
       parameters: [ { $ref: '#/components/parameters/GoalId' } ]
       responses:
         '200': { description: "The goal as it is after the read", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
@@ -1321,6 +1323,29 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { description: "application-invalid-state (not approved by two officers), or payout-recipient-missing (the member has no PayPal account on file)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '503': { description: "dependency-unavailable (the application stays APPROVED; call again)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/applications/{applicationId}/payout/sync:
+    post:
+      tags: [lending-desk]
+      operationId: syncApplicationPayout
+      summary: Check again with PayPal how the application's payout stands
+      description: |
+        For a payout whose webhook has not arrived (a machine PayPal cannot call, or a lost delivery). Reads the application's
+        current payout from PayPal and applies what it says through the same steps the payout webhooks use (ADR 0029): the
+        loan and Schedule Version 1 are created once when it succeeded, a refused or returned payout puts the application
+        back to `APPROVED` with a `payoutIssue`. A webhook that comes before, after or twice changes nothing. A safe re-read, so
+        no `Idempotency-Key`: a payout is read at most once every 5 seconds, and a call inside that time, a payout that is
+        already final, and one PayPal has not given an id yet return the application as it stands.
+      security:
+        - staffSession: []
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      responses:
+        '200': { description: "The application as it stands after the read", content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { description: "application-not-found, or payout-not-found (no payout was ever asked for)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: "paypal-rejected (PayPal refused the read; nothing changed)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (PayPal could not be reached; nothing changed)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
 
   # ---------------------------------------------------------------- Lending, underwriting and the coach (ADR 0020)

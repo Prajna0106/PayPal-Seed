@@ -85,6 +85,27 @@ public interface SavingsPayments {
 
     OrderCapture captureTopUp(UUID goalId, String orderId);
 
+    /** Where a payout stands after PayPal was asked, in the words the payout events use (ADR 0029). */
+    enum PayoutEnd {
+        PENDING,
+        /** The recipient has no account yet; PayPal holds the money and a success or a return follows. */
+        UNCLAIMED,
+        SUCCEEDED,
+        FAILED,
+        RETURNED
+    }
+
+    record PayoutReport(PayoutEnd end, String reasonCode, String transactionId) {
+    }
+
+    /**
+     * Asks PayPal how the payout stands, for a webhook that did not come (ADR 0029), and returns what is stored afterwards;
+     * empty when there is no such payout. Throws when PayPal cannot be reached.
+     */
+    default Optional<PayoutReport> syncPayout(String referenceId) {
+        return Optional.empty();
+    }
+
     /** Sends the money out to {@code memberId}. Idempotent on {@code referenceId}. */
     Payout sendPayout(String referenceId, UUID memberId, long amountCents, PayoutRecipients.Recipient recipient, SavingsWallet wallet,
                       String note);

@@ -18,6 +18,7 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.CreateOrder;
 import com.paypalseed.payments.api.dto.PaymentsDtos.IncomeCredit;
 import com.paypalseed.payments.api.dto.PaymentsDtos.MandateView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutSyncSummary;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
@@ -77,12 +78,13 @@ class PaymentsService implements PaymentsFacade {
     private final SavingsCollectionService savings;
     private final SavingsSyncService savingsSync;
     private final PayoutService payoutService;
+    private final PayoutSyncService payoutSync;
     private final IncomeService income;
 
     PaymentsService(PayPalGateway paypal, PayPalCommandExecutor executor, MandateRepository mandates, MoneyRegistry registry,
                     MoneyFacts facts, BusinessClock clock, ApplicationEventPublisher events, PaypalCatalogService catalog,
                     SavingsCollectionService savings, SavingsSyncService savingsSync, PayoutService payoutService,
-                    IncomeService income) {
+                    PayoutSyncService payoutSync, IncomeService income) {
         this.paypal = paypal;
         this.executor = executor;
         this.mandates = mandates;
@@ -94,6 +96,7 @@ class PaymentsService implements PaymentsFacade {
         this.savings = savings;
         this.savingsSync = savingsSync;
         this.payoutService = payoutService;
+        this.payoutSync = payoutSync;
         this.income = income;
     }
 
@@ -416,6 +419,17 @@ class PaymentsService implements PaymentsFacade {
     @Transactional(readOnly = true)
     public Optional<PayoutView> payoutOf(String referenceId) {
         return payoutService.find(referenceId);
+    }
+
+    /** Not transactional: the right to read is committed before PayPal is called, and the report is applied in its own transaction. */
+    @Override
+    public PayoutView syncPayout(UUID payoutId) {
+        return payoutSync.sync(payoutId).view();
+    }
+
+    @Override
+    public PayoutSyncSummary syncOpenPayouts(int limit) {
+        return payoutSync.syncOpen(limit);
     }
 
     @Override

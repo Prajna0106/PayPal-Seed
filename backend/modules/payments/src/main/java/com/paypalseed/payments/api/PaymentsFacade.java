@@ -7,6 +7,7 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.CreateOrder;
 import com.paypalseed.payments.api.dto.PaymentsDtos.IncomeCredit;
 import com.paypalseed.payments.api.dto.PaymentsDtos.MandateView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutSyncSummary;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
@@ -120,6 +121,19 @@ public interface PaymentsFacade {
     PayoutView sendPayout(SendPayout command);
 
     Optional<PayoutView> payoutOf(String referenceId);
+
+    /**
+     * Reads a payout that is not final from PayPal and applies what it says exactly as a webhook report is applied (ADR 0029):
+     * the outcome moves the payout forward at most once and is announced once as {@code PayoutSucceeded}, {@code PayoutFailed}
+     * or {@code PayoutReturned}, whichever of this call or the webhook gets there first. Returns the payout as stored
+     * afterwards. A final payout (failed, blocked, returned), one PayPal has not given an id yet, and one read within
+     * {@code seed.payments.payout-sync-min-interval} are returned as stored without a call to PayPal. A PayPal failure is thrown
+     * and nothing changes; an unknown payout is {@code 404 payout-not-found}. Opens no transaction of its own.
+     */
+    PayoutView syncPayout(UUID payoutId);
+
+    /** The reconcile job's batch: payouts that may have missed a webhook, least recently read first, at most {@code limit}. */
+    PayoutSyncSummary syncOpenPayouts(int limit);
 
     // ---- Transaction Search ----------------------------------------------------------------------
 

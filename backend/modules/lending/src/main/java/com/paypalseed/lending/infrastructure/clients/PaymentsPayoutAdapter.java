@@ -11,6 +11,7 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutWallet;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RecipientType;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
 import com.paypalseed.platform.kernel.DomainException;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -47,5 +48,20 @@ class PaymentsPayoutAdapter implements DisbursementPayouts {
             case REQUESTED, PENDING, UNCLAIMED -> State.PENDING;
         };
         return new Result(state, view.failureReason().orElse(null));
+    }
+
+    @Override
+    public Optional<Synced> sync(String referenceId) {
+        return payments.payoutOf(referenceId).map(known -> {
+            PayoutView view = payments.syncPayout(known.payoutId());
+            Outcome outcome = switch (view.status()) {
+                case SUCCEEDED -> Outcome.SUCCEEDED;
+                case FAILED, BLOCKED -> Outcome.FAILED;
+                case RETURNED -> Outcome.RETURNED;
+                case UNCLAIMED -> Outcome.UNCLAIMED;
+                case REQUESTED, PENDING -> Outcome.PENDING;
+            };
+            return new Synced(outcome, view.failureReason().orElse(null));
+        });
     }
 }

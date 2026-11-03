@@ -14,6 +14,7 @@ public final class PaymentsErrors {
 
     public static final ErrorCode PAYOUT_REFERENCE_REUSED = ErrorCode.conflict("payout-reference-reused",
             "This payout reference was already used for a different amount or recipient");
+    public static final ErrorCode PAYOUT_NOT_FOUND = ErrorCode.notFound("payout-not-found", "No such payout");
     public static final ErrorCode SAVINGS_SUBSCRIPTION_NOT_FOUND =
             ErrorCode.notFound("savings-subscription-not-found", "This goal has no PayPal subscription");
     public static final ErrorCode SAVINGS_SUBSCRIPTION_ENDED = ErrorCode.conflict("savings-subscription-ended",
