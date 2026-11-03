@@ -14,49 +14,106 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@paypal-seed/ui/components/sidebar";
-import { Bot, LayoutDashboard, LifeBuoy, ServerCog } from "lucide-react";
+import {
+  Bot,
+  CircleDollarSign,
+  FileText,
+  GanttChart,
+  LayoutDashboard,
+  LifeBuoy,
+  Lock,
+  PieChart,
+  Scale,
+  ServerCog,
+  ShieldAlert,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+type Role = "OFFICER" | "CHECKER" | "ADMIN";
+
 interface NavItem {
   href: Route;
   label: string;
   icon: ReactNode;
+  /** The page works only for this role. The link stays, marked, and the page explains the restriction. */
+  requires?: Role;
 }
 
-const WORK: NavItem[] = [
-  { href: "/", label: "Overview", icon: <LayoutDashboard /> },
-  { href: "/hardship", label: "Hardship queue", icon: <LifeBuoy /> },
-];
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
 
-const PLATFORM: NavItem[] = [
-  { href: "/agents", label: "Agents", icon: <Bot /> },
-  { href: "/operations", label: "Operations", icon: <ServerCog /> },
+const GROUPS: NavGroup[] = [
+  { label: "Overview", items: [{ href: "/", label: "Overview", icon: <LayoutDashboard /> }] },
+  {
+    label: "Queues",
+    items: [
+      { href: "/applications" as Route, label: "Applications", icon: <FileText /> },
+      { href: "/fair-checks" as Route, label: "Fair checks", icon: <Scale /> },
+      { href: "/hardship", label: "Hardship", icon: <LifeBuoy /> },
+    ],
+  },
+  {
+    label: "Portfolio",
+    items: [
+      { href: "/portfolio" as Route, label: "Portfolio", icon: <PieChart /> },
+      { href: "/workload" as Route, label: "Workload", icon: <GanttChart /> },
+    ],
+  },
+  {
+    label: "Safety",
+    items: [
+      { href: "/reserve" as Route, label: "Reserve", icon: <CircleDollarSign /> },
+      { href: "/fraud" as Route, label: "Fraud", icon: <ShieldAlert /> },
+    ],
+  },
+  {
+    label: "Platform",
+    items: [
+      { href: "/agents", label: "Agents", icon: <Bot /> },
+      { href: "/operations", label: "Operations", icon: <ServerCog />, requires: "ADMIN" },
+    ],
+  },
 ];
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebar({ footer }: { footer: ReactNode }) {
+export function AppSidebar({ footer, roles }: { footer: ReactNode; roles: readonly Role[] }) {
   const pathname = usePathname();
-  const renderGroup = (label: string, items: NavItem[]) => (
-    <SidebarGroup>
+  const renderGroup = ({ label, items }: NavGroup) => (
+    <SidebarGroup key={label}>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={isActive(pathname, item.href)} tooltip={item.label}>
-                <Link href={item.href}>
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {items.map((item) => {
+            const restricted = item.requires !== undefined && !roles.includes(item.requires);
+            return (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive(pathname, item.href)}
+                  tooltip={restricted ? `${item.label} (admins only)` : item.label}
+                >
+                  <Link href={item.href}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                    {restricted ? (
+                      <span className="ml-auto text-muted-ink group-data-[collapsible=icon]:hidden">
+                        <Lock aria-hidden="true" className="size-3.5" />
+                        <span className="sr-only">Admins only</span>
+                      </span>
+                    ) : null}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -70,10 +127,7 @@ export function AppSidebar({ footer }: { footer: ReactNode }) {
           <Wordmark compact className="hidden group-data-[collapsible=icon]:inline-flex" />
         </Link>
       </SidebarHeader>
-      <SidebarContent>
-        {renderGroup("Work", WORK)}
-        {renderGroup("Platform", PLATFORM)}
-      </SidebarContent>
+      <SidebarContent>{GROUPS.map(renderGroup)}</SidebarContent>
       <SidebarFooter>{footer}</SidebarFooter>
       <SidebarRail />
     </Sidebar>

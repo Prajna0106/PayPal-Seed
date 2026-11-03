@@ -1,0 +1,127 @@
+/*
+ * The workload scheduler in Seed tokens (web/DESIGN.md). SLA state colours come from the status tokens; fallbacks
+ * keep it readable if a token is not emitted on the page.
+ */
+.seed-workload {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.seed-workload__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--color-body, #4e4e4e);
+}
+
+.seed-workload__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seed-workload__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+}
+
+.seed-workload__swatch--now {
+  width: 2px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--color-ink, #0c0a09);
+}
+
+.seed-workload__chart {
+  overflow: hidden;
+  border: 1px solid var(--color-hairline, #e7e5e4);
+  border-radius: var(--radius-xl, 16px);
+  background: var(--color-surface, #ffffff);
+}
+
+.seed-workload .b-schedulerpro,
+.seed-workload .b-grid-header,
+.seed-workload .b-sch-event {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+.seed-workload .b-grid-header-container,
+.seed-workload .b-grid-headers {
+  background: var(--color-canvas-soft, #fafafa);
+}
+
+.seed-workload .b-grid-cell {
+  color: var(--color-ink, #0c0a09);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* A bucket with one waiting item can be minutes wide on an hourly axis: keep the text readable. */
+.seed-workload .b-sch-event-wrap {
+  min-width: 5.5rem;
+}
+
+.seed-workload .b-sch-event {
+  border-radius: var(--radius-pill, 9999px);
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: center;
+  border: 1px solid transparent;
+}
+
+/* Bar fill and swatch share one rule per SLA state so the legend can never drift from the chart. */
+.seed-workload .seed-sla-overdue .b-sch-event,
+.seed-workload__swatch.seed-sla-overdue {
+  background: var(--color-danger-soft, #fbeaea) !important;
+  color: var(--color-danger, #c42727) !important;
+  border-color: var(--color-danger, #c42727);
+}
+
+.seed-workload .seed-sla-due_soon .b-sch-event,
+.seed-workload__swatch.seed-sla-due_soon {
+  background: var(--color-warning-soft, #fbf1e3) !important;
+  color: var(--color-warning, #b45309) !important;
+  border-color: var(--color-warning, #b45309);
+}
+
+.seed-workload .seed-sla-on_track .b-sch-event,
+.seed-workload__swatch.seed-sla-on_track {
+  background: var(--color-success-soft, #e7f4ec) !important;
+  color: var(--color-success, #15803d) !important;
+  border-color: var(--color-success, #15803d);
+}
+
+.seed-workload .seed-sla-no_sla .b-sch-event,
+.seed-workload__swatch.seed-sla-no_sla {
+  background: var(--color-surface-strong, #f0efed) !important;
+  color: var(--color-ink-soft, #292524) !important;
+  border-color: var(--color-hairline-strong, #d6d3d1);
+}
+
+.seed-workload__swatch.seed-sla-overdue,
+.seed-workload__swatch.seed-sla-due_soon,
+.seed-workload__swatch.seed-sla-on_track,
+.seed-workload__swatch.seed-sla-no_sla {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.seed-workload .b-timerange.seed-now {
+  border-inline-start: 2px solid var(--color-ink, #0c0a09);
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seed-workload * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

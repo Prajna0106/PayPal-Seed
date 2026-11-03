@@ -1,0 +1,13 @@
+/*
+ * The journey timeline reuses the base look in timeline.css. Steps on a monthly axis can be a day wide, so every bar gets
+ * room for its short label, and the saving bars read as long ribbons.
+ */
+.seed-journey .b-sch-event-wrap {
+  min-width: 4.5rem;
+}
+
+.seed-journey .b-sch-event {
+  padding-inline: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1265,6 +1265,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/loans/applications/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a loan would cost each month, before the member applies
+         * @description Member role only. Stores nothing and does not call PayPal. It runs the same eligibility, sizing and schedule
+         *     code as the application and the disbursement, as of today's business date, so a valid preview is the schedule
+         *     the loan gets if it is paid out today (paid out on a later day, the due dates are counted from that day).
+         *     A request that is outside the member's limits is a `200` with `valid: false` and the reasons in plain words,
+         *     not an error. `totalRepayableCents` equals the amount asked for: the loan is 0% with no fees.
+         *     `memberId` is optional and must be the caller's own, otherwise `404`.
+         */
+        post: operations["previewLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/loans/applications/{applicationId}": {
         parameters: {
             query?: never;
@@ -2610,6 +2635,24 @@ export interface components {
             closedReason?: string | null;
             /** Format: uuid */
             journalEntryId?: string | null;
+            /**
+             * Format: date-time
+             * @description When the officers' decision is overdue (the request time plus the decision SLA, `seed.reserve.cover.decision-sla`). Null if the approval request cannot be read
+             */
+            slaDueAt?: string | null;
+            /** @description Who has approved so far, oldest first. A maker, then a different checker. Rejections are not listed */
+            approvals: components["schemas"]["CoverApproval"][];
+        };
+        CoverApproval: {
+            /** @enum {string} */
+            role: "MAKER" | "CHECKER";
+            /**
+             * Format: uuid
+             * @description Resolve to a name with the staff directory
+             */
+            staffId: string;
+            /** Format: date-time */
+            decidedAt: string;
         };
         CoverRequestPage: {
             rows: components["schemas"]["CoverRequest"][];
@@ -2661,6 +2704,8 @@ export interface components {
             rows: components["schemas"]["FlagView"][];
             /** Format: uuid */
             nextBefore?: string | null;
+            /** @description A flag is raised when the score reaches this value (`seed.fraud.flag-threshold`) */
+            flagThreshold: number;
         };
         SignalView: {
             code: components["schemas"]["SignalCode"];
@@ -2863,6 +2908,83 @@ export interface components {
             fairCheckConsented: boolean;
             /** Format: int64 */
             verifiedMonthlyIncomeCents?: number;
+        };
+        PreviewLoanApplicationRequest: {
+            /**
+             * Format: uuid
+             * @description Ignored for a signed-in member; any other member's id is a 404
+             */
+            memberId?: string;
+            /** Format: int64 */
+            requestedAmountCents: number;
+            /** @description Outside the member's allowed range it is answered with `valid: false`, not an error */
+            termMonths: number;
+            /** @description Defaults to 15 */
+            preferredDueDay?: number;
+            /** Format: int64 */
+            verifiedMonthlyIncomeCents?: number;
+        };
+        PreviewInstalment: {
+            seq: number;
+            /** Format: date */
+            dueDate: string;
+            /** Format: int64 */
+            amountCents: number;
+        };
+        LoanApplicationPreview: {
+            /** @description The member could apply for exactly this */
+            valid: boolean;
+            /**
+             * @description Which rule decided, for choosing the message and the control to point at; never a score
+             * @enum {string}
+             */
+            outcome: "APPROVED" | "NOT_ELIGIBLE" | "AMOUNT_NOT_ALLOWED" | "TERM_OUT_OF_RANGE" | "ABOVE_LIMIT" | "INSTALMENT_ABOVE_CAP";
+            /** Format: int64 */
+            requestedAmountCents: number;
+            termMonths: number;
+            /** @description The day of the month instalments fall due */
+            dueDay: number;
+            /**
+             * Format: date
+             * @description Today's business date; the schedule is counted from it
+             */
+            assumedDisbursementDate: string;
+            /**
+             * Format: int64
+             * @description The largest instalment; 0 when the member is not eligible
+             */
+            monthlyInstalmentCents: number;
+            /**
+             * Format: int64
+             * @description Equal to the amount asked for (0% and no fees)
+             */
+            totalRepayableCents: number;
+            /**
+             * Format: date
+             * @description Null when there is no schedule
+             */
+            firstDueDate?: string | null;
+            /** @description Empty unless `valid` */
+            instalments: components["schemas"]["PreviewInstalment"][];
+            /** @description Plain words about the outcome, with what to change */
+            reasons: string[];
+            /**
+             * Format: int64
+             * @description A safe amount to try instead, when there is one
+             */
+            suggestedAmountCents?: number | null;
+            /** @description A safe term to try instead, when there is one */
+            suggestedTermMonths?: number | null;
+            /**
+             * Format: int64
+             * @description The loan ceiling that applies to the member
+             */
+            limitCents: number;
+            /**
+             * Format: int64
+             * @description The most the member can safely repay each month
+             */
+            maxMonthlyInstalmentCents: number;
         };
         RejectApplicationRequest: {
             reason?: string;
@@ -5490,6 +5612,34 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    previewLoanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewLoanApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplicationPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getLoanApplication: {

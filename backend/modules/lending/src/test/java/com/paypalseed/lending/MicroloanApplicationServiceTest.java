@@ -1,12 +1,14 @@
 package com.paypalseed.lending;
 
 import com.paypalseed.lending.api.LendingFacade;
+import com.paypalseed.lending.api.dto.LendingDtos.ApplicationPreviewView;
 import com.paypalseed.lending.api.dto.LendingDtos.CoverResult;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.api.dto.LendingDtos.MemberApplicationView;
 import com.paypalseed.lending.api.dto.LendingDtos.MemberLoanView;
+import com.paypalseed.lending.api.dto.LendingDtos.PreviewInstalment;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
 import com.paypalseed.lending.api.dto.LendingDtos.ReschedulePreview;
 import com.paypalseed.lending.api.dto.LendingDtos.RescheduleRequest;
@@ -14,7 +16,9 @@ import com.paypalseed.lending.api.dto.LendingDtos.ReserveCover;
 import com.paypalseed.lending.api.dto.LendingDtos.RiskFacts;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
 import com.paypalseed.lending.api.dto.LendingDtos.Slot;
+import com.paypalseed.lending.application.usecases.LoanRegistration;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService;
+import com.paypalseed.lending.application.usecases.MicroloanApplicationService.PreviewApplicationCommand;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.SubmitApplicationCommand;
 import com.paypalseed.lending.domain.model.LendingErrors;
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
@@ -163,6 +167,90 @@ class MicroloanApplicationServiceTest {
 
         LoanApplicationView cancelled = service.cancelWithinCoolingOff(submitted.id(), ANA_ID);
         assertThat(cancelled.status()).isEqualTo("CANCELLED_COOLING_OFF");
+    }
+
+    @Test
+    void previewIsTheScheduleDisbursementCreatesForTheSameApplication() {
+        ApplicationPreviewView preview = service.previewApplication(ANA_ID,
+            new PreviewApplicationCommand(120_000L, 8, 15, OptionalLong.of(160_000L)));
+
+        assertThat(preview.valid()).isTrue();
+        assertThat(preview.outcome()).isEqualTo("APPROVED");
+        assertThat(preview.instalments()).hasSize(8);
+        assertThat(preview.monthlyInstalmentCents()).isEqualTo(15_000L);
+        assertThat(preview.totalRepayableCents()).isEqualTo(120_000L);
+        assertThat(preview.instalments().stream().mapToLong(PreviewInstalment::amountCents).sum()).isEqualTo(120_000L);
+        assertThat(preview.firstDueDate()).isEqualTo(preview.instalments().get(0).dueDate());
+        assertThat(preview.assumedDisbursementDate()).isEqualTo(LocalDate.of(2026, 11, 1));
+        assertThat(repository.findByMemberId(ANA_ID)).as("a preview stores nothing").isEmpty();
+        assertThat(lendingFacade.registeredLoans).isEmpty();
+
+        LoanApplicationView submitted = service.submitApplication(ANA_ID,
+            new SubmitApplicationCommand("Mixer", 120_000L, 8, 15, WalletType.PAYPAL, true, OptionalLong.of(160_000L)));
+        service.approveApplication(submitted.id(), OFFICER_1);
+        service.approveApplication(submitted.id(), OFFICER_2);
+        service.disburseApplication(submitted.id());
+
+        RegisterDisbursedLoan registered = lendingFacade.registeredLoans.get(0);
+        List<PreviewInstalment> created = LoanRegistration.originalSchedule(registered.principalCents(),
+                registered.instalmentCount(), registered.dueDay(), registered.disbursedOn())
+            .instalments().stream().map(i -> new PreviewInstalment(i.seq(), i.dueDate(), i.amountCents())).toList();
+        assertThat(preview.instalments()).isEqualTo(created);
+        assertThat(preview.dueDay()).isEqualTo(registered.dueDay());
+    }
+
+    @Test
+    void previewOfAnAmountOverTheLimitSaysSoAndSuggestsASafeAlternative() {
+        ApplicationPreviewView preview = service.previewApplication(ANA_ID,
+            new PreviewApplicationCommand(160_000L, 8, null, OptionalLong.of(160_000L)));
+
+        assertThat(preview.valid()).isFalse();
+        assertThat(preview.outcome()).isEqualTo("ABOVE_LIMIT");
+        assertThat(preview.instalments()).isEmpty();
+        assertThat(preview.firstDueDate()).isNull();
+        assertThat(preview.dueDay()).isEqualTo(15);
+        assertThat(preview.limitCents()).isEqualTo(150_000L);
+        assertThat(preview.suggestedAmountCents()).isEqualTo(150_000L);
+        assertThat(preview.suggestedTermMonths()).isEqualTo(10);
+        assertThat(preview.reasons()).singleElement().asString().contains("exceeds").contains("$1500.00");
+    }
+
+    @Test
+    void previewOfATermOutsideTheRangeSuggestsTheNearestAllowedTerm() {
+        ApplicationPreviewView preview = service.previewApplication(ANA_ID,
+            new PreviewApplicationCommand(60_000L, 2, 15, OptionalLong.of(160_000L)));
+
+        assertThat(preview.valid()).isFalse();
+        assertThat(preview.outcome()).isEqualTo("TERM_OUT_OF_RANGE");
+        assertThat(preview.instalments()).isEmpty();
+        assertThat(preview.suggestedTermMonths()).isEqualTo(3);
+        assertThat(preview.suggestedAmountCents()).isEqualTo(45_000L);
+    }
+
+    @Test
+    void previewOfAnInstalmentAboveTheSafeCapSuggestsALongerTerm() {
+        ApplicationPreviewView preview = service.previewApplication(ANA_ID,
+            new PreviewApplicationCommand(120_000L, 4, 15, OptionalLong.of(160_000L)));
+
+        assertThat(preview.valid()).isFalse();
+        assertThat(preview.outcome()).isEqualTo("INSTALMENT_ABOVE_CAP");
+        assertThat(preview.monthlyInstalmentCents()).isEqualTo(30_000L);
+        assertThat(preview.maxMonthlyInstalmentCents()).isEqualTo(15_000L);
+        assertThat(preview.suggestedAmountCents()).isEqualTo(120_000L);
+        assertThat(preview.suggestedTermMonths()).isEqualTo(8);
+    }
+
+    @Test
+    void previewForAMemberWhoIsNotEligibleYetHasNoScheduleAndNoSuggestion() {
+        ApplicationPreviewView preview = service.previewApplication(UUID.randomUUID(),
+            new PreviewApplicationCommand(120_000L, 8, 15, OptionalLong.empty()));
+
+        assertThat(preview.valid()).isFalse();
+        assertThat(preview.outcome()).isEqualTo("NOT_ELIGIBLE");
+        assertThat(preview.instalments()).isEmpty();
+        assertThat(preview.suggestedAmountCents()).isNull();
+        assertThat(preview.suggestedTermMonths()).isNull();
+        assertThat(preview.reasons()).isNotEmpty();
     }
 
     static class StubSavingsFacade implements SavingsFacade {
