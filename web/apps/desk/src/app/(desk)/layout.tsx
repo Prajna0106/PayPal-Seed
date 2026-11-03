@@ -21,6 +21,7 @@ export default async function DeskLayout({ children }: { children: ReactNode }) 
             personas={session.demo ? PERSONAS : []}
           />
         }
+        roles={session.roles}
       />
       <SidebarInset className="bg-canvas">
         <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-hairline bg-canvas/85 px-4 backdrop-blur-md">

@@ -18,6 +18,7 @@ const schema = z.object({
   PAYPAL_API_URL: z.url().default("https://api-m.sandbox.paypal.com"),
   PAYPAL_LOGIN_CLIENT_ID: z.string().optional(),
   PAYPAL_LOGIN_CLIENT_SECRET: z.string().optional(),
+  CHANNEL3_API_KEY: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

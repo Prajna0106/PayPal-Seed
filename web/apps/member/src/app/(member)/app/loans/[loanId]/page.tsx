@@ -31,7 +31,7 @@ export default async function LoanPage({ params }: PageProps<"/app/loans/[loanId
   return (
     <div className="flex flex-col gap-10">
       <Button asChild variant="ghost" size="sm" className="-ml-3 self-start">
-        <Link href="/app">
+        <Link href="/app/loans">
           <ArrowLeft aria-hidden="true" />
           Your loans
         </Link>

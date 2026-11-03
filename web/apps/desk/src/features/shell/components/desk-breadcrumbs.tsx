@@ -18,6 +18,12 @@ const LABELS: Record<string, string> = {
   loans: "Loans",
   agents: "Agents",
   operations: "Operations",
+  applications: "Applications",
+  "fair-checks": "Fair checks",
+  portfolio: "Portfolio",
+  workload: "Workload",
+  reserve: "Reserve",
+  fraud: "Fraud",
 };
 
 /** Ids are shortened (`9b2e…`) so a breadcrumb never wraps; the page header shows the full id. */
