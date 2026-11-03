@@ -60,7 +60,7 @@ public class FlagQueries {
         List<FlagRow> shown = more ? rows.subList(0, size) : rows;
         Map<UUID, List<String>> codes = signals.codesByFlag(shown.stream().map(FlagRow::id).toList());
         return new FlagPage(shown.stream().map(f -> view(f, codes.getOrDefault(f.id(), List.of()))).toList(),
-                more ? shown.get(shown.size() - 1).id() : null);
+                more ? shown.get(shown.size() - 1).id() : null, settings.flagThreshold());
     }
 
     @Transactional(readOnly = true)

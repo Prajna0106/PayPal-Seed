@@ -11,9 +11,11 @@ import com.paypalseed.ledger.api.dto.AccountRef;
 import com.paypalseed.ledger.api.dto.AccountType;
 import com.paypalseed.ledger.api.dto.PostingRequest;
 import com.paypalseed.lending.api.LendingFacade;
+import com.paypalseed.lending.api.dto.LendingDtos.ApplicationPreviewView;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanApplicationView;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
+import com.paypalseed.lending.api.dto.LendingDtos.PreviewInstalment;
 import com.paypalseed.lending.api.dto.LendingDtos.RegisterDisbursedLoan;
 import com.paypalseed.lending.api.events.LoanApplicationChanged;
 import com.paypalseed.lending.application.ports.DisbursementPayouts;
@@ -71,6 +73,22 @@ public class MicroloanApplicationService {
             }
         }
     }
+
+    /** The inputs of an application that matter to its schedule and sizing; what {@link #previewApplication} reads. */
+    public record PreviewApplicationCommand(
+        long requestedAmountCents,
+        int termMonths,
+        Integer preferredDueDay,
+        OptionalLong verifiedMonthlyIncomeCents
+    ) {
+        public PreviewApplicationCommand {
+            if (verifiedMonthlyIncomeCents == null) {
+                verifiedMonthlyIncomeCents = OptionalLong.empty();
+            }
+        }
+    }
+
+    private static final int DEFAULT_DUE_DAY = 15;
 
     private static final Logger log = LoggerFactory.getLogger(MicroloanApplicationService.class);
 
@@ -177,6 +195,49 @@ public class MicroloanApplicationService {
         );
     }
 
+    /**
+     * What the loan would look like if the member applied now: the same eligibility, sizing and schedule code that
+     * {@link #submitApplication} and disbursement run, so the preview cannot disagree with the loan the member gets.
+     * Stores nothing and calls no one but the readers eligibility already uses.
+     */
+    @Transactional(readOnly = true)
+    public ApplicationPreviewView previewApplication(UUID memberId, PreviewApplicationCommand command) {
+        Objects.requireNonNull(memberId, "memberId is required");
+        Objects.requireNonNull(command, "command is required");
+
+        EligibilityInput input = buildEligibilityInput(memberId, command.verifiedMonthlyIncomeCents());
+        EligibilityEvaluation eval = EligibilityEngine.evaluate(input);
+        SizingDecision decision = EligibilityEngine.checkApplication(input, command.requestedAmountCents(), command.termMonths());
+
+        int dueDay = command.preferredDueDay() != null ? command.preferredDueDay() : DEFAULT_DUE_DAY;
+        LocalDate today = clock != null ? clock.today() : LocalDate.now();
+        List<PreviewInstalment> instalments = List.of();
+        if (decision.allowed()) {
+            instalments = LoanRegistration.originalSchedule(command.requestedAmountCents(), command.termMonths(), dueDay, today)
+                .instalments().stream()
+                .map(i -> new PreviewInstalment(i.seq(), i.dueDate(), i.amountCents()))
+                .toList();
+        }
+        boolean hasSuggestion = !decision.allowed() && decision.suggestedPrincipalCents() > 0 && decision.suggestedTermMonths() > 0;
+        return new ApplicationPreviewView(
+            decision.allowed(),
+            decision.outcome().name(),
+            command.requestedAmountCents(),
+            command.termMonths(),
+            dueDay,
+            today,
+            decision.requiredMonthlyInstalmentCents(),
+            command.requestedAmountCents(),
+            instalments.isEmpty() ? null : instalments.get(0).dueDate(),
+            instalments,
+            decision.reasons(),
+            hasSuggestion ? decision.suggestedPrincipalCents() : null,
+            hasSuggestion ? decision.suggestedTermMonths() : null,
+            eval.tierLimitCents(),
+            eval.maxMonthlyInstalmentCents()
+        );
+    }
+
     @Transactional
     public LoanApplicationView submitApplication(UUID memberId, SubmitApplicationCommand command) {
         Objects.requireNonNull(memberId, "memberId is required");
@@ -218,7 +279,7 @@ public class MicroloanApplicationService {
             );
         }
 
-        int dueDay = command.preferredDueDay() != null ? command.preferredDueDay() : 15;
+        int dueDay = command.preferredDueDay() != null ? command.preferredDueDay() : DEFAULT_DUE_DAY;
         WalletType wallet = command.payoutWallet() != null ? command.payoutWallet() : WalletType.PAYPAL;
 
         LoanApplication app = LoanApplication.submit(

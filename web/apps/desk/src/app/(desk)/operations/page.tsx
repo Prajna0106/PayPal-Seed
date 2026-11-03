@@ -3,6 +3,7 @@ import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { CalendarClock, Link2, Lock, Radar, Sunset } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { DemoTools } from "@/features/operations/components/demo-tools";
 import { AdvanceClock, RunOperation } from "@/features/operations/components/operation-card";
 import { CobSection, PanelSkeleton } from "@/features/overview/components/sections";
 import { hasRole, requireSession } from "@/server/session";
@@ -51,6 +52,7 @@ export default async function OperationsPage() {
           icon={<Link2 />}
         />
       </div>
+      <DemoTools />
       <Suspense fallback={<PanelSkeleton height="h-48" />}>
         <CobSection />
       </Suspense>

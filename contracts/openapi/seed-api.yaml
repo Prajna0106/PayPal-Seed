@@ -1328,6 +1328,28 @@ paths:
         '422': { $ref: '#/components/responses/Problem' }
         '503': { description: 'dependency-unavailable (Transaction Search could not be read in time; nothing was stored)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
+  /api/v1/loans/applications/preview:
+    post:
+      tags: [lending]
+      operationId: previewLoanApplication
+      summary: What a loan would cost each month, before the member applies
+      description: |
+        Member role only. Stores nothing and does not call PayPal. It runs the same eligibility, sizing and schedule
+        code as the application and the disbursement, as of today's business date, so a valid preview is the schedule
+        the loan gets if it is paid out today (paid out on a later day, the due dates are counted from that day).
+        A request that is outside the member's limits is a `200` with `valid: false` and the reasons in plain words,
+        not an error. `totalRepayableCents` equals the amount asked for: the loan is 0% with no fees.
+        `memberId` is optional and must be the caller's own, otherwise `404`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PreviewLoanApplicationRequest' } } }
+      responses:
+        '200': { description: The preview, content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplicationPreview' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
   /api/v1/loans/applications/{applicationId}:
     get:
       tags: [lending]
@@ -2417,7 +2439,7 @@ components:
       example: { memberId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10, loanId: 0197f3a4-2c3d-7e4f-9051-6b7c8d9e0f21, amountCents: 5000, reasonCode: INCOME_DROP_VERIFIED }
     CoverRequest:
       type: object
-      required: [id, memberId, loanId, amountCents, reasonCode, status, requestedOn]
+      required: [id, memberId, loanId, amountCents, reasonCode, status, requestedOn, approvals]
       properties:
         id: { type: string, format: uuid }
         memberId: { type: string, format: uuid }
@@ -2430,6 +2452,18 @@ components:
         requestedOn: { type: string, format: date }
         closedReason: { type: [string, 'null'] }
         journalEntryId: { type: [string, 'null'], format: uuid }
+        slaDueAt: { type: [string, 'null'], format: date-time, description: 'When the officers'' decision is overdue (the request time plus the decision SLA, `seed.reserve.cover.decision-sla`). Null if the approval request cannot be read' }
+        approvals:
+          type: array
+          description: Who has approved so far, oldest first. A maker, then a different checker. Rejections are not listed
+          items: { $ref: '#/components/schemas/CoverApproval' }
+    CoverApproval:
+      type: object
+      required: [role, staffId, decidedAt]
+      properties:
+        role: { type: string, enum: [MAKER, CHECKER] }
+        staffId: { type: string, format: uuid, description: Resolve to a name with the staff directory }
+        decidedAt: { type: string, format: date-time }
     CoverRequestPage:
       type: object
       required: [rows]
@@ -2475,10 +2509,11 @@ components:
         reviewedAt: { type: [string, 'null'], format: date-time }
     FlagPage:
       type: object
-      required: [rows]
+      required: [rows, flagThreshold]
       properties:
         rows: { type: array, items: { $ref: '#/components/schemas/FlagView' } }
         nextBefore: { type: [string, 'null'], format: uuid }
+        flagThreshold: { type: integer, description: 'A flag is raised when the score reaches this value (`seed.fraud.flag-threshold`)' }
     SignalView:
       type: object
       required: [code, weight, explanation, detectedAt, evidence]
@@ -2642,6 +2677,44 @@ components:
         payoutWallet: { $ref: '#/components/schemas/Wallet' }
         fairCheckConsented: { type: boolean, description: The member agreed to the fair loan check for this application }
         verifiedMonthlyIncomeCents: { type: integer, format: int64, minimum: 0 }
+    PreviewLoanApplicationRequest:
+      type: object
+      required: [requestedAmountCents, termMonths]
+      properties:
+        memberId: { type: string, format: uuid, description: Ignored for a signed-in member; any other member's id is a 404 }
+        requestedAmountCents: { type: integer, format: int64, minimum: 1, maximum: 1000000000 }
+        termMonths: { type: integer, minimum: 1, maximum: 60, description: 'Outside the member''s allowed range it is answered with `valid: false`, not an error' }
+        preferredDueDay: { type: integer, minimum: 1, maximum: 28, description: Defaults to 15 }
+        verifiedMonthlyIncomeCents: { type: integer, format: int64, minimum: 0 }
+    PreviewInstalment:
+      type: object
+      required: [seq, dueDate, amountCents]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        dueDate: { type: string, format: date }
+        amountCents: { type: integer, format: int64 }
+    LoanApplicationPreview:
+      type: object
+      required: [valid, outcome, requestedAmountCents, termMonths, dueDay, assumedDisbursementDate, monthlyInstalmentCents, totalRepayableCents, instalments, reasons, limitCents, maxMonthlyInstalmentCents]
+      properties:
+        valid: { type: boolean, description: The member could apply for exactly this }
+        outcome:
+          type: string
+          enum: [APPROVED, NOT_ELIGIBLE, AMOUNT_NOT_ALLOWED, TERM_OUT_OF_RANGE, ABOVE_LIMIT, INSTALMENT_ABOVE_CAP]
+          description: Which rule decided, for choosing the message and the control to point at; never a score
+        requestedAmountCents: { type: integer, format: int64 }
+        termMonths: { type: integer }
+        dueDay: { type: integer, description: The day of the month instalments fall due }
+        assumedDisbursementDate: { type: string, format: date, description: 'Today''s business date; the schedule is counted from it' }
+        monthlyInstalmentCents: { type: integer, format: int64, description: The largest instalment; 0 when the member is not eligible }
+        totalRepayableCents: { type: integer, format: int64, description: Equal to the amount asked for (0% and no fees) }
+        firstDueDate: { type: [string, 'null'], format: date, description: Null when there is no schedule }
+        instalments: { type: array, items: { $ref: '#/components/schemas/PreviewInstalment' }, description: Empty unless `valid` }
+        reasons: { type: array, items: { type: string }, description: 'Plain words about the outcome, with what to change' }
+        suggestedAmountCents: { type: [integer, 'null'], format: int64, description: 'A safe amount to try instead, when there is one' }
+        suggestedTermMonths: { type: [integer, 'null'], description: 'A safe term to try instead, when there is one' }
+        limitCents: { type: integer, format: int64, description: The loan ceiling that applies to the member }
+        maxMonthlyInstalmentCents: { type: integer, format: int64, description: The most the member can safely repay each month }
     RejectApplicationRequest:
       type: object
       properties:

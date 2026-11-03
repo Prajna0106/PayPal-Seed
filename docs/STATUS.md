@@ -25,7 +25,7 @@ Two test-suite notes from the final run:
 | --- | --- | --- |
 | Backend | F1 to F6, identity, PayPal Payouts, savings subscriptions, Transaction Search, Venmo wallet, credit record, desk read models, reserve, fraud flags, member home call, signed actor tokens, ledger, governance, engagement, agent gateway. Full build passes: 1,126 tests | Nothing run against the real PayPal sandbox yet; the checks are listed under PayPal sandbox |
 | Contracts | Every route is in `contracts/openapi`, events in `contracts/events`; a test fails when a route and the contract disagree; the web client is generated from it | `agent-tools.yaml` uses the tool names as operation ids on purpose |
-| Frontend | Landing page; member loan, timeline, Pay now, hardship help; desk hardship, loans, agents, operations | Member login, Home, savings, apply, fair check, record; desk applications, fair check, portfolio, workload, reserve, fraud |
+| Frontend | Landing page; member Log in with PayPal, Home, savings, borrow, record, fund, shop, settings; desk queues, portfolio, workload, reserve, fraud, operations. Builds pass | Not clicked through in a browser yet; Spanish copy; a few fields the backend does not return yet |
 | Agents | Guardian, Savings Coach, Fair Check, all through OpenRouter with kill switch and grounding checks | Astropods hosting and evals; Trust and Desk Analyst agents |
 | Deployment | `infra/render.yaml` with secrets, groups and manual steps written down; Docker Compose | Nothing deployed; Render Workflows are placeholders; no edge rate limit |
 | Authentication | Backend verifies signed actor tokens (key rotation, 30 s skew); dev headers only in dev, test and demo; service token only on `/internal/**` | The web servers do not sign tokens yet; Log in with PayPal on the web side; staff SSO |
@@ -72,32 +72,40 @@ Pending:
 
 ## Frontend
 
-Built:
+Built (typecheck, lint and the low-memory production build pass for both apps; the new screens have not been clicked through in a browser yet):
 
 - **Landing page**: inclusion story, journey, safety net, guardrails, FAQ; Framer Motion; mobile layout.
-- **Member app**: demo login (Ana), `/app`, loan page with Bryntum timeline and PayPal Pay now, hardship help page.
-- **Desk**: persona login, overview, hardship queue (AG Grid) and case with approvals, loan view, agents kill switch, operations.
+- **Member app**
+  - **Login:** Log in with PayPal (server-side OpenID Connect), signed actor tokens, demo login behind `SEED_DEMO_LOGIN`.
+  - **Shell and Home:** navigation with every route, and Home from one `GET /members/me/home` call (savings, loan, borrow, record, help, open application; a failed section shows a calm note).
+  - **Savings:** goals list, create a goal (coach suggestion, PayPal approval redirect and return page), goal detail with top-up (PayPal or Venmo buttons), pause, resume and withdraw; the Bryntum journey timeline.
+  - **Borrow:** a five-step flow (what is unlocked, amount with a live monthly payment, consent, fair check, review with the full schedule), applications list and detail with the cooling-off cancel, loans list.
+  - **Settings:** profile and the consent ledger (revoking income consent revokes both consents).
+  - **Record:** the credit record page, share links (consent first, link shown once), and a public verify page at `/verify/{token}`.
+  - **Fund and shop:** a public safety-fund page at `/fund` with PayPal Donate, and `/app/shop`, saving for a product with Channel3 (a labelled demo catalog until `CHANNEL3_API_KEY` is set).
+  - **Loan pages:** loan page with timeline and PayPal Pay now, hardship help page.
+- **Desk**
+  - **Sidebar and queues:** grouped sidebar; applications queue and fair-check queue (AG Grid), with approve, reject, disburse and the decision form.
+  - **Portfolio and workload:** portfolio KPIs, inclusion impact and loan grid; officer workload in Bryntum.
+  - **Reserve and fraud:** reserve cover requests (maker and checker, with signers and the SLA badge) and fraud flags with the evidence pack.
+  - **Existing screens and demo tools:** persona login, overview, hardship queue and case, loan view, agents kill switch, operations with demo buttons for the hardship scan and sweep.
 
 Pending, member app:
 
-- [x] **P0 Log in with PayPal** button and callback. The demo path is behind `SEED_DEMO_LOGIN`, off by default in production.
-- [ ] **P0 Home**: Seed balance, goals and streak, loan and next payment, record level, recent Seed activity.
-- [ ] **P0 Savings**: create a goal, approve the subscription in PayPal, top up, pause, resume, withdraw; coach suggestion.
-- [ ] **P0 Eligibility and apply**: what is unlocked and why; consent screen; fair-check result in plain words; schedule preview; accept; cooling-off.
-- [ ] **P1 Credit record** page and share link.
-- [ ] **P1 Public fund page and Donate button** (`GET /api/v1/reserve/summary`, `POST /api/v1/reserve/donations/intent`); the PayPal order carries the returned `customId`.
-- [ ] **P1 Bryntum savings-to-loan timeline**: deposits, unlock date and instalments on one timeline.
-- [ ] **P1 Channel3 product goals**: pick a product, save for its price, buy it with PayPal when the goal is reached.
-- [ ] **P2 Spanish** copy for the new pages, and a review of the Spanish copy that exists, by a native speaker (the i18n package exists).
+- [ ] **P0 Click through every screen against the real backend and the PayPal sandbox** (login, create a goal and approve it, top up, withdraw, apply, repay). Nothing new has been seen in a browser; the PayPal redirects and buttons, the clipboard copy and the Venmo button are the places to look first.
+- [ ] **P1 Home extras the backend does not return yet**: recent Seed activity, a months-to-go number for the next unlock, a next deposit date on a goal, and deposit history (the savings timeline starts at the goal's creation date for lack of it).
+- [ ] **P1 Savings details**: an amount change on a goal is not built; the withdrawal status updates on reload only.
+- [ ] **P1 Channel3**: set `CHANNEL3_API_KEY` and check the real response shape; the adapter parses defensively and drops anything that does not fit. The buy action opens the merchant's checkout, not PayPal.
+- [ ] **P2 Spanish** copy for the new pages (they are English only), and a review of the Spanish that exists, by a native speaker.
+- [ ] **P2 Public donate amount** is limited to $1 to $1,000 in the browser only; the backend caps it too.
 
 Pending, desk:
 
-- [ ] **P0 Loan applications** queue (AG Grid) with approve, reject and disburse.
-- [ ] **P0 Fair-check decisions** queue with evidence in master/detail and the AI narrative labelled.
-- [ ] **P1 Portfolio and inclusion impact** grid: loans by status and aging bucket, members served without a credit score, on-time rate, hardship outcomes.
-- [ ] **P1 Officer workload** in Bryntum: approvals per officer against SLA.
-- [ ] **P1 Operations button** to run the hardship scan and sweep for demos.
-- [ ] **P1 Reserve cover requests** (maker and checker) and the fund balance; **P2 fraud flags** with the evidence pack. The backend for both is built.
+- [ ] **P0 Click through the desk screens** with two different officers (maker and checker) on the real backend.
+- [ ] **P1 Fair check beside an application**: the contract has no lookup by application, so the page reads the whole list and picks the newest check; add a lookup before the list gets long.
+- [ ] **P1 Cover form**: needs member and loan ids typed in. A link from the hardship case page to `/reserve?memberId=&loanId=&hardshipCaseId=` would fill them.
+- [ ] **P2 SLA badges** compare with the real clock, so they can be wrong when the demo clock has been moved.
+- [ ] **P2 Workload bars** use default lengths where a bucket has no deadline (layout only; all counts come from the backend).
 
 ---
 

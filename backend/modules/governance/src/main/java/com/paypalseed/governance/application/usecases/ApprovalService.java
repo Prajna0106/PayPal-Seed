@@ -195,7 +195,7 @@ public class ApprovalService {
 
     private ApprovalView view(RequestRow r) {
         List<DecisionView> decisions = approvals.decisions(r.id()).stream()
-                .map(d -> new DecisionView(d.role(), StaffRefs.of(d.staffId()), Decision.valueOf(d.decision()),
+                .map(d -> new DecisionView(d.role(), StaffRefs.of(d.staffId()), d.staffId(), Decision.valueOf(d.decision()),
                         d.reasonCode(), d.decidedAt()))
                 .toList();
         return new ApprovalView(r.id(), r.subjectId(), Tier.valueOf(r.tier()), r.status(), r.snapshotHash(), r.slaDueAt(),

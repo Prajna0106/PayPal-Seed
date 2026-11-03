@@ -87,7 +87,12 @@ public final class GovernanceDtos {
     public record DecisionResult(UUID requestId, String requestStatus, String role, String next, long auditSeq) {
     }
 
-    public record DecisionView(String role, String staffRef, Decision decision, String reasonCode, Instant decidedAt) {
+    /**
+     * {@code staffRef} is the pseudonym events and read models carry. {@code staffId} is the officer themselves, for the
+     * desk screens that name who signed (resolved through the staff directory); it never goes into an event.
+     */
+    public record DecisionView(String role, String staffRef, UUID staffId, Decision decision, String reasonCode,
+                               Instant decidedAt) {
     }
 
     public record ApprovalView(UUID id, UUID subjectId, Tier tier, String status, String snapshotHash, Instant slaDueAt,
