@@ -29,6 +29,8 @@ public class FakePayPal implements PayPalGateway {
         public volatile long quantity;
         public volatile Instant nextBilling;
         public volatile String planId;
+        /** PayPal's {@code status_update_time}; null reports none, as the sandbox may. */
+        public volatile Instant statusChangedAt;
         public final String customId;
         public final List<SubscriptionTransaction> transactions = Collections.synchronizedList(new ArrayList<>());
 
@@ -137,6 +139,12 @@ public class FakePayPal implements PayPalGateway {
     /** Member approved the subscription in the PayPal popup. */
     public void approve(String subscriptionId) {
         subscriptions.get(subscriptionId).status = "ACTIVE";
+    }
+
+    /** A completed sale PayPal billed on the subscription; what a sync reads and what a sale webhook announces. */
+    public void addSale(String subscriptionId, String saleId, long grossCents) {
+        subscriptions.get(subscriptionId).transactions
+                .add(new SubscriptionTransaction(saleId, "COMPLETED", grossCents, feeCents, Instant.now()));
     }
 
     public long callCount(String operation) {
@@ -386,6 +394,6 @@ public class FakePayPal implements PayPalGateway {
             throw new PayPalException(PayPalException.Kind.STATE, 404, "RESOURCE_NOT_FOUND", "no subscription " + id);
         }
         return new Subscription(id, s.status, s.quantity, Optional.ofNullable(s.nextBilling), approveUrl,
-                Optional.of(s.customId));
+                Optional.of(s.customId), Optional.ofNullable(s.statusChangedAt));
     }
 }

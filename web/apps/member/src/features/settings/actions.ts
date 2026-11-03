@@ -47,7 +47,8 @@ export async function changeConsent(type: string, intent: string): Promise<Conse
     return { ok: false, message: "We did not recognise that agreement." };
   }
   const api = await memberApi();
-  const income = parsed.data.type === "INCOME_READ";
+  // Both keep the one consent that underwriting enforces (ADR 0026), so both change it there as well.
+  const income = parsed.data.type === "INCOME_READ" || parsed.data.type === "FAIR_CHECK";
   const grant = parsed.data.intent === "grant";
   try {
     try {

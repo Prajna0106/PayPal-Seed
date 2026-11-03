@@ -36,6 +36,9 @@ export default async function VerifyPage({ params }: PageProps<"/verify/[token]"
   if (record.loansRepaidOnPlan !== undefined) {
     rows.push(["Loans repaid on plan", record.loansRepaidOnPlan]);
   }
+  if (record.loansCompletedWithFundHelp !== undefined && record.loansCompletedWithFundHelp > 0) {
+    rows.push(["Loans completed with community fund help", record.loansCompletedWithFundHelp]);
+  }
   if (record.onTimeBand) {
     rows.push(["Paying on time", `${record.onTimeBand} of months and payments`]);
   }

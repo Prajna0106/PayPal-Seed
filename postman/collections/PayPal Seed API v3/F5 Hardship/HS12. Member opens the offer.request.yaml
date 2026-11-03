@@ -1,0 +1,48 @@
+$kind: http-request
+name: 'HS12. Member opens the offer'
+method: GET
+url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/hardship?lang=en'
+order: 12000
+description: 'Four options with numbers from the schedule engine, one recommended by code, none preselected. Opening the offer moves the case to OFFER_VIEWED. The message is AI text (source AI) or the template.'
+queryParams:
+  - key: 'lang'
+    value: 'en'
+    description: 'en or es'
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has caseId, status, target, offer', () => ['caseId', 'status', 'target', 'offer'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('Case matches the desk queue and is now viewed', () => {
+        pm.expect(body.caseId).to.eql(pm.collectionVariables.get('hardshipCaseId'));
+        pm.expect(body.status).to.eql('OFFER_VIEWED');
+      });
+      const offer = body.offer;
+      pm.test('Offer has four options A to D with the tiers in the policy', () => {
+        const by = Object.fromEntries(offer.options.map(o => [o.label, o]));
+        pm.expect(Object.keys(by).sort()).to.eql(['A', 'B', 'C', 'D']);
+        pm.expect(by.A.tier).to.eql('AUTO_POLICY');
+        pm.expect(by.B.tier).to.eql('MAKER_CHECKER');
+        pm.expect(by.C.tier).to.eql('MAKER_CHECKER');
+        pm.expect(by.D.tier).to.eql('NONE');
+      });
+      pm.test('Exactly the recommended option is flagged', () => {
+        const flagged = offer.options.filter(o => o.recommended).map(o => o.label);
+        pm.expect(flagged).to.eql([offer.recommended]);
+      });
+      pm.test('Message is labelled with its source', () => {
+        pm.expect(['AI', 'TEMPLATE']).to.include(offer.message.source);
+        pm.expect(offer.message.text).to.be.a('string').and.not.empty;
+      });
+      pm.test('The member never sees risk level or score', () => pm.expect(pm.response.text()).to.not.match(/"(riskLevel|risk_level|level|score|riskScore|points)"\s*:/));
+      const b = offer.options.find(o => o.label === 'B');
+      pm.collectionVariables.set('hardshipOfferId', offer.offerId);
+      pm.collectionVariables.set('hardshipOfferRevision', String(offer.revision));
+      pm.collectionVariables.set('hardshipOptionBId', b.optionId);
+examples: './.resources/HS12. Member opens the offer.resources/examples/'

@@ -1,0 +1,22 @@
+$kind: http-example
+name: '403 sod-violation'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/decision'
+  method: POST
+response:
+  statusCode: 403
+  statusText: 'Forbidden'
+  headers:
+    - key: Content-Type
+      value: 'application/problem+json'
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://problems.paypal-seed.dev/sod-violation",
+        "title": "Separation of duties",
+        "status": 403,
+        "code": "sod-violation",
+        "detail": "The checker must be a different person from the maker"
+      }

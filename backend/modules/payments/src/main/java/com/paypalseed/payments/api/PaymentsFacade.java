@@ -10,6 +10,7 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionSync;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsTopUp;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
@@ -93,6 +94,15 @@ public interface PaymentsFacade {
 
     /** Cancels the goal's subscription; an ended one is left alone. */
     void cancelSavingsSubscription(UUID goalId, String requestId, String reason);
+
+    /**
+     * Reads the goal's PayPal subscription and its sales of the last 35 days and returns them as the facts the webhooks
+     * announce, for a webhook that never came (a machine PayPal cannot call, or a missed delivery). Records the status
+     * and next charge the way a webhook does, ordered by PayPal's own time (ADR 0027). Publishes nothing: the caller
+     * applies the facts through the same steps the webhook listeners use. Empty when the goal has no subscription.
+     * A PayPal failure is thrown and nothing is changed.
+     */
+    Optional<SavingsSubscriptionSync> syncSavingsSubscription(UUID goalId);
 
     /** One-off top-up order into a goal; the only way to save with Venmo. Idempotent on the key. */
     CheckoutOrder createSavingsTopUp(SavingsTopUp command);

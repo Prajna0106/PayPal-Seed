@@ -62,12 +62,14 @@ export interface PayoutPanelProps {
   loanId: string | null;
   /** Plain-language reason from the server (`explainPayoutIssue`); the raw PayPal reason never reaches the browser. */
   payoutIssueText: string | null;
+  /** The payout came back after the loan was registered, so the loan was voided (ADR 0024). */
+  payoutReturned?: boolean;
   summary: string;
   disburseKey: string;
 }
 
 /** The last step: pay out, watch the payout, or read why it was refused and try again. */
-export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, summary, disburseKey }: PayoutPanelProps) {
+export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, payoutReturned = false, summary, disburseKey }: PayoutPanelProps) {
   if (status !== "APPROVED" && status !== "DISBURSING" && status !== "DISBURSED") {
     return null;
   }
@@ -105,13 +107,13 @@ export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, su
             {payoutIssueText ? (
               <Alert variant="destructive">
                 <TriangleAlert aria-hidden="true" />
-                <AlertTitle>The last payout did not go through</AlertTitle>
+                <AlertTitle>{payoutReturned ? "The payout came back" : "The last payout did not go through"}</AlertTitle>
                 <AlertDescription>{payoutIssueText}</AlertDescription>
               </Alert>
             ) : null}
             <ActionDialog
-              triggerLabel={payoutIssueText ? "Try the payout again" : "Pay out through PayPal"}
-              title={payoutIssueText ? "Try the payout again?" : "Pay out this loan?"}
+              triggerLabel={payoutIssueText ? (payoutReturned ? "Send the payout again" : "Try the payout again") : "Pay out through PayPal"}
+              title={payoutIssueText ? (payoutReturned ? "Send the payout again?" : "Try the payout again?") : "Pay out this loan?"}
               description={
                 <>
                   <p>{summary}.</p>

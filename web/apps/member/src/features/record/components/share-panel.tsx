@@ -32,11 +32,9 @@ function ConsentForm() {
       <Button type="submit" disabled={pending} aria-busy={pending}>
         Allow sharing my record
       </Button>
-      {state.status === "error" ? (
-        <p role="alert" className="text-sm text-danger">
-          {state.message}
-        </p>
-      ) : null}
+      <p role="status" aria-live="polite" className={state.status === "error" ? "text-sm text-danger" : "text-sm text-body empty:hidden"}>
+        {state.status === "error" ? state.message : state.status === "granted" ? "Thank you. You can make your link now." : null}
+      </p>
     </form>
   );
 }
@@ -97,6 +95,8 @@ function CreateForm() {
           </p>
         </div>
       </form>
+
+      {state.status === "error" && state.consentNeeded ? <ConsentForm /> : null}
 
       {state.status === "created" ? <CreatedLink link={state.link} expiresAt={state.expiresAt} /> : null}
     </div>

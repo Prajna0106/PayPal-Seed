@@ -1,0 +1,26 @@
+$kind: http-request
+name: 'HS24. Case is approved and the plan change is applied'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}'
+order: 24000
+description: 'The saga applies the change as a new schedule version right after the second approval (asynchronous). Re-send if the status is still APPROVED.'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Approved, then applied', () => pm.expect(['APPROVED', 'APPLIED']).to.include(body.summary.status));
+      pm.test('Both people are on the record', () => {
+        const roles = body.approval.decisions.map(d => d.role);
+        pm.expect(body.approval.status).to.eql('APPROVED');
+        pm.expect(roles).to.include.members(['MAKER', 'CHECKER']);
+      });
+      pm.test('Reviewers are pseudonymous', () => body.approval.decisions.forEach(d => pm.expect(d.staffRef).to.not.eql(pm.variables.get('makerId'))));
+      pm.collectionVariables.set('hardshipCaseStatus', body.summary.status);

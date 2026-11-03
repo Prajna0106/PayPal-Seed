@@ -9,9 +9,12 @@ import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { ChangeAmountForm } from "@/features/savings/components/change-amount-form";
+import { DepositList } from "@/features/savings/components/deposit-list";
 import { ApprovalNote } from "@/features/savings/components/approval-note";
 import { PauseResume } from "@/features/savings/components/pause-resume";
 import { Section } from "@/features/savings/components/section";
+import { SyncButton } from "@/features/savings/components/sync-button";
 import { TopUpSection } from "@/features/savings/components/top-up-section";
 import { WithdrawForm } from "@/features/savings/components/withdraw-form";
 import { WithdrawalList } from "@/features/savings/components/withdrawal-list";
@@ -25,7 +28,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
   if (!z.uuid().safeParse(goalId).success) {
     notFound();
   }
-  const { goal, withdrawals, streakMonths } = await getGoalDetail(goalId);
+  const { goal, withdrawals, streakMonths, deposits, nextDepositDate } = await getGoalDetail(goalId);
   const status = GOAL_STATUS[goal.status];
   const pending = goal.status === "PENDING_APPROVAL";
   const canPause = goal.wallet === "PAYPAL" && (goal.status === "ACTIVE" || goal.status === "PAUSED");
@@ -43,7 +46,12 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
         eyebrow={`${WALLET_LABEL[goal.wallet]} · ${formatMoney(goal.monthlyCents)} a month`}
         title={goal.name}
         description={status.hint}
-        actions={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            {goal.wallet === "PAYPAL" ? <SyncButton goalId={goal.id} /> : null}
+          </div>
+        }
       />
 
       {welcome && !pending ? (
@@ -81,6 +89,13 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
         ) : null}
       </section>
 
+      {nextDepositDate && !pending ? (
+        <p className="text-sm text-body">
+          <span className="font-medium text-ink">Next deposit {formatBusinessDate(nextDepositDate, "short")}</span>
+          <span className="text-muted-ink"> as PayPal last told us.</span>
+        </p>
+      ) : null}
+
       {canPause ? (
         <Section
           id="pause"
@@ -92,6 +107,12 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
           }
         >
           <PauseResume goalId={goal.id} paused={goal.status === "PAUSED"} />
+        </Section>
+      ) : null}
+
+      {canPause ? (
+        <Section id="amount" title="Change your monthly amount" description="Save more or less each month. What you have saved stays yours.">
+          <ChangeAmountForm goalId={goal.id} wallet={goal.wallet} monthlyCents={goal.monthlyCents} attemptKey={crypto.randomUUID()} />
         </Section>
       ) : null}
 
@@ -112,6 +133,12 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
       {canWithdraw(goal) ? (
         <Section id="withdraw" title="Take money out" description="It is your money. Take out what you need, when you need it.">
           <WithdrawForm goalId={goal.id} attemptKey={crypto.randomUUID()} availableCents={goal.savedCents} />
+        </Section>
+      ) : null}
+
+      {!pending ? (
+        <Section id="deposits" title="Money added" description="The latest deposits, monthly and extra.">
+          <DepositList deposits={deposits} />
         </Section>
       ) : null}
 

@@ -1,6 +1,7 @@
 package com.paypalseed.reserve.application.usecases;
 
 import com.paypalseed.reserve.api.ReserveFacade;
+import com.paypalseed.reserve.api.dto.ReserveDtos.CoverReturn;
 import com.paypalseed.reserve.api.dto.ReserveDtos.DonationIntent;
 import com.paypalseed.reserve.api.dto.ReserveDtos.DonationReceipt;
 import com.paypalseed.reserve.api.dto.ReserveDtos.ReserveSummary;
@@ -13,10 +14,12 @@ class ReserveFacadeService implements ReserveFacade {
 
     private final DonationService donations;
     private final SummaryQueries summaries;
+    private final CoverReturns coverReturns;
 
-    ReserveFacadeService(DonationService donations, SummaryQueries summaries) {
+    ReserveFacadeService(DonationService donations, SummaryQueries summaries, CoverReturns coverReturns) {
         this.donations = donations;
         this.summaries = summaries;
+        this.coverReturns = coverReturns;
     }
 
     @Override
@@ -41,6 +44,12 @@ class ReserveFacadeService implements ReserveFacade {
     @Override
     public DonationIntent createDonationIntent(String idempotencyKey, boolean anonymous, String displayName) {
         return donations.createIntent(idempotencyKey, anonymous, displayName);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CoverReturn returnUnusedCover(String approvalRef, long amountCents, String reasonCode) {
+        return coverReturns.returnUnused(approvalRef, amountCents, reasonCode);
     }
 
     @Override

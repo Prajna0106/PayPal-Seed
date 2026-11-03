@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { LoanCardModel } from "../server/queries";
+import { loanEnded } from "../status";
 
 /** One loan on the member home: what is left, the next payment, progress, and how it is paid. */
 export function LoanCard({ loan }: { loan: LoanCardModel }) {
@@ -27,7 +28,7 @@ export function LoanCard({ loan }: { loan: LoanCardModel }) {
         {loan.status === "ACTIVE" ? (
           <StatusPill tone={loan.autopay ? "success" : "neutral"}>{loan.autopay ? "Autopay on" : "Pay as you go"}</StatusPill>
         ) : (
-          <StatusPill tone="success">{loan.status === "REPAID" ? "Paid off" : loan.status.toLowerCase()}</StatusPill>
+          <StatusPill tone={loanEnded(loan.status).tone}>{loanEnded(loan.status).label}</StatusPill>
         )}
       </header>
 

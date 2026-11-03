@@ -187,3 +187,7 @@ Things worth showing:
 - Put a spending limit on the OpenRouter key and keep `SEED_LLM_DAILY_BUDGET_MICRO_USD` low for demos.
 - The demo uses the PayPal Sandbox only.
 - The dev identity headers are for dev, test and demo profiles only.
+
+## 6. Run the story in Postman
+
+`postman/collections/PayPal Seed API v3/F5 Hardship` runs sections 3 and 4 as requests HS01 to HS34: loan, income, scan, offer, a stale offer (409), choice, maker and checker (with the `sod-violation` case), schedule versions and the kill switch. Pick the `Sandbox` environment (`postman/environments/sandbox.json`), start the backend as in section 3, and run the folder in order: `postman collection run "postman/collections/PayPal Seed API v3" -e postman/environments/sandbox.json`. Ids pass between requests in `hardship*` collection variables. HS33 (`agent-disabled`) needs a run token in `agentToken` and is skipped when it is empty.

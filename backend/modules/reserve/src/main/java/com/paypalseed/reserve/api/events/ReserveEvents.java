@@ -29,6 +29,16 @@ public final class ReserveEvents {
                                 UUID journalEntryId, String approvalRef, LocalDate businessDate) {
     }
 
+    /**
+     * Money went back to the fund after it was paid out (ADR 0024): {@code UNUSED_COVER} when a cover credited a loan
+     * for more than its schedule took (the member paid in the same moment; reserve posted the correction,
+     * {@code journalEntryId}), {@code LOAN_VOIDED} when the loan was voided and its cover returned in lending's entry.
+     * {@code returnRef} is the idempotency key. No cash moved in either case.
+     */
+    public record CoverReturned(UUID eventId, String returnRef, String kind, UUID loanId, long amountCents,
+                                UUID journalEntryId, String reasonCode, LocalDate businessDate) {
+    }
+
     public record CoverRejected(UUID eventId, UUID coverRequestId, UUID loanId, UUID memberId, String reason,
                                 LocalDate businessDate) {
     }

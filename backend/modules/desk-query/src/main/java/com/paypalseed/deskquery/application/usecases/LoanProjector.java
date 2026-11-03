@@ -9,6 +9,7 @@ import com.paypalseed.lending.api.events.LendingEvents.InstalmentView;
 import com.paypalseed.lending.api.events.LendingEvents.LateBucketChanged;
 import com.paypalseed.lending.api.events.LendingEvents.LoanRepaid;
 import com.paypalseed.lending.api.events.LendingEvents.LoanReopened;
+import com.paypalseed.lending.api.events.LendingEvents.LoanVoided;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReceived;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReversed;
 import com.paypalseed.lending.api.events.LendingEvents.ScheduleChanged;
@@ -71,6 +72,17 @@ public class LoanProjector {
     public void on(LoanReopened e) {
         loans.ensure(e.loanId(), e.memberId());
         loans.recordReopened(e.loanId(), e.businessDate(), e.outstandingCents());
+    }
+
+    /**
+     * A returned payout closes the loan as DISBURSEMENT_RETURNED; a cooling-off cancellation as CANCELLED. Either way the
+     * loan owes nothing and drops out of exposure, delinquency and the inclusion figures (ADR 0024).
+     */
+    @Transactional
+    public void on(LoanVoided e) {
+        loans.ensure(e.loanId(), e.memberId());
+        loans.recordVoided(e.loanId(), e.businessDate(),
+                LoanVoided.COOLING_OFF_CANCELLED.equals(e.reason()) ? "CANCELLED" : "DISBURSEMENT_RETURNED");
     }
 
     @Transactional

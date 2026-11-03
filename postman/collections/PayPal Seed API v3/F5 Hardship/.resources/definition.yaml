@@ -1,0 +1,4 @@
+$kind: collection
+name: F5 Hardship
+order: 1000
+description: 'The hardship safety net end to end: Ana loses income, the scan opens a case, she chooses to pause a month, two officers approve, the plan changes as a new schedule version, then the agent kill switch. Run the folder in order against a dev, test or demo backend (SEED_ROLE=worker, profiles demo,dev). Ids are passed between requests in hardship* collection variables. See docs/features/f5-hardship-safety-net/08-run-guide.md.'

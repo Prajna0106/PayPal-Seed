@@ -70,6 +70,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             .set(LOAN_APPLICATION.UPDATED_AT, app.getUpdatedAt())
             .set(LOAN_APPLICATION.PAYOUT_ISSUE, app.getPayoutIssue())
             .set(LOAN_APPLICATION.PAYOUT_ATTEMPTS, app.getPayoutAttempts())
+            .set(LOAN_APPLICATION.DISBURSEMENT_VOIDS, app.getDisbursementVoids())
             .set(LOAN_APPLICATION.LAST_OFFICER_ID, app.getLastOfficerId())
             .onConflict(LOAN_APPLICATION.ID).doUpdate()
             .set(LOAN_APPLICATION.STATUS, DSL.excluded(LOAN_APPLICATION.STATUS))
@@ -85,6 +86,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             .set(LOAN_APPLICATION.UPDATED_AT, DSL.excluded(LOAN_APPLICATION.UPDATED_AT))
             .set(LOAN_APPLICATION.PAYOUT_ISSUE, DSL.excluded(LOAN_APPLICATION.PAYOUT_ISSUE))
             .set(LOAN_APPLICATION.PAYOUT_ATTEMPTS, DSL.excluded(LOAN_APPLICATION.PAYOUT_ATTEMPTS))
+            .set(LOAN_APPLICATION.DISBURSEMENT_VOIDS, DSL.excluded(LOAN_APPLICATION.DISBURSEMENT_VOIDS))
             .set(LOAN_APPLICATION.LAST_OFFICER_ID, DSL.excluded(LOAN_APPLICATION.LAST_OFFICER_ID))
             .execute();
 
@@ -151,6 +153,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             r.getCoolingOffExpiresAt()
         );
         app.restorePayoutState(r.getPayoutIssue(), r.getPayoutAttempts(), r.getLastOfficerId());
+        app.restoreDisbursementVoids(r.getDisbursementVoids());
         return app;
     }
 

@@ -1,0 +1,22 @@
+$kind: http-example
+name: '503 agent-disabled'
+order: 1000
+request:
+  url: '{{baseUrl}}/agent/v1/tools/loan-summary?loanId={{hardshipLoanId}}'
+  method: GET
+response:
+  statusCode: 503
+  statusText: 'Service Unavailable'
+  headers:
+    - key: Content-Type
+      value: 'application/problem+json'
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://problems.paypal-seed.dev/agent-disabled",
+        "title": "Agent disabled",
+        "status": 503,
+        "code": "agent-disabled",
+        "detail": "Agents are switched off. Template messages are used instead."
+      }

@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Records one fact and folds it into the member's state, in one transaction. The fact key makes a redelivery a
  * no-op; the member lock makes two facts for the same member fold one after the other, in the order stored.
+ *
+ * <p>A {@code LOAN_VOIDED} fact (ADR 0024, ADR 0025 follow-up) rebuilds the member's state without that loan and
+ * publishes the level move, if any, as a {@code CORRECTION}.
  */
 @Service
 public class RecordIngest {
@@ -35,7 +38,11 @@ public class RecordIngest {
         }
         RecordState before = store.find(fact.memberId())
                 .orElseGet(() -> RecordState.initial(fact.memberId(), fact.occurredOn()));
-        Applied applied = RecordProjector.apply(before, fact);
+        // A void takes a whole loan back, including a default or a promotion it caused, so the state is rebuilt from the
+        // facts without it. Every other fact, and any later fact of a voided loan, folds on top of the current state.
+        Applied applied = fact.kind() == RecordFact.Kind.LOAN_VOIDED
+                ? RecordProjector.replay(fact.memberId(), before.level(), store.facts(fact.memberId()))
+                : RecordProjector.apply(before, fact);
         store.save(applied.state());
         if (applied.levelChanged()) {
             events.publishEvent(new RecordLevelChanged(Ids.newId(), fact.memberId(), applied.from().name(),

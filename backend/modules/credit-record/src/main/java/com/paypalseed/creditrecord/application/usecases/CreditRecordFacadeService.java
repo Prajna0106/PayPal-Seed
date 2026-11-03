@@ -67,6 +67,11 @@ public class CreditRecordFacadeService implements CreditRecordFacade {
     }
 
     @Override
+    public int revokeAllShares(UUID memberId) {
+        return shares.revokeAll(memberId);
+    }
+
+    @Override
     public void revokeShare(UUID memberId, UUID shareId) {
         shares.revoke(memberId, shareId);
     }

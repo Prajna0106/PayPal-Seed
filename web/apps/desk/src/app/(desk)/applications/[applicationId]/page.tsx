@@ -19,6 +19,7 @@ import {
   APPLICATION_STATUSES,
   buildTimeline,
   explainPayoutIssue,
+  RETURNED_AFTER_DISBURSEMENT,
   shortRef,
 } from "@/features/applications/model";
 import {
@@ -55,6 +56,9 @@ export default async function ApplicationPage({ params }: { params: Promise<{ ap
   const summary = `${formatMoney(application.requestedAmountCents)} over ${application.termMonths} months`;
   const awaitingSignature = application.status === "SUBMITTED" || application.status === "PENDING_SECOND_APPROVAL";
   const signStep = application.status === "SUBMITTED" ? "first" : "second";
+  // An approved application with a payoutIssue can be paid again, or ended: the backend allows reject only then.
+  const payoutRetry = application.status === "APPROVED" && Boolean(application.payoutIssue);
+  const payoutReturned = application.payoutIssue?.toUpperCase() === RETURNED_AFTER_DISBURSEMENT;
   const signedFirstByMe =
     application.status === "PENDING_SECOND_APPROVAL" && application.firstApproverId === session.staffId;
 
@@ -101,6 +105,14 @@ export default async function ApplicationPage({ params }: { params: Promise<{ ap
                 signStep={signStep}
                 {...(signedFirstByMe ? { signBlocked: "A different officer must sign this one. You signed the first approval." } : {})}
               />
+            ) : payoutRetry ? (
+              <ApplicationActions
+                applicationId={applicationId}
+                keys={{ approve: newIdempotencyKey(), reject: newIdempotencyKey() }}
+                summary={summary}
+                show={{ sign: false, reject: true }}
+                signStep="second"
+              />
             ) : null}
           </ApprovalsPanel>
           <PayoutPanel
@@ -108,6 +120,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ ap
             status={application.status}
             loanId={application.loanId ?? null}
             payoutIssueText={application.payoutIssue ? explainPayoutIssue(application.payoutIssue) : null}
+            payoutReturned={payoutReturned}
             summary={summary}
             disburseKey={newIdempotencyKey()}
           />

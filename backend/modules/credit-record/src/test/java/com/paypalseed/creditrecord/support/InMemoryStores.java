@@ -53,9 +53,18 @@ public final class InMemoryStores {
         }
 
         @Override
+        public List<RecordFact> facts(UUID memberId) {
+            return facts.values().stream().filter(f -> f.memberId().equals(memberId))
+                    .sorted(Comparator.comparingLong(f -> seqs.get(f.factKey()))).toList();
+        }
+
+        @Override
         public List<StoredFact> history(UUID memberId, Long before, int limit) {
             List<StoredFact> out = new ArrayList<>();
+            java.util.Set<UUID> voided = facts.values().stream().filter(f -> f.kind() == RecordFact.Kind.LOAN_VOIDED)
+                    .map(RecordFact::loanId).collect(java.util.stream.Collectors.toSet());
             facts.values().stream().filter(f -> f.memberId().equals(memberId))
+                    .filter(f -> f.kind() != RecordFact.Kind.LOAN_VOIDED && (f.loanId() == null || !voided.contains(f.loanId())))
                     .map(f -> new StoredFact(seqs.get(f.factKey()), f.kind(), f.occurredOn(), f.daysLate()))
                     .filter(f -> before == null || f.seq() < before)
                     .sorted(Comparator.comparingLong(StoredFact::seq).reversed()).limit(limit).forEach(out::add);
@@ -124,6 +133,19 @@ public final class InMemoryStores {
                         s.fingerprint(), s.issuedAt(), s.expiresAt(), at));
             }
             return true;
+        }
+
+        @Override
+        public int revokeAllActive(UUID memberId, Instant at) {
+            int closed = 0;
+            for (Share s : List.copyOf(shares.values())) {
+                if (s.memberId().equals(memberId) && !s.revoked() && at.isBefore(s.expiresAt())) {
+                    shares.put(s.id(), new Share(s.id(), s.memberId(), s.snapshotId(), s.detail(), s.keyId(), s.idempotencyKey(),
+                            s.fingerprint(), s.issuedAt(), s.expiresAt(), at));
+                    closed++;
+                }
+            }
+            return closed;
         }
     }
 }

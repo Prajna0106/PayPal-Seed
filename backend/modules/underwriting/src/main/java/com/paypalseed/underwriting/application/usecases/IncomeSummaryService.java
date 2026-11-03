@@ -9,6 +9,7 @@ import com.paypalseed.underwriting.api.dto.UnderwritingDtos.FairCheckCardView;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeMonthDto;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.IncomeSummary;
 import com.paypalseed.underwriting.application.usecases.FairLoanCheckService.RunFairCheckCommand;
+import com.paypalseed.underwriting.application.usecases.IncomeRefresher.FetchedIncome;
 import com.paypalseed.underwriting.infrastructure.persistence.IncomeRepository;
 import com.paypalseed.underwriting.infrastructure.persistence.IncomeRepository.Consent;
 import com.paypalseed.underwriting.infrastructure.persistence.IncomeRepository.Week;
@@ -23,7 +24,9 @@ import java.util.OptionalLong;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The F3 income summary F5 reads, plus F2 <-> F3 facade delegation. Weekly totals are bucketed into 13
@@ -39,6 +42,7 @@ public class IncomeSummaryService implements UnderwritingFacade {
     private final BusinessClock clock;
     private final FairLoanCheckService fairLoanCheck;
     private final IncomeRefresher refresher;
+    private final TransactionTemplate transaction;
 
     public IncomeSummaryService(IncomeRepository income, BusinessClock clock) {
         this(income, clock, null);
@@ -48,17 +52,28 @@ public class IncomeSummaryService implements UnderwritingFacade {
         this(income, clock, fairLoanCheck, null);
     }
 
+    public IncomeSummaryService(
+        IncomeRepository income,
+        BusinessClock clock,
+        FairLoanCheckService fairLoanCheck,
+        IncomeRefresher refresher
+    ) {
+        this(income, clock, fairLoanCheck, refresher, null);
+    }
+
     @Autowired
     public IncomeSummaryService(
         IncomeRepository income,
         BusinessClock clock,
         @Autowired(required = false) FairLoanCheckService fairLoanCheck,
-        @Autowired(required = false) IncomeRefresher refresher
+        @Autowired(required = false) IncomeRefresher refresher,
+        @Autowired(required = false) PlatformTransactionManager transactions
     ) {
         this.income = income;
         this.clock = clock;
         this.fairLoanCheck = fairLoanCheck;
         this.refresher = refresher;
+        this.transaction = transactions == null ? null : new TransactionTemplate(transactions);
     }
 
     @Override
@@ -101,6 +116,44 @@ public class IncomeSummaryService implements UnderwritingFacade {
         return UnderwritingFacade.super.latestAssessmentStatus(memberId);
     }
 
+    /**
+     * Not transactional on purpose: PayPal is read first, with no connection held, and only then does one short
+     * transaction record the consent and the weeks together. A failed read throws before anything is written, so a
+     * submission that fails here leaves no trace; a replay finds fresh weeks and reads nothing.
+     */
+    @Override
+    public void prepareIncomeForApplication(UUID memberId) {
+        if (refresher == null || fairLoanCheck == null) {
+            return;
+        }
+        Optional<FetchedIncome> fetched = refresher.fetchIfStale(memberId, true);
+        if (fetched.isEmpty()) {
+            return;
+        }
+        inTransaction(() -> {
+            fairLoanCheck.grantConsent(memberId);
+            refresher.store(memberId, fetched.get());
+        });
+    }
+
+    /** Not transactional, for the same reason as {@link #prepareIncomeForApplication}. */
+    @Override
+    public void refreshIncomeIfConsented(UUID memberId) {
+        if (refresher == null) {
+            return;
+        }
+        Optional<FetchedIncome> fetched = refresher.fetchIfStale(memberId, false);
+        fetched.ifPresent(f -> inTransaction(() -> refresher.store(memberId, f)));
+    }
+
+    private void inTransaction(Runnable work) {
+        if (transaction == null) {
+            work.run();
+        } else {
+            transaction.executeWithoutResult(status -> work.run());
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public OptionalLong verifiedMonthlyIncomeCents(UUID memberId, LocalDate asOf) {
@@ -138,8 +191,9 @@ public class IncomeSummaryService implements UnderwritingFacade {
         }
         fairLoanCheck.grantConsent(memberId);
         if (refresher != null) {
-            // Refresh before the summary is read below; a PayPal failure refuses the assessment (retryable).
-            refresher.refreshIfStale(memberId);
+            // This runs inside the caller's transaction, so it never waits for PayPal: the caller prepared the income
+            // first (prepareIncomeForApplication), and stale income refuses the assessment (retryable) here.
+            refresher.requireFresh(memberId);
         }
 
         LocalDate today = clock != null ? clock.today() : LocalDate.now();
@@ -154,7 +208,7 @@ public class IncomeSummaryService implements UnderwritingFacade {
             }
         }
 
-        FairCheckCardView card = fairLoanCheck.runFairLoanCheck(
+        FairCheckCardView card = fairLoanCheck.runFairLoanCheckOnStoredIncome(
             memberId,
             new RunFairCheckCommand(
                 applicationId,

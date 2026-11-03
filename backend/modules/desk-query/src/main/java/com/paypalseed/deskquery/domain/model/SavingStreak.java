@@ -1,8 +1,8 @@
 package com.paypalseed.deskquery.domain.model;
 
+import com.paypalseed.platform.kernel.BusinessClock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -10,7 +10,9 @@ import java.util.List;
 /**
  * Saving history as the desk shows it: the run of consecutive calendar months with at least one deposit, ending at the
  * member's latest deposit month. It is computed from the set of months, so deposits may arrive in any order and be
- * delivered twice. Months are UTC calendar months of the deposit instant.
+ * delivered twice. Months are calendar months in the business time zone ({@link BusinessClock#PROGRAM_ZONE}), the zone every
+ * other business date of the program uses, so a deposit made on the evening of the last day of a month counts for that month
+ * and not for the next one (ADR 0027; ADR 0015 used UTC).
  */
 public final class SavingStreak {
 
@@ -18,7 +20,7 @@ public final class SavingStreak {
     }
 
     public static LocalDate monthOf(Instant depositedAt) {
-        return depositedAt.atOffset(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
+        return BusinessClock.businessDateOf(depositedAt).withDayOfMonth(1);
     }
 
     public static int of(Collection<LocalDate> depositMonths) {

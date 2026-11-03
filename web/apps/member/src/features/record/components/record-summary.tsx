@@ -3,7 +3,7 @@ import { SeedMark } from "@paypal-seed/ui/brand/seed-mark";
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
 import { Progress } from "@paypal-seed/ui/components/progress";
 import { formatBusinessDate, formatMoney, formatPercentBps } from "@paypal-seed/ui/lib/format";
-import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, HeartHandshake, ShieldCheck } from "lucide-react";
 import { LEVEL_BLURB, LEVEL_NAME, plural, type RecordView } from "../model";
 
 /** The level, what it unlocks and the plain numbers behind it. There is no score anywhere on this page. */
@@ -45,6 +45,14 @@ export function RecordSummary({ record }: { record: RecordView }) {
         />
         <Kpi label="On-time saving months" value={record.savings.onTimeMonths} hint="Months you added to your savings" />
       </section>
+
+      {record.loans.completedWithFundHelp > 0 ? (
+        <p className="flex items-start gap-2 text-sm text-body text-pretty">
+          <HeartHandshake aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-ink" />
+          {plural(record.loans.completedWithFundHelp, "loan was", "loans were")} completed with help from the community fund. That is
+          counted separately from loans you repaid yourself, and it is never held against you.
+        </p>
+      ) : null}
     </div>
   );
 }

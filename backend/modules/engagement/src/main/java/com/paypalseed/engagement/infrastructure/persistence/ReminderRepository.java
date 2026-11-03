@@ -18,6 +18,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ReminderRepository {
 
+    public static final String LOAN_VOIDED = "LOAN_VOIDED";
+
     public record Contact(UUID memberId, String phoneE164, String locale, String timezone, boolean optedOut) {
     }
 
@@ -133,6 +135,19 @@ public class ReminderRepository {
                 .orderBy(REMINDER.CREATED_AT.desc())
                 .limit(1)
                 .fetchOptional(REMINDER.LOAN_ID);
+    }
+
+    /** Stops the messages still waiting to go out for a loan; the message that explains the loan is closed is kept. */
+    public int cancelQueuedForLoan(UUID loanId) {
+        return dsl.update(REMINDER)
+                .set(REMINDER.STATUS, "CANCELLED")
+                .where(REMINDER.LOAN_ID.eq(loanId).and(REMINDER.STATUS.eq("QUEUED")).and(REMINDER.TYPE.ne(LOAN_VOIDED)))
+                .execute();
+    }
+
+    /** True once the member has been told the loan is closed as void; nothing else is sent about it after that. */
+    public boolean loanClosedAsVoid(UUID loanId) {
+        return dsl.fetchExists(REMINDER, REMINDER.LOAN_ID.eq(loanId).and(REMINDER.TYPE.eq(LOAN_VOIDED)));
     }
 
     public List<Reminder> forGoal(UUID goalId) {

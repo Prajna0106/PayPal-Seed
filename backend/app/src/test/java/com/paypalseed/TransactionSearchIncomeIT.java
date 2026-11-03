@@ -218,6 +218,26 @@ class TransactionSearchIncomeIT extends IntegrationTest {
     }
 
     @Test
+    void withdrawingTheFairCheckInIdentityForgetsTheWeeksAndClosesTheIncomeLineToo() throws Exception {
+        UUID member = linkedMember();
+        consentEverywhere(member);
+        assess(member).andExpect(status().isCreated());
+        assertThat(storedWeeks(member)).isEqualTo(13);
+        assertThat(identity.hasActiveConsent(member, ConsentType.FAIR_CHECK)).isTrue();
+
+        assertThat(identity.revokeConsent(member, ConsentType.FAIR_CHECK)).isTrue();
+        settle();
+
+        assertThat(underwriting.getConsentStatus(member).consented()).isFalse();
+        assertThat(storedWeeks(member)).isZero();
+        assertThat(identity.hasActiveConsent(member, ConsentType.INCOME_READ)).isFalse();
+        clock.set(TODAY.plusDays(2));
+        assess(member).andExpect(status().isUnprocessableEntity())
+                .andExpect(content().string(containsString("consent-required")));
+        assertThat(searches()).isEqualTo(3);
+    }
+
+    @Test
     void withdrawingOtherConsentsLeavesIncomeReadAlone() {
         UUID member = linkedMember();
         consentEverywhere(member);

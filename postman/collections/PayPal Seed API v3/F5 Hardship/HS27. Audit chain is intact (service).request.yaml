@@ -1,0 +1,20 @@
+$kind: http-request
+name: 'HS27. Audit chain is intact (service)'
+method: POST
+url: '{{baseUrl}}/internal/jobs/governance/verify-audit-chain'
+order: 27000
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('The hash chain recomputes end to end', () => {
+        pm.expect(body.intact).to.eql(true);
+        pm.expect(body.entries).to.be.above(0);
+        pm.expect(body.firstBrokenSeq).to.eql(null);
+      });

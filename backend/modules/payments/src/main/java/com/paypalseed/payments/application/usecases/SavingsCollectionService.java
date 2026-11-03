@@ -213,7 +213,7 @@ class SavingsCollectionService {
 
     private static SavingsSubscriptionView view(SavingsSubscription s) {
         return new SavingsSubscriptionView(s.goalId(), s.subscriptionId(), s.status(), Optional.ofNullable(s.approveUrl()),
-                s.monthlyCents());
+                s.monthlyCents(), Optional.ofNullable(s.nextBillingTime()));
     }
 
     /** Keeps {@code PayPal-Request-Id} (108 characters at most) short however long the caller's key is. */

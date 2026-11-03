@@ -1,0 +1,20 @@
+$kind: http-request
+name: 'HS25. Schedule versions keep the previous plan'
+method: GET
+url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/schedule/versions'
+order: 25000
+description: 'Version 1 is the original, version 2 is the date move from HS14. Once the case is APPLIED, version 3 is the approved pause. Earlier versions are never changed.'
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const versions = pm.response.json();
+      pm.test('Original and the date move are kept', () => pm.expect(versions.length).to.be.at.least(2));
+      if (pm.collectionVariables.get('hardshipCaseStatus') === 'APPLIED') {
+        pm.test('The approved pause is its own version', () => pm.expect(versions.length).to.be.at.least(3));
+      }

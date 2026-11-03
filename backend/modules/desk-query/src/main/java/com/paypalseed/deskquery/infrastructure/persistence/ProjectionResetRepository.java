@@ -1,12 +1,14 @@
 package com.paypalseed.deskquery.infrastructure.persistence;
 
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.APPLICATION_VIEW;
+import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.APPLICATION_VOID;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.APPROVAL_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.ASSESSMENT_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.HARDSHIP_CASE_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.LOAN_INSTALMENT_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.LOAN_MISSED_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.LOAN_VIEW;
+import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.MEMBER_ACTIVITY;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.MEMBER_SAVINGS;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.MEMBER_SAVINGS_MONTH;
 
@@ -31,7 +33,11 @@ public class ProjectionResetRepository {
     /** Returns the number of rows removed from the projection's own tables. */
     public long reset(Projection projection) {
         return switch (projection) {
-            case APPLICATIONS -> dsl.deleteFrom(APPLICATION_VIEW).execute();
+            case APPLICATIONS -> {
+                int rows = dsl.deleteFrom(APPLICATION_VIEW).execute();
+                dsl.deleteFrom(APPLICATION_VOID).execute();
+                yield rows;
+            }
             case ASSESSMENTS -> {
                 int rows = dsl.deleteFrom(ASSESSMENT_VIEW).execute();
                 dsl.update(APPLICATION_VIEW).set(APPLICATION_VIEW.ASSESSMENT_OUTCOME, (String) null)
@@ -51,6 +57,7 @@ public class ProjectionResetRepository {
                 yield rows;
             }
             case APPROVALS -> dsl.deleteFrom(APPROVAL_VIEW).execute();
+            case ACTIVITY -> dsl.deleteFrom(MEMBER_ACTIVITY).execute();
             case SAVINGS -> {
                 int rows = dsl.deleteFrom(MEMBER_SAVINGS).execute();
                 dsl.deleteFrom(MEMBER_SAVINGS_MONTH).execute();
