@@ -27,6 +27,8 @@ export const approveForm = z.object({ applicationId: z.uuid(), key: z.uuid() });
 
 export const disburseForm = z.object({ applicationId: z.uuid(), key: z.uuid() });
 
+export const syncPayoutInput = z.uuid();
+
 export const rejectForm = z.object({
   applicationId: z.uuid(),
   key: z.uuid(),

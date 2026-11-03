@@ -98,6 +98,9 @@ seed:
     # Keys the fingerprint of a payout recipient that fraud compares (ADR 0027): 32+ characters, identical on every instance.
     # Required outside dev, test and demo (start-up refuses an empty value there).
     recipient-fingerprint-key: ${SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY:}
+    payout-sync-min-interval: ${SEED_PAYMENTS_PAYOUT_SYNC_MIN_INTERVAL:PT5S}   # a payout is read from PayPal at most this often (desk Check again, reconcile) (ADR 0029)
+    payout-reconcile-min-age: ${SEED_PAYMENTS_PAYOUT_RECONCILE_MIN_AGE:PT20S}  # the reconcile reads a payout only once it is this old; the create answer comes first
+    payout-reconcile-batch: ${SEED_PAYMENTS_PAYOUT_RECONCILE_BATCH:50}         # payouts per run of the reconcile job
   savings:
     return-url: ${SEED_SAVINGS_RETURN_URL:http://127.0.0.1:3000/app/savings/return}       # where PayPal sends the member after agreeing
     cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://127.0.0.1:3000/app/savings/cancelled}
@@ -149,6 +152,7 @@ seed:
     hardship-sweep-ms: ${SEED_JOBS_HARDSHIP_SWEEP_MS:30000}
     savings-approval-sweep-ms: ${SEED_JOBS_SAVINGS_APPROVAL_SWEEP_MS:60000}
     savings-reconcile-ms: ${SEED_JOBS_SAVINGS_RECONCILE_MS:900000}        # read PayPal for goals that may have missed a webhook, every 15 minutes (ADR 0028)
+    payout-reconcile-ms: ${SEED_JOBS_PAYOUT_RECONCILE_MS:60000}           # read PayPal for payouts that may have missed a webhook, every minute (ADR 0029)
     held-refund-retry-ms: ${SEED_JOBS_HELD_REFUND_RETRY_MS:60000}
     record-close-ms: ${SEED_JOBS_RECORD_CLOSE_MS:21600000}                # month-end close of credit records, every 6 hours
     record-close-initial-ms: ${SEED_JOBS_RECORD_CLOSE_INITIAL_MS:60000}

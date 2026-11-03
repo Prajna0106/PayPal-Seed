@@ -131,6 +131,10 @@ final class Doubles {
         String nextReason;
         RuntimeException failNextPayout;
         int subscriptionsStarted;
+        /** What PayPal says about each payout reference (ADR 0029); a reference with no entry is not a known payout. */
+        final Map<String, PayoutReport> payoutReports = new HashMap<>();
+        final List<String> payoutReads = new ArrayList<>();
+        RuntimeException failPayoutRead;
         SubscriptionReport report;
         RuntimeException failRead;
         int reads;
@@ -201,6 +205,17 @@ final class Doubles {
         public OrderCapture captureTopUp(UUID goalId, String orderId) {
             calls.add("capture:" + goalId + ":" + orderId);
             return new OrderCapture(orderId, "COMPLETED", 2_500);
+        }
+
+        @Override
+        public Optional<PayoutReport> syncPayout(String referenceId) {
+            payoutReads.add(referenceId);
+            if (failPayoutRead != null) {
+                RuntimeException e = failPayoutRead;
+                failPayoutRead = null;
+                throw e;
+            }
+            return Optional.ofNullable(payoutReports.get(referenceId));
         }
 
         @Override

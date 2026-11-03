@@ -1189,6 +1189,8 @@ export interface paths {
          *     crediting steps the webhooks use, so a webhook that arrives later or twice changes nothing. At most one read per
          *     goal every 5 seconds (`seed.savings.sync-min-interval`); a call inside that time, or for a goal that has no live
          *     subscription (expired, cancelled, completed), returns the stored goal untouched.
+         *     It also reads the goal's withdrawal payouts that PayPal has not reported yet and applies what PayPal says (ADR 0029),
+         *     whatever the state of the subscription.
          */
         post: operations["syncSavingsGoal"];
         delete?: never;
@@ -1342,6 +1344,31 @@ export interface paths {
          *     PayPal for the same payout; calling for a `DISBURSED` application returns it.
          */
         post: operations["disburseLoanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desk/applications/{applicationId}/payout/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check again with PayPal how the application's payout stands
+         * @description For a payout whose webhook has not arrived (a machine PayPal cannot call, or a lost delivery). Reads the application's
+         *     current payout from PayPal and applies what it says through the same steps the payout webhooks use (ADR 0029): the
+         *     loan and Schedule Version 1 are created once when it succeeded, a refused or returned payout puts the application
+         *     back to `APPROVED` with a `payoutIssue`. A webhook that comes before, after or twice changes nothing. A safe re-read, so
+         *     no `Idempotency-Key`: a payout is read at most once every 5 seconds, and a call inside that time, a payout that is
+         *     already final, and one PayPal has not given an id yet return the application as it stands.
+         */
+        post: operations["syncApplicationPayout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5742,6 +5769,57 @@ export interface operations {
                 };
             };
             /** @description dependency-unavailable (the application stays APPROVED; call again) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    syncApplicationPayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: components["parameters"]["ApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The application as it stands after the read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanApplication"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description application-not-found, or payout-not-found (no payout was ever asked for) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description paypal-rejected (PayPal refused the read; nothing changed) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description dependency-unavailable (PayPal could not be reached; nothing changed) */
             503: {
                 headers: {
                     [name: string]: unknown;

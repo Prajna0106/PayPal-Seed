@@ -223,6 +223,10 @@ public final class PaymentsDtos {
                              Optional<String> paypalTransactionId, long feeCents, Optional<String> failureReason) {
     }
 
+    /** What one run of the payout reconcile did: payouts looked at, read from PayPal, and failed to read (ADR 0029). */
+    public record PayoutSyncSummary(int examined, int synced, int failed) {
+    }
+
     // ---- Transaction Search ---------------------------------------------------------------------
 
     public enum CounterpartyKind {

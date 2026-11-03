@@ -83,6 +83,8 @@ public class FakePayPal implements PayPalGateway {
         public volatile String errorName;
         public volatile String transactionId;
         public volatile long feeCents;
+        /** When set, the batch header says this whatever the item says (for example DENIED); null derives it from the item. */
+        public volatile String batchStatus;
 
         SimPayout(String batchId, String itemId, CreatePayout r) {
             this.batchId = batchId;
@@ -363,7 +365,7 @@ public class FakePayPal implements PayPalGateway {
     }
 
     private static PayoutItem payoutItem(SimPayout p) {
-        String batchStatus = "PENDING".equals(p.status) ? "PENDING" : "SUCCESS";
+        String batchStatus = p.batchStatus != null ? p.batchStatus : "PENDING".equals(p.status) ? "PENDING" : "SUCCESS";
         return new PayoutItem(p.batchId, batchStatus, Optional.of(p.itemId), Optional.of(p.status),
                 Optional.ofNullable(p.transactionId), p.feeCents, Optional.ofNullable(p.errorName),
                 Optional.ofNullable(p.errorName).map(n -> "simulated " + n));

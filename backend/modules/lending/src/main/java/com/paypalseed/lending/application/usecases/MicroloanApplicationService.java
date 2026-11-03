@@ -613,6 +613,12 @@ public class MicroloanApplicationService {
         return toView(app);
     }
 
+    /** The reference of the application's current payout; empty while no payout was ever asked for. */
+    public java.util.Optional<String> currentPayoutReference(UUID applicationId) {
+        LoanApplication app = findOrThrow(applicationId);
+        return app.getPayoutAttempts() == 0 ? java.util.Optional.empty() : java.util.Optional.of(app.payoutReference());
+    }
+
     public LoanApplicationView getApplication(UUID applicationId) {
         return toView(findOrThrow(applicationId));
     }

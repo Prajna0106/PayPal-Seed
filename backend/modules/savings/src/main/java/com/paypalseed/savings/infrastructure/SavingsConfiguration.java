@@ -137,8 +137,10 @@ public class SavingsConfiguration {
     public SyncGoalUseCase syncGoalUseCase(GoalStore goals, SavingsPayments payments, GoalSyncLog syncLog,
                                            SubscriptionStateUseCase states, CreditPaymentUseCase credits,
                                            ObjectProvider<Clock> realTime,
-                                           @Value("${seed.savings.sync-min-interval:PT5S}") Duration minInterval) {
-        return new SyncGoalUseCase(goals, payments, syncLog, states, credits, realTime.getIfAvailable(Clock::systemUTC), minInterval);
+                                           @Value("${seed.savings.sync-min-interval:PT5S}") Duration minInterval,
+                                           WithdrawalStore withdrawals, WithdrawalOutcomeUseCase outcomes) {
+        return new SyncGoalUseCase(goals, payments, syncLog, states, credits, realTime.getIfAvailable(Clock::systemUTC), minInterval,
+            withdrawals, outcomes);
     }
 
     @Bean

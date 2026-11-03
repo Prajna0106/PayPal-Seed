@@ -90,6 +90,21 @@ class PaymentsAdapter implements SavingsPayments {
     }
 
     @Override
+    public Optional<PayoutReport> syncPayout(String referenceId) {
+        return payments.payoutOf(referenceId).map(known -> {
+            PayoutView view = payments.syncPayout(known.payoutId());
+            PayoutEnd end = switch (view.status()) {
+                case SUCCEEDED -> PayoutEnd.SUCCEEDED;
+                case FAILED, BLOCKED -> PayoutEnd.FAILED;
+                case RETURNED -> PayoutEnd.RETURNED;
+                case UNCLAIMED -> PayoutEnd.UNCLAIMED;
+                case REQUESTED, PENDING -> PayoutEnd.PENDING;
+            };
+            return new PayoutReport(end, view.failureReason().orElse(null), view.paypalTransactionId().orElse(null));
+        });
+    }
+
+    @Override
     public Payout sendPayout(String referenceId, UUID memberId, long amountCents, PayoutRecipients.Recipient recipient,
                              SavingsWallet wallet, String note) {
         // A PayPal wallet is paid by payer id, which survives an email change; Venmo has no payer id and takes the email.
