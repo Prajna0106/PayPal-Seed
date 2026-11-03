@@ -1,0 +1,17 @@
+$kind: http-request
+name: 'HS32. Agent tool call with a forged token is refused'
+method: GET
+url: '{{baseUrl}}/agent/v1/tools/loan-summary?loanId={{hardshipLoanId}}'
+order: 32000
+description: 'Agent tokens are minted per run (one loan, one case, 10 minutes) and never stored; anything else is a 401.'
+queryParams:
+  - key: 'loanId'
+    value: '{{hardshipLoanId}}'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer seedagt_forged'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 401', () => pm.response.to.have.status(401));

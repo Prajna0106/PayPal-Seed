@@ -9,6 +9,9 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.RecipientType;
 import com.paypalseed.payments.infrastructure.persistence.jooq.tables.records.PayoutRecord;
 import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.platform.persistence.PgSql;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jooq.Condition;
@@ -50,6 +53,14 @@ public class PayoutRepository {
 
     public Optional<Payout> byReference(String referenceId) {
         return dsl.selectFrom(PAYOUT).where(PAYOUT.REFERENCE_ID.eq(referenceId)).fetchOptional(PayoutRepository::map);
+    }
+
+    public Optional<Payout> byId(UUID id) {
+        return dsl.selectFrom(PAYOUT).where(PAYOUT.ID.eq(id)).fetchOptional(PayoutRepository::map);
+    }
+
+    public Optional<Payout> byIdForUpdate(UUID id) {
+        return dsl.selectFrom(PAYOUT).where(PAYOUT.ID.eq(id)).forUpdate().fetchOptional(PayoutRepository::map);
     }
 
     public Optional<Payout> byReferenceForUpdate(String referenceId) {
@@ -106,6 +117,34 @@ public class PayoutRepository {
                 .set(PAYOUT_TRANSITION.SOURCE, source)
                 .set(PAYOUT_TRANSITION.PAYPAL_EVENT_ID, paypalEventId)
                 .execute();
+    }
+
+    /**
+     * Takes the right to read the payout from PayPal now (ADR 0029). True for exactly one of any number of concurrent callers,
+     * and only when the payout was not read within {@code minGap}; the time is recorded before the read, so a read that fails
+     * still counts. One statement: the row lock makes a concurrent claim wait, then fail the condition against the new time.
+     */
+    public boolean claimSync(UUID id, Instant now, Duration minGap) {
+        return dsl.update(PAYOUT)
+                .set(PAYOUT.LAST_SYNCED_AT, now)
+                .where(PAYOUT.ID.eq(id))
+                .and(PAYOUT.LAST_SYNCED_AT.isNull().or(PAYOUT.LAST_SYNCED_AT.le(now.minus(minGap))))
+                .execute() == 1;
+    }
+
+    /**
+     * Payouts the reconcile job should read, least recently read first: not final, PayPal has given an id to read them by, and
+     * asked before {@code createdBefore} (a payout the create call just answered needs no read yet).
+     */
+    public List<UUID> dueForSync(Instant createdBefore, int limit) {
+        return dsl.select(PAYOUT.ID)
+                .from(PAYOUT)
+                .where(PAYOUT.STATUS.in(PayoutStatus.REQUESTED.name(), PayoutStatus.PENDING.name(), PayoutStatus.UNCLAIMED.name()))
+                .and(PAYOUT.PAYPAL_ITEM_ID.isNotNull().or(PAYOUT.PAYPAL_BATCH_ID.isNotNull()))
+                .and(PAYOUT.CREATED_AT.le(createdBefore))
+                .orderBy(PAYOUT.LAST_SYNCED_AT.asc().nullsFirst(), PAYOUT.CREATED_AT.asc())
+                .limit(limit)
+                .fetch(PAYOUT.ID);
     }
 
     private static Payout map(PayoutRecord r) {

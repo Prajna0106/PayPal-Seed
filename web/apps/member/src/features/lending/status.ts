@@ -40,6 +40,9 @@ export const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; tone
   },
 };
 
+/** Shown wherever a payout came back (ADR 0024): calm, says nothing is owed, never blames the member. */
+export const RETURNED_NOTE = "The money did not reach your PayPal account, you owe nothing, we will try again once your account is ready.";
+
 export type StepState = "done" | "current" | "upcoming" | "stopped";
 
 export interface TimelineStep {

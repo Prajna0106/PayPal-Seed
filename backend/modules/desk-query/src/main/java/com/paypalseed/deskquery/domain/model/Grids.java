@@ -13,7 +13,7 @@ public final class Grids {
             "DISBURSED", "REJECTED", "CANCELLED_COOLING_OFF");
     /** The statuses that wait for an officer: these are the ones with a running SLA. */
     public static final List<String> OPEN_APPLICATION_STATUSES = List.of("SUBMITTED", "PENDING_SECOND_APPROVAL");
-    public static final Set<String> LOAN_STATUSES = Set.of("ACTIVE", "REPAID", "COVERED", "CANCELLED");
+    public static final Set<String> LOAN_STATUSES = Set.of("ACTIVE", "REPAID", "COVERED", "CANCELLED", "DISBURSEMENT_RETURNED");
 
     public static final GridDefinition APPLICATIONS = new GridDefinition("applications",
             Map.of("submittedAt", ColumnType.INSTANT,

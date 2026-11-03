@@ -72,6 +72,11 @@ class HardshipTriggers {
     }
 
     @ApplicationModuleListener
+    void on(LendingEvents.LoanVoided e) {
+        reactions.onLoanVoided(e.loanId());
+    }
+
+    @ApplicationModuleListener
     void on(LendingEvents.ScheduleChanged e) {
         reactions.onScheduleChanged(e.loanId(), e.causedBy());
     }

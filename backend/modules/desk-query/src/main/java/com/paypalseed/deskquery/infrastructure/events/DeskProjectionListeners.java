@@ -16,6 +16,7 @@ import com.paypalseed.lending.api.events.LendingEvents.InstalmentMissed;
 import com.paypalseed.lending.api.events.LendingEvents.LateBucketChanged;
 import com.paypalseed.lending.api.events.LendingEvents.LoanReopened;
 import com.paypalseed.lending.api.events.LendingEvents.LoanRepaid;
+import com.paypalseed.lending.api.events.LendingEvents.LoanVoided;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReceived;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReversed;
 import com.paypalseed.lending.api.events.LendingEvents.ScheduleChanged;
@@ -84,6 +85,15 @@ class DeskProjectionListeners {
     @ApplicationModuleListener
     void on(LoanReopened e) {
         loans.on(e);
+    }
+
+    /** A returned payout voids the loan and sends its application back for another payout; a cancellation voids the loan only. */
+    @ApplicationModuleListener
+    void on(LoanVoided e) {
+        loans.on(e);
+        if (!LoanVoided.COOLING_OFF_CANCELLED.equals(e.reason())) {
+            applications.onPayoutReturned(e.applicationId(), e.loanId(), e.payoutReference(), e.businessDate());
+        }
     }
 
     @ApplicationModuleListener

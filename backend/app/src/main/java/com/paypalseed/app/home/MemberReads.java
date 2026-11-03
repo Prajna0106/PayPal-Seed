@@ -17,7 +17,12 @@ import java.util.UUID;
 public interface MemberReads {
 
     record Goal(UUID goalId, String name, String status, long targetCents, long savedCents, long monthlyCents,
-                String currency, LocalDate targetDate) {
+                String currency, LocalDate targetDate, LocalDate nextDepositDate) {
+
+        public Goal(UUID goalId, String name, String status, long targetCents, long savedCents, long monthlyCents,
+                    String currency, LocalDate targetDate) {
+            this(goalId, name, status, targetCents, savedCents, monthlyCents, currency, targetDate, null);
+        }
     }
 
     /** {@code SavingsFacade}: the member's goals, newest first. */

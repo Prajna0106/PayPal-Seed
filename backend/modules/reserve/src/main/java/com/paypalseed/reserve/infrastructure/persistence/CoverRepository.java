@@ -96,9 +96,39 @@ public class CoverRepository {
                 .execute();
     }
 
-    /** The member's approved and pending covers requested in {@code [from, until)}: what the yearly cap counts. */
+    /** An approved cover with the part of it already handed back to the fund (ADR 0024). */
+    public record CoverRoom(UUID id, long amountCents, long returnedCents) {
+        public long roomCents() {
+            return amountCents - returnedCents;
+        }
+    }
+
+    /** Locks the approved covers of a loan, oldest first, so a return can be spread over them. */
+    public List<CoverRoom> lockApprovedFor(UUID loanId) {
+        return dsl.select(COVER_REQUEST.ID, COVER_REQUEST.AMOUNT_CENTS, COVER_REQUEST.RETURNED_CENTS).from(COVER_REQUEST)
+                .where(COVER_REQUEST.LOAN_ID.eq(loanId).and(COVER_REQUEST.STATUS.eq(CoverStatus.APPROVED.name())))
+                .orderBy(COVER_REQUEST.REQUESTED_ON, COVER_REQUEST.ID).forUpdate()
+                .fetch(r -> new CoverRoom(r.value1(), r.value2(), r.value3()));
+    }
+
+    public long returnedCents(UUID id) {
+        return dsl.select(COVER_REQUEST.RETURNED_CENTS).from(COVER_REQUEST).where(COVER_REQUEST.ID.eq(id))
+                .fetchOne(0, Long.class);
+    }
+
+    /** Records that {@code cents} of the cover are back in the fund. The row is locked by the caller. */
+    public void addReturned(UUID id, long cents) {
+        dsl.update(COVER_REQUEST).set(COVER_REQUEST.RETURNED_CENTS, COVER_REQUEST.RETURNED_CENTS.plus(cents))
+                .where(COVER_REQUEST.ID.eq(id)).execute();
+    }
+
+    /**
+     * The member's approved and pending covers requested in {@code [from, until)}: what the yearly cap counts. Money
+     * handed back to the fund does not count, because the member did not end up with it.
+     */
     public long committed(UUID memberId, LocalDate from, LocalDate until) {
-        BigDecimal sum = dsl.select(DSL.coalesce(DSL.sum(COVER_REQUEST.AMOUNT_CENTS), BigDecimal.ZERO))
+        BigDecimal sum = dsl.select(DSL.coalesce(DSL.sum(COVER_REQUEST.AMOUNT_CENTS.minus(COVER_REQUEST.RETURNED_CENTS)),
+                        BigDecimal.ZERO))
                 .from(COVER_REQUEST)
                 .where(COVER_REQUEST.MEMBER_ID.eq(memberId)
                         .and(COVER_REQUEST.REQUESTED_ON.ge(from)).and(COVER_REQUEST.REQUESTED_ON.lt(until))

@@ -1,0 +1,24 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/hardship/cases/{{hardshipCaseId}}/choice'
+  method: POST
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "caseId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01",
+        "status": "PENDING_APPROVAL",
+        "optionLabel": "B",
+        "tier": "MAKER_CHECKER",
+        "decisionDueAt": "2027-03-12T17:42:00Z",
+        "holdUntil": null,
+        "payNowCents": null
+      }

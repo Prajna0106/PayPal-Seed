@@ -57,11 +57,29 @@ class DisbursementPayoutIT extends MoneyFlowSupport {
         }
     }
 
+    public static class PayoutLog {
+        final List<com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested> requested = new CopyOnWriteArrayList<>();
+
+        @TransactionalEventListener
+        public void on(com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested e) {
+            requested.add(e);
+        }
+
+        List<com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested> of(String reference) {
+            return requested.stream().filter(r -> r.referenceId().equals(reference)).toList();
+        }
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class Recording {
         @Bean
         EventLog eventLog() {
             return new EventLog();
+        }
+
+        @Bean
+        PayoutLog payoutLog() {
+            return new PayoutLog();
         }
     }
 
@@ -75,6 +93,8 @@ class DisbursementPayoutIT extends MoneyFlowSupport {
     FairLoanCheckService fairCheck;
     @Autowired
     EventLog events;
+    @Autowired
+    PayoutLog payoutLog;
 
     private static final UUID OFFICER_ONE = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
     private static final UUID OFFICER_TWO = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2");
@@ -156,6 +176,21 @@ class DisbursementPayoutIT extends MoneyFlowSupport {
         assertThat(loansRegistered(id)).isEqualTo(1);
         assertThat(receivable(loanId)).isEqualTo(120_000);
         assertThat(paypal.payoutsByBatch.values().stream().filter(p -> p.senderItemId.equals(id.toString()))).hasSize(1);
+    }
+
+    @Test
+    void theDisbursementPayoutIsAnnouncedForTheMemberAsADisbursement() throws Exception {
+        UUID member = newMember();
+        UUID id = approvedApplication(member).id();
+
+        disburse(id, 200);
+        settle();
+
+        assertThat(payoutLog.of(id.toString())).singleElement().satisfies(requested -> {
+            assertThat(requested.memberId()).isEqualTo(member);
+            assertThat(requested.purpose()).isEqualTo(com.paypalseed.payments.api.dto.PaymentsDtos.PayoutPurpose.DISBURSEMENT);
+            assertThat(requested.amountCents()).isEqualTo(120_000);
+        });
     }
 
     @Test

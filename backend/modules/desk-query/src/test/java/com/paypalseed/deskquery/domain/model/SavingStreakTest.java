@@ -2,6 +2,7 @@ package com.paypalseed.deskquery.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.paypalseed.platform.kernel.BusinessClock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -47,9 +48,29 @@ class SavingStreakTest {
     }
 
     @Test
-    void depositMonthsAreUtcCalendarMonths() {
+    void depositMonthsAreCalendarMonthsInTheBusinessTimeZone() {
+        // 2026-11-01T03:00Z is still 31 October 20:00 in Los Angeles; the UTC rule of ADR 0015 put it in November.
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-11-01T03:00:00Z"))).isEqualTo(month(2026, 10));
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-11-01T06:59:59Z"))).isEqualTo(month(2026, 10));
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-11-01T07:00:00Z"))).isEqualTo(month(2026, 11));
         assertThat(SavingStreak.monthOf(Instant.parse("2026-10-31T23:59:59Z"))).isEqualTo(month(2026, 10));
-        assertThat(SavingStreak.monthOf(Instant.parse("2026-11-01T00:00:00Z"))).isEqualTo(month(2026, 11));
+    }
+
+    @Test
+    void theMonthBoundaryFollowsDaylightSavingTime() {
+        // Summer offset is UTC-7 and winter UTC-8: the first of the month starts at 07:00Z in July and 08:00Z in December.
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-07-01T06:59:59Z"))).isEqualTo(month(2026, 6));
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-07-01T07:00:00Z"))).isEqualTo(month(2026, 7));
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-12-01T07:59:59Z"))).isEqualTo(month(2026, 11));
+        assertThat(SavingStreak.monthOf(Instant.parse("2026-12-01T08:00:00Z"))).isEqualTo(month(2026, 12));
+    }
+
+    @Test
+    void theBusinessZoneIsTheOneTheClockDefines() {
+        Instant firstInstantOfNovember = java.time.LocalDate.of(2026, 11, 1).atStartOfDay(BusinessClock.PROGRAM_ZONE).toInstant();
+
+        assertThat(SavingStreak.monthOf(firstInstantOfNovember)).isEqualTo(month(2026, 11));
+        assertThat(SavingStreak.monthOf(firstInstantOfNovember.minusSeconds(1))).isEqualTo(month(2026, 10));
     }
 
     @Test

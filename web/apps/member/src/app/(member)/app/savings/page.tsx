@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Savings" };
 const MAX_OPEN_GOALS = 3;
 
 export default async function SavingsPage() {
-  const { goals, streakMonths, totalSavedCents } = await getSavingsOverview();
+  const { goals, streakMonths, totalSavedCents, nextDeposits } = await getSavingsOverview();
   const current = goals.filter((goal) => goal.status !== "EXPIRED" && goal.status !== "CANCELLED");
   const earlier = goals.filter((goal) => goal.status === "EXPIRED" || goal.status === "CANCELLED");
   const atLimit = goals.filter((goal) => isOpen(goal.status)).length >= MAX_OPEN_GOALS;
@@ -81,7 +81,7 @@ export default async function SavingsPage() {
           {current.length > 0 ? (
             <section aria-label="Your goals" className="grid gap-4 md:grid-cols-2">
               {current.map((goal) => (
-                <GoalCard key={goal.id} goal={goal} streakMonths={streakMonths} />
+                <GoalCard key={goal.id} goal={goal} streakMonths={streakMonths} nextDepositDate={nextDeposits[goal.id] ?? null} />
               ))}
             </section>
           ) : null}

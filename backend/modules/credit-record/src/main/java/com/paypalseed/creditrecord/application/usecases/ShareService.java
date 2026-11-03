@@ -1,5 +1,6 @@
 package com.paypalseed.creditrecord.application.usecases;
 
+import com.paypalseed.creditrecord.api.RecordSharingConsent;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.CreateShare;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.ShareCreated;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.ShareDetail;
@@ -46,12 +47,15 @@ public class ShareService {
     private final ShareStore shares;
     private final ShareTokenCodec codec;
     private final BusinessClock clock;
+    private final RecordSharingConsent consent;
 
-    public ShareService(RecordStore records, ShareStore shares, ShareTokenCodec codec, BusinessClock clock) {
+    public ShareService(RecordStore records, ShareStore shares, ShareTokenCodec codec, BusinessClock clock,
+                        RecordSharingConsent consent) {
         this.records = records;
         this.shares = shares;
         this.codec = codec;
         this.clock = clock;
+        this.consent = consent;
     }
 
     @Transactional
@@ -68,6 +72,11 @@ public class ShareService {
         String fingerprint = detail.name() + ":" + request.expiresInDays();
 
         shares.lock(memberId);
+        // Asked under the member lock and before the replay check: revoking the consent also revokes the links (under the
+        // same lock), so a link can never be made, or handed out again, after the member said no.
+        if (!consent.granted(memberId)) {
+            throw new DomainException(RecordErrors.SHARING_CONSENT_REQUIRED, "Agree to share your record before making a link");
+        }
         var replay = shares.byIdempotencyKey(memberId, idempotencyKey);
         if (replay.isPresent()) {
             Share existing = replay.get();
@@ -88,12 +97,22 @@ public class ShareService {
         // The month, not the day, of the first fact: a partner learns how long, not which day.
         Snapshot snapshot = new Snapshot(Ids.newId(), memberId, state.level().rank(), state.since().withDayOfMonth(1),
                 state.lifetime().loansRepaidOnPlan(), OnTimeBand.of(state.lifetime().onTimeBps()).name(), state.defaults(),
-                clock.today());
+                clock.today(), state.loansCompletedWithFundHelp());
         Share share = new Share(Ids.newId(), memberId, snapshot.id(), detail, codec.signingKeyId(), idempotencyKey,
                 fingerprint, now, now.plus(request.expiresInDays(), ChronoUnit.DAYS), null);
         ShareCreated result = created(share);
         shares.insert(snapshot, share);
         return result;
+    }
+
+    /**
+     * Ends every active link of a member whose consent to share was withdrawn. Idempotent: a second call finds nothing
+     * active. Taken under the creation lock so a link being made at that moment is caught too.
+     */
+    @Transactional
+    public int revokeAll(UUID memberId) {
+        shares.lock(memberId);
+        return shares.revokeAllActive(memberId, clock.now());
     }
 
     @Transactional(readOnly = true)
@@ -133,6 +152,7 @@ public class ShareService {
         boolean full = share.detail() == ShareDetail.FULL;
         return new VerifiedRecord(valid, RecordLevel.ofRank(snapshot.levelRank()).name(),
                 summary ? snapshot.recordSince() : null, summary ? snapshot.loansOnPlan() : null,
+                summary ? snapshot.loansWithFundHelp() : null,
                 full ? OnTimeBand.valueOf(snapshot.onTimeBand()).label() : null, share.issuedAt(), share.expiresAt());
     }
 

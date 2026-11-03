@@ -17,6 +17,11 @@ export const CONSENT_COPY: Record<ConsentTypeName, { title: string; about: strin
     about: "Lets the fair loan check read your PayPal income, so a loan fits your real month.",
     onRevoke: "The fair check stops reading your income straight away, and we delete the income we already read.",
   },
+  FAIR_CHECK: {
+    title: "Fair loan check",
+    about: "Lets Seed run the fair loan check when you apply, so any loan is sized to fit your real month.",
+    onRevoke: "The fair check stops straight away, and we delete the income we already read. You can still save as usual.",
+  },
   RECORD_SHARING: {
     title: "Share my Seed record",
     about: "Lets you make links that show your record to someone you choose.",

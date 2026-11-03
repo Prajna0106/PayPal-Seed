@@ -18,11 +18,13 @@ public class ConsentCatalog {
     ConsentCatalog(@Value("${seed.identity.consent.terms-version:2026-11}") String terms,
                    @Value("${seed.identity.consent.privacy-version:2026-11}") String privacy,
                    @Value("${seed.identity.consent.income-read-version:2026-11}") String incomeRead,
-                   @Value("${seed.identity.consent.record-sharing-version:2026-11}") String recordSharing) {
+                   @Value("${seed.identity.consent.record-sharing-version:2026-11}") String recordSharing,
+                   @Value("${seed.identity.consent.fair-check-version:2026-11}") String fairCheck) {
         current.put(ConsentType.TERMS, terms);
         current.put(ConsentType.PRIVACY, privacy);
         current.put(ConsentType.INCOME_READ, incomeRead);
         current.put(ConsentType.RECORD_SHARING, recordSharing);
+        current.put(ConsentType.FAIR_CHECK, fairCheck);
     }
 
     public String currentVersion(ConsentType type) {

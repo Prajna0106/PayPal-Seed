@@ -26,6 +26,9 @@ import org.springframework.stereotype.Component;
  * <p>Facts are stamped with the business clock, like every fraud fact. Every handler is idempotent on its source key,
  * so the at-least-once delivery of events adds nothing twice. No payer id, email or name is logged or passed on in
  * clear: the destination is handed over as a reference that fraud hashes at once.
+ *
+ * <p>This is the wallet-type signal: it sees the preference change, not the account behind it. Who a payout actually went
+ * to is seen by fraud itself, from the recipient fingerprint payments publishes with every payout request (ADR 0027).
  */
 @Component
 class FraudFeed {

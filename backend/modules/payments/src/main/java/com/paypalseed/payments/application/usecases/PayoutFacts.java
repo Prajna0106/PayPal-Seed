@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class PayoutFacts {
 
+    /** {@link Report#source()} of a payout Seed read from PayPal itself (ADR 0029), as opposed to the API response or a webhook. */
+    public static final String POLL = "POLL";
+
     /** What one report says. {@code status} is empty when it only carries ids. */
     public record Report(Optional<PayoutStatus> status, String batchId, String itemId, String transactionId, long feeCents,
                          String reason, String source, String paypalEventId) {
@@ -84,8 +87,8 @@ public class PayoutFacts {
 
     private void publish(Payout payout, PayoutStatus target, String reason, Report report) {
         Instant now = clock.now();
-        String causedBy = report.paypalEventId() == null ? "payout-api:" + payout.referenceId()
-                : "paypal-event:" + report.paypalEventId();
+        String causedBy = report.paypalEventId() != null ? "paypal-event:" + report.paypalEventId()
+                : (POLL.equals(report.source()) ? "payout-poll:" : "payout-api:") + payout.referenceId();
         switch (target) {
             case SUCCEEDED -> events.publishEvent(new PaymentEvents.PayoutSucceeded(Ids.newId(), payout.id(),
                     payout.referenceId(), payout.amountCents(), payout.wallet(),

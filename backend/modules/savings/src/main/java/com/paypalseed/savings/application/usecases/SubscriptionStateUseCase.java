@@ -36,16 +36,26 @@ public class SubscriptionStateUseCase {
 
     private final GoalStore goals;
     private final SavingsPayments payments;
+    private final GoalVisibility visibility;
 
     public SubscriptionStateUseCase(GoalStore goals, SavingsPayments payments) {
+        this(goals, payments, GoalVisibility.never());
+    }
+
+    public SubscriptionStateUseCase(GoalStore goals, SavingsPayments payments, GoalVisibility visibility) {
         this.goals = Objects.requireNonNull(goals);
         this.payments = Objects.requireNonNull(payments);
+        this.visibility = Objects.requireNonNull(visibility);
     }
 
     @Transactional
     public void apply(UUID goalId, String subscriptionId, State state, Instant at) {
         Optional<SavingsGoal> found = goals.findByIdForUpdate(goalId);
         if (found.isEmpty()) {
+            if (visibility.worthWaitingFor(at)) {
+                // The goal's own commit may still be on its way: fail so that the event is delivered again (ADR 0027).
+                throw new GoalNotVisibleYetException(goalId, "Subscription " + subscriptionId + " reported " + state);
+            }
             log.warn("Subscription {} reported {} for unknown goal {}", subscriptionId, state, goalId);
             return;
         }

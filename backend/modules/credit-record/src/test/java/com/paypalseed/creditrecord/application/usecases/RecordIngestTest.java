@@ -158,4 +158,58 @@ class RecordIngestTest {
         assertThatThrownBy(() -> RecordFact.instalmentMissed("k", ANA, LOAN, 0, LocalDate.now()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void aVoidedLoanIsTakenBackWholeAndTheLevelItLiftedIsCorrected() {
+        for (int month = 1; month <= 6; month++) {
+            deposit("v" + month, month);
+        }
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        ingest.ingest(RecordFact.loanDisbursed("disb-v", ANA, LOAN, d));
+        ingest.ingest(RecordFact.instalmentPaid(ANA, LOAN, 1, 0, d));
+        ingest.ingest(RecordFact.instalmentPaid(ANA, LOAN, 2, 0, d));
+        ingest.ingest(RecordFact.loanRepaid(ANA, LOAN, 0, d));
+        assertThat(queries.levelOf(ANA).level()).isEqualTo("STEADY");
+        assertThat(queries.history(ANA, null, 50).items()).extracting(i -> i.kind()).contains("LOAN_DISBURSED", "LOAN_REPAID");
+        published.clear();
+
+        assertThat(ingest.ingest(RecordFact.loanVoided(ANA, LOAN, d.plusDays(30)))).isEqualTo(IngestOutcome.RECORDED);
+
+        assertThat(published).singleElement().isInstanceOfSatisfying(RecordLevelChanged.class, e -> {
+            assertThat(e.fromLevel()).isEqualTo("STEADY");
+            assertThat(e.toLevel()).isEqualTo("BUILDING");
+            assertThat(e.cause()).isEqualTo("CORRECTION");
+        });
+        RecordView view = queries.record(ANA);
+        assertThat(view.level()).isEqualTo("BUILDING");
+        assertThat(view.loans().repaidOnPlan()).isZero();
+        assertThat(view.instalments().onTime()).isZero();
+        assertThat(view.savings().onTimeMonths()).isEqualTo(6);
+        assertThat(queries.history(ANA, null, 50).items()).extracting(i -> i.kind())
+                .containsOnly("SAVINGS_DEPOSIT").hasSize(6);
+    }
+
+    @Test
+    void aVoidDeliveredTwiceOrBeforeTheLoanFactsChangesNothingMore() {
+        deposit("w1", 1);
+        deposit("w2", 2);
+        deposit("w3", 3);
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        assertThat(ingest.ingest(RecordFact.loanVoided(ANA, LOAN, d))).isEqualTo(IngestOutcome.RECORDED);
+        assertThat(ingest.ingest(RecordFact.loanVoided(ANA, LOAN, d))).isEqualTo(IngestOutcome.DUPLICATE);
+        published.clear();
+
+        ingest.ingest(RecordFact.loanDisbursed("disb-w", ANA, LOAN, d));
+        ingest.ingest(RecordFact.instalmentPaid(ANA, LOAN, 1, 0, d));
+        ingest.ingest(RecordFact.loanRepaid(ANA, LOAN, 0, d));
+        ingest.ingest(RecordFact.loanDefaulted(ANA, LOAN, d));
+
+        assertThat(published).isEmpty();
+        RecordView view = queries.record(ANA);
+        assertThat(view.level()).isEqualTo("BUILDING");
+        assertThat(view.defaults()).isZero();
+        assertThat(view.loans().repaidOnPlan()).isZero();
+        assertThat(view.instalments().onTime()).isZero();
+        assertThat(queries.history(ANA, null, 50).items()).extracting(i -> i.kind()).containsOnly("SAVINGS_DEPOSIT");
+    }
 }

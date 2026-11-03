@@ -1,0 +1,39 @@
+$kind: http-request
+name: 'HS08. Desk queue shows the new case'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/hardship/cases?origin=PROACTIVE_SCAN&level=LIKELY_MISS&level=IMMINENT&limit=50'
+order: 8000
+description: 'Newest first, filtered by allowlisted values. Finds the case of the loan from HS01 and saves its id.'
+queryParams:
+  - key: 'origin'
+    value: 'PROACTIVE_SCAN'
+  - key: 'level'
+    value: 'LIKELY_MISS'
+  - key: 'level'
+    value: 'IMMINENT'
+  - key: 'limit'
+    value: '50'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has rows and nextBefore', () => ['rows', 'nextBefore'].forEach(k => pm.expect(body).to.have.property(k)));
+      const row = body.rows.find(r => r.loanId === pm.collectionVariables.get('hardshipLoanId'));
+      pm.test('The loan has a case on the first page', () => pm.expect(row, 'queue row for the loan').to.be.an('object'));
+      if (row) {
+        pm.test('Row is a proactive LIKELY_MISS case', () => {
+          pm.expect(row.origin).to.eql('PROACTIVE_SCAN');
+          pm.expect(['LIKELY_MISS', 'IMMINENT']).to.include(row.level);
+          pm.expect(['DETECTED', 'OUTREACH_SENT', 'OFFER_VIEWED']).to.include(row.status);
+        });
+        pm.collectionVariables.set('hardshipCaseId', row.caseId);
+      }
+examples: './.resources/HS08. Desk queue shows the new case.resources/examples/'

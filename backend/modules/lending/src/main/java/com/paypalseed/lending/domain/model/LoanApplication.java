@@ -17,10 +17,17 @@ import java.util.UUID;
  * or {@code REJECTED}. {@code DISBURSING} means the payout is with PayPal: the loan is registered only when
  * the payout succeeds, and a payout that fails for good puts the application back to {@code APPROVED} with the
  * reason in {@code payoutIssue}, ready to be sent again. Nothing can cancel or reject an application in between.
+ *
+ * <p>A payout PayPal takes back after the loan was registered voids that loan (ADR 0024): {@code DISBURSED} goes back to
+ * {@code APPROVED} with {@code payoutIssue = RETURNED_AFTER_DISBURSEMENT}, the voided loan is detached, and the next
+ * disbursement uses a new payout reference and registers a new loan under a new disbursement reference.
  */
 public class LoanApplication {
 
     public static final Duration COOLING_OFF_WINDOW = Duration.ofHours(48);
+
+    /** The {@code payoutIssue} of an application whose registered loan was voided because its payout came back. */
+    public static final String RETURNED_AFTER_DISBURSEMENT = "RETURNED_AFTER_DISBURSEMENT";
 
     public enum ApplicationStatus {
         SUBMITTED,
@@ -63,6 +70,7 @@ public class LoanApplication {
     private Instant coolingOffExpiresAt;
     private String payoutIssue;
     private int payoutAttempts;
+    private int disbursementVoids;
     private UUID lastOfficerId;
     private final Instant createdAt;
     private Instant updatedAt;
@@ -139,6 +147,11 @@ public class LoanApplication {
         this.lastOfficerId = lastOfficerId;
     }
 
+    /** Restores how many registered loans of this application were voided (ADR 0024). */
+    public void restoreDisbursementVoids(int disbursementVoids) {
+        this.disbursementVoids = disbursementVoids;
+    }
+
     public static LoanApplication submit(
         UUID memberId,
         String purpose,
@@ -212,7 +225,8 @@ public class LoanApplication {
     public void reject(UUID officerId, String reason, Instant now) {
         Objects.requireNonNull(officerId, "officerId is required");
         Objects.requireNonNull(now, "now is required");
-        if (this.status != ApplicationStatus.SUBMITTED && this.status != ApplicationStatus.PENDING_SECOND_APPROVAL) {
+        boolean payoutBroken = this.status == ApplicationStatus.APPROVED && this.payoutIssue != null;
+        if (this.status != ApplicationStatus.SUBMITTED && this.status != ApplicationStatus.PENDING_SECOND_APPROVAL && !payoutBroken) {
             throw new DomainException(
                 LendingErrors.APPLICATION_INVALID_STATE,
                 "Cannot reject application in status " + this.status
@@ -228,7 +242,7 @@ public class LoanApplication {
      * Blueprint §5: Payouts with {@code sender_batch_id = loan-{id}-disb}.
      */
     public String expectedDisbursementBatchId() {
-        return "loan-" + this.id + "-disb";
+        return disbursementVoids == 0 ? "loan-" + this.id + "-disb" : "loan-" + this.id + "-disb-v" + disbursementVoids;
     }
 
     /**
@@ -310,6 +324,29 @@ public class LoanApplication {
     }
 
     /**
+     * PayPal took the payout back after the loan was registered, so the member never kept the money (ADR 0024). The
+     * application is approved again, the voided loan is detached, and the reason says why an officer must act: send
+     * it again once the recipient is fixed, or reject it. The next disbursement gets a new disbursement reference.
+     */
+    public void loanReturned(Instant now) {
+        Objects.requireNonNull(now, "now is required");
+        if (this.status != ApplicationStatus.DISBURSED) {
+            throw new DomainException(
+                LendingErrors.APPLICATION_INVALID_STATE,
+                "Only a disbursed application can have its loan voided; current status: " + this.status
+            );
+        }
+        this.disbursementVoids++;
+        this.loanId = null;
+        this.disbursementRef = null;
+        this.disbursedAt = null;
+        this.coolingOffExpiresAt = null;
+        this.payoutIssue = RETURNED_AFTER_DISBURSEMENT;
+        this.status = ApplicationStatus.APPROVED;
+        this.updatedAt = now;
+    }
+
+    /**
      * Blueprint §5 User flow #7: "A 48-hour cooling-off lets her return the money with no cost if she changes her mind."
      */
     public void cancelWithinCoolingOff(Instant now) {
@@ -353,6 +390,10 @@ public class LoanApplication {
     public Instant getDisbursedAt() { return disbursedAt; }
     public Instant getCoolingOffExpiresAt() { return coolingOffExpiresAt; }
     public String getPayoutIssue() { return payoutIssue; }
+    public int getDisbursementVoids() {
+        return disbursementVoids;
+    }
+
     public int getPayoutAttempts() { return payoutAttempts; }
     public UUID getLastOfficerId() { return lastOfficerId; }
     public Instant getCreatedAt() { return createdAt; }

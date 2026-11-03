@@ -7,6 +7,7 @@ dependencies {
     implementation(project(":engines:schedule"))
     implementation(project(":engines:rules"))
     implementation(project(":modules:ledger"))
+    implementation(project(":modules:governance"))
     implementation(project(":modules:payments"))
     implementation(project(":modules:identity"))
     implementation(project(":modules:credit-record"))

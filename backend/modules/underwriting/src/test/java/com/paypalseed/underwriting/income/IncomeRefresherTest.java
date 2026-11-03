@@ -181,6 +181,77 @@ class IncomeRefresherTest {
     }
 
     @Test
+    void fetchingReadsPayPalButWritesNothing() {
+        when(source.credits(anyString(), any(), any())).thenReturn(List.of(new IncomeEntry("A", LocalDate.of(2026, 8, 11), 19_410)));
+
+        Optional<IncomeRefresher.FetchedIncome> fetched = refresher(IncomeSource.TRANSACTION_SEARCH).fetchIfStale(MEMBER, false);
+
+        assertThat(fetched).isPresent();
+        assertThat(fetched.get().weeks()).hasSize(13);
+        assertThat(fetched.get().anchor()).isEqualTo(TODAY);
+        verify(income, never()).replaceFetchedWeeks(any(), anyList(), any(), any());
+    }
+
+    @Test
+    void aConsentGivenInThisRequestAllowsTheReadButNoConsentAtAllDoesNot() {
+        when(income.consent(MEMBER)).thenReturn(Optional.empty());
+        when(source.credits(anyString(), any(), any())).thenReturn(List.of());
+
+        assertThat(refresher(IncomeSource.TRANSACTION_SEARCH).fetchIfStale(MEMBER, false)).isEmpty();
+        verifyNoInteractions(source);
+
+        assertThat(refresher(IncomeSource.TRANSACTION_SEARCH).fetchIfStale(MEMBER, true)).isPresent();
+    }
+
+    @Test
+    void aFailedFetchBeforeTheConsentExistsThrowsAndWritesNothing() {
+        when(income.consent(MEMBER)).thenReturn(Optional.empty());
+        when(source.credits(anyString(), any(), any()))
+                .thenThrow(new DomainException(UnderwritingErrors.INCOME_SOURCE_UNAVAILABLE, "PayPal is down"));
+
+        assertThatThrownBy(() -> refresher(IncomeSource.TRANSACTION_SEARCH).fetchIfStale(MEMBER, true))
+                .isInstanceOfSatisfying(DomainException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(UnderwritingErrors.INCOME_SOURCE_UNAVAILABLE));
+        verify(income, never()).replaceFetchedWeeks(any(), anyList(), any(), any());
+    }
+
+    @Test
+    void freshWeeksAreNotFetchedEvenWhenTheRequestCarriesTheConsent() {
+        when(income.refreshState(MEMBER)).thenReturn(Optional.of(
+                new RefreshState(clock.now().minus(Duration.ofHours(2)), TODAY)));
+
+        assertThat(refresher(IncomeSource.TRANSACTION_SEARCH).fetchIfStale(MEMBER, true)).isEmpty();
+        verifyNoInteractions(source);
+    }
+
+    @Test
+    void requireFreshPassesForFreshWeeksAndRefusesStaleOnesWithoutReadingPayPal() {
+        when(income.refreshState(MEMBER)).thenReturn(Optional.of(
+                new RefreshState(clock.now().minus(Duration.ofHours(2)), TODAY)));
+        refresher(IncomeSource.TRANSACTION_SEARCH).requireFresh(MEMBER);
+
+        when(income.refreshState(MEMBER)).thenReturn(Optional.of(
+                new RefreshState(clock.now().minus(Duration.ofHours(30)), TODAY)));
+        assertThatThrownBy(() -> refresher(IncomeSource.TRANSACTION_SEARCH).requireFresh(MEMBER))
+                .isInstanceOfSatisfying(DomainException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(UnderwritingErrors.INCOME_SOURCE_UNAVAILABLE));
+
+        when(income.refreshState(MEMBER)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> refresher(IncomeSource.TRANSACTION_SEARCH).requireFresh(MEMBER))
+                .isInstanceOf(DomainException.class);
+        verifyNoInteractions(source);
+    }
+
+    @Test
+    void requireFreshDoesNothingForSeededIncomeOrAMemberWithoutConsent() {
+        refresher(IncomeSource.SEEDED).requireFresh(MEMBER);
+
+        when(income.consent(MEMBER)).thenReturn(Optional.empty());
+        refresher(IncomeSource.TRANSACTION_SEARCH).requireFresh(MEMBER);
+        verifyNoInteractions(source);
+    }
+
+    @Test
     void aNonPositiveMaxAgeIsRejectedAtStartUp() {
         assertThatThrownBy(() -> new IncomeRefresher(income, source, accounts, clock, IncomeSource.SEEDED, Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);

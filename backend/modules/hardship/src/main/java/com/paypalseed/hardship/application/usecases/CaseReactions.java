@@ -23,6 +23,9 @@ public class CaseReactions {
     private static final Set<CaseStatus> PAYABLE = EnumSet.of(CaseStatus.DETECTED, CaseStatus.OUTREACH_SENT, CaseStatus.OFFER_VIEWED,
             CaseStatus.OPTION_CHOSEN, CaseStatus.PENDING_APPROVAL);
 
+    /** The closed reason of a case whose loan never stood. */
+    public static final String LOAN_VOIDED = "LOAN_VOIDED";
+
     private final CaseRepository cases;
     private final CaseLifecycle lifecycle;
     private final LendingFacade lending;
@@ -48,6 +51,19 @@ public class CaseReactions {
         if (remaining == 0) {
             lifecycle.close(c, CaseStatus.CANCELLED_PAID, loanRepaid ? "LOAN_REPAID" : "MEMBER_PAID");
         }
+    }
+
+    /**
+     * The loan never stood (its payout came back, or the member cancelled in the cooling-off window; ADR 0024): there is
+     * nothing left to protect, so an open case ends as SUPERSEDED with the reason {@value #LOAN_VOIDED}. Closing releases
+     * the hold, the open-case flag, the timers and any open approval, so no offer, reminder or decision follows. No case
+     * open, or one already closed, means a replay and changes nothing.
+     */
+    @Transactional
+    public void onLoanVoided(UUID loanId) {
+        cases.openForLoan(loanId).flatMap(c -> cases.lock(c.id()))
+                .filter(c -> !c.status().terminal())
+                .ifPresent(c -> lifecycle.close(c, CaseStatus.SUPERSEDED, LOAN_VOIDED));
     }
 
     /** Our own apply carries {@code approval:hardship:<caseId>:...}; anything else replaces the plan the offer was built on. */

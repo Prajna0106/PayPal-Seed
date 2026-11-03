@@ -6,19 +6,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@payp
 import { CircleCheck, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { disburseApplication } from "../actions";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { disburseApplication, syncApplicationPayout } from "../actions";
 import { ActionDialog } from "./action-dialog";
 
 const POLL_MS = 5000;
-/** About three minutes: PayPal answers a payout in seconds; past this the officer can refresh by hand. */
-const MAX_POLLS = 36;
+/** About two minutes: PayPal answers a payout in seconds; past this the officer checks by hand. */
+const MAX_POLLS = 24;
 
-/** While a payout is running the page asks the server again every few seconds; it stops when the tab is hidden. */
-function PayoutWatcher() {
-  const router = useRouter();
+/**
+ * While a payout is running the panel asks the backend to read it from PayPal every few seconds (a machine PayPal cannot
+ * call never gets the webhook), and the action refreshes the page with the answer. It stops when the tab is hidden and
+ * after about two minutes; "Check again" does the same read by hand.
+ */
+function PayoutWatcher({ applicationId }: { applicationId: string }) {
   const [stopped, setStopped] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [checking, startChecking] = useTransition();
+  const inFlight = useRef(false);
+
+  const check = useCallback(() => {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    startChecking(async () => {
+      try {
+        const result = await syncApplicationPayout(applicationId);
+        setProblem(result.status === "error" ? result.message : null);
+      } finally {
+        inFlight.current = false;
+      }
+    });
+  }, [applicationId]);
 
   useEffect(() => {
     let polls = 0;
@@ -32,10 +52,10 @@ function PayoutWatcher() {
         setStopped(true);
         return;
       }
-      router.refresh();
+      check();
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [router]);
+  }, [check]);
 
   return (
     <div aria-live="polite" className="flex items-start gap-3 text-sm text-body">
@@ -44,11 +64,12 @@ function PayoutWatcher() {
         <p>
           {stopped
             ? "PayPal has not confirmed yet. This can take a few minutes."
-            : "Waiting for PayPal to confirm the payout. This page updates by itself."}
+            : "Waiting for PayPal to confirm the payout. This page checks by itself."}
         </p>
+        {problem ? <p className="text-destructive">{problem}</p> : null}
         {stopped ? (
-          <Button variant="outline" size="sm" className="self-start" onClick={() => router.refresh()}>
-            Check again
+          <Button variant="outline" size="sm" className="h-11 self-start" disabled={checking} onClick={check}>
+            {checking ? "Checking…" : "Check again"}
           </Button>
         ) : null}
       </div>
@@ -62,12 +83,14 @@ export interface PayoutPanelProps {
   loanId: string | null;
   /** Plain-language reason from the server (`explainPayoutIssue`); the raw PayPal reason never reaches the browser. */
   payoutIssueText: string | null;
+  /** The payout came back after the loan was registered, so the loan was voided (ADR 0024). */
+  payoutReturned?: boolean;
   summary: string;
   disburseKey: string;
 }
 
 /** The last step: pay out, watch the payout, or read why it was refused and try again. */
-export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, summary, disburseKey }: PayoutPanelProps) {
+export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, payoutReturned = false, summary, disburseKey }: PayoutPanelProps) {
   if (status !== "APPROVED" && status !== "DISBURSING" && status !== "DISBURSED") {
     return null;
   }
@@ -84,7 +107,7 @@ export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, su
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {status === "DISBURSING" ? <PayoutWatcher /> : null}
+        {status === "DISBURSING" ? <PayoutWatcher applicationId={applicationId} /> : null}
 
         {status === "DISBURSED" ? (
           <div className="flex flex-col gap-3 text-sm text-body">
@@ -105,13 +128,13 @@ export function PayoutPanel({ applicationId, status, loanId, payoutIssueText, su
             {payoutIssueText ? (
               <Alert variant="destructive">
                 <TriangleAlert aria-hidden="true" />
-                <AlertTitle>The last payout did not go through</AlertTitle>
+                <AlertTitle>{payoutReturned ? "The payout came back" : "The last payout did not go through"}</AlertTitle>
                 <AlertDescription>{payoutIssueText}</AlertDescription>
               </Alert>
             ) : null}
             <ActionDialog
-              triggerLabel={payoutIssueText ? "Try the payout again" : "Pay out through PayPal"}
-              title={payoutIssueText ? "Try the payout again?" : "Pay out this loan?"}
+              triggerLabel={payoutIssueText ? (payoutReturned ? "Send the payout again" : "Try the payout again") : "Pay out through PayPal"}
+              title={payoutIssueText ? (payoutReturned ? "Send the payout again?" : "Try the payout again?") : "Pay out this loan?"}
               description={
                 <>
                   <p>{summary}.</p>

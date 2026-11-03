@@ -15,11 +15,14 @@ envVarGroups:
   # Backend roles only (the web apps never see these). Identical on every instance, which is what they need:
   #   SEED_RECORD_SIGNING_SECRET  signs credit record share links
   #   SEED_DESK_QUERY_CURSOR_KEY  signs desk grid cursors, so a cursor made by one api instance works on another
+  #   SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY  keys the hash of a payout recipient that the fraud rule compares
   - name: seed-backend
     envVars:
       - key: SEED_RECORD_SIGNING_SECRET
         generateValue: true
       - key: SEED_DESK_QUERY_CURSOR_KEY
+        generateValue: true
+      - key: SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY
         generateValue: true
 
 services:

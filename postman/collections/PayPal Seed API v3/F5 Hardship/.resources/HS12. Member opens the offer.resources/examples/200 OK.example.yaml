@@ -1,0 +1,110 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/hardship?lang=en'
+  method: GET
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "caseId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01",
+        "status": "OFFER_VIEWED",
+        "target": {
+          "seq": 3,
+          "dueDate": "2027-03-20",
+          "amountCents": 15000
+        },
+        "offer": {
+          "offerId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e02",
+          "revision": 1,
+          "expiresOn": "2027-03-25",
+          "recommended": "C",
+          "message": {
+            "locale": "en",
+            "source": "TEMPLATE",
+            "text": "Your sales look lower than usual. Here are four ways to make March easier. You choose."
+          },
+          "options": [
+            {
+              "optionId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0a",
+              "label": "A",
+              "primitive": "MOVE_DATE",
+              "args": {
+                "seq": 3,
+                "days": 14
+              },
+              "summary": {
+                "days": 14,
+                "amountCents": 15000
+              },
+              "tier": "AUTO_POLICY",
+              "sustainable": false,
+              "recommended": false,
+              "warnings": [
+                "NOT_SUSTAINABLE_AT_CURRENT_INCOME"
+              ]
+            },
+            {
+              "optionId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0b",
+              "label": "B",
+              "primitive": "DEFER_TO_END",
+              "args": {
+                "seq": 3
+              },
+              "summary": {
+                "months": 1,
+                "amountCents": 15000
+              },
+              "tier": "MAKER_CHECKER",
+              "sustainable": false,
+              "recommended": false,
+              "warnings": [
+                "NOT_SUSTAINABLE_AT_CURRENT_INCOME"
+              ]
+            },
+            {
+              "optionId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0c",
+              "label": "C",
+              "primitive": "REAMORTIZE",
+              "args": {
+                "extraMonths": 2
+              },
+              "summary": {
+                "extraMonths": 2,
+                "instalments": 8,
+                "minInstalmentCents": 11200,
+                "maxInstalmentCents": 11300
+              },
+              "tier": "MAKER_CHECKER",
+              "sustainable": true,
+              "recommended": true,
+              "warnings": []
+            },
+            {
+              "optionId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e0d",
+              "label": "D",
+              "primitive": "PAYMENT",
+              "args": {
+                "amountCents": 6900
+              },
+              "summary": {
+                "payNowCents": 6900,
+                "stillDueCents": 8100
+              },
+              "tier": "NONE",
+              "sustainable": false,
+              "recommended": false,
+              "warnings": [
+                "LEAVES_SHORTFALL"
+              ]
+            }
+          ]
+        }
+      }

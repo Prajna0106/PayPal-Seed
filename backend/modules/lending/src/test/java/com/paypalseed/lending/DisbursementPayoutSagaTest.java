@@ -48,6 +48,7 @@ class DisbursementPayoutSagaTest {
     private final LendingFacade lending = mock(LendingFacade.class);
     private final List<Object> published = new ArrayList<>();
     private final List<String> payoutReferences = new ArrayList<>();
+    private final List<UUID> payoutMembers = new ArrayList<>();
     private Result nextPayout = new Result(State.PENDING, null);
     private RuntimeException payoutBreaks;
     private Optional<PayoutRecipients.Recipient> email = Optional.of(new PayoutRecipients.Recipient("PAYER-ANA", "ana@example.com"));
@@ -70,12 +71,22 @@ class DisbursementPayoutSagaTest {
                 return new MemberSavingsSummary(memberId, 4, 4, 0, 7_500L, 30_000L, true);
             }
         };
-        DisbursementPayouts payouts = (reference, cents, recipient, wallet, note) -> {
-            payoutReferences.add(reference);
-            if (payoutBreaks != null) {
-                throw payoutBreaks;
+        DisbursementPayouts payouts = new DisbursementPayouts() {
+            @Override
+            public Result send(String reference, long cents, PayoutRecipients.Recipient recipient, WalletType wallet, String note) {
+                payoutReferences.add(reference);
+                if (payoutBreaks != null) {
+                    throw payoutBreaks;
+                }
+                return nextPayout;
             }
-            return nextPayout;
+
+            @Override
+            public Result send(String reference, UUID member, long cents, PayoutRecipients.Recipient recipient, WalletType wallet,
+                               String note) {
+                payoutMembers.add(member);
+                return send(reference, cents, recipient, wallet, note);
+            }
         };
         PayoutRecipients recipients = memberId -> email;
         when(lending.registerDisbursedLoan(any())).thenAnswer(call -> {
@@ -114,6 +125,13 @@ class DisbursementPayoutSagaTest {
         assertThat(payoutReferences).containsExactly(applicationId.toString());
         verify(lending, times(1)).registerDisbursedLoan(any());
         assertThat(publishedStatuses()).containsExactly("DISBURSING", "DISBURSED");
+    }
+
+    @Test
+    void thePayoutIsAskedForInTheNameOfTheMemberWhoseLoanItIs() {
+        service.disburseApplication(applicationId, TWO);
+
+        assertThat(payoutMembers).containsExactly(ANA);
     }
 
     @Test

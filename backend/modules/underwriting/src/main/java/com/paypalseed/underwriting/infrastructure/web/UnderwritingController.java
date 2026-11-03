@@ -166,6 +166,14 @@ public class UnderwritingController {
         return ResponseEntity.ok(fairLoanCheckService.listAllAssessments());
     }
 
+    /** The newest fair check of one application, so the desk page does not read the whole list. */
+    @GetMapping("/desk/underwriting/assessments/latest")
+    public ResponseEntity<FairCheckCardView> latestDeskAssessment(Actor actor, @RequestParam("applicationId") UUID applicationId) {
+        staff(actor);
+        return ResponseEntity.ok(fairLoanCheckService.latestAssessmentOfApplication(applicationId)
+            .orElseThrow(() -> new DomainException(UnderwritingErrors.ASSESSMENT_NOT_FOUND, "Assessment not found")));
+    }
+
     @PostMapping("/desk/underwriting/assessments/{assessmentId}/decision")
     public ResponseEntity<FairCheckCardView> recordOfficerDecision(
         Actor actor,

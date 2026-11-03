@@ -28,6 +28,11 @@ public final class ReserveErrors {
     public static final ErrorCode FUND_LIMIT_REACHED =
             ErrorCode.conflict("reserve-limit-reached", "The reserve cannot hold more than the system supports");
 
+    public static final ErrorCode COVER_RETURN_INVALID =
+            ErrorCode.validation("cover-return-invalid", "That cover return cannot be recorded");
+    public static final ErrorCode COVER_RETURN_EXCEEDS_COVER =
+            ErrorCode.validation("cover-return-exceeds-cover", "More was returned than the cover paid");
+
     private ReserveErrors() {
     }
 }

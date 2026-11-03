@@ -11,6 +11,9 @@ public final class RecordErrors {
     public static final ErrorCode SHARE_NOT_FOUND = ErrorCode.notFound("share-not-found", "No such share link");
     public static final ErrorCode NOTHING_TO_SHARE =
             ErrorCode.conflict("record-nothing-to-share", "There is no record to share yet");
+    /** Sharing needs the member's say-so, at the consent text in force now (ADR 0025). */
+    public static final ErrorCode SHARING_CONSENT_REQUIRED = ErrorCode.conflict("record-sharing-consent-required",
+            "Agree to share your record before making a link");
     public static final ErrorCode SHARE_LIMIT =
             ErrorCode.conflict("share-limit-reached", "Too many active share links; revoke one first");
     public static final ErrorCode SHARE_EXPIRY_INVALID =

@@ -256,4 +256,123 @@ class RecordRepositoryTest {
         assertThat(state.factCount()).isEqualTo(12);
         assertThat(new RecordQueries(records).history(ana, null, 100).items()).hasSize(12);
     }
+    // ---- ADR 0025 ---------------------------------------------------------------------------------------------------------
+
+    @Test
+    void revokingAllActiveSharesLeavesRevokedExpiredAndOtherMembersAlone() {
+        UUID ana = member();
+        UUID ben = member();
+        Instant issued = Instant.parse("2026-11-10T20:00:00Z");
+        Share live1 = storedShare(ana, "all-1", issued, 7);
+        Share live2 = storedShare(ana, "all-2", issued, 14);
+        Share revoked = storedShare(ana, "all-3", issued, 7);
+        Share expired = storedShare(ana, "all-4", issued.minus(20, ChronoUnit.DAYS), 7);
+        Share bens = storedShare(ben, "all-1", issued, 7);
+        shares.revoke(ana, revoked.id(), issued.plusSeconds(10));
+        Instant now = issued.plusSeconds(3600);
+
+        assertThat(shares.revokeAllActive(ana, now)).isEqualTo(2);
+
+        assertThat(shares.share(live1.id()).orElseThrow().revokedAt()).isEqualTo(now);
+        assertThat(shares.share(live2.id()).orElseThrow().revokedAt()).isEqualTo(now);
+        assertThat(shares.share(revoked.id()).orElseThrow().revokedAt()).isEqualTo(issued.plusSeconds(10)); // first revocation stands
+        assertThat(shares.share(expired.id()).orElseThrow().revoked()).isFalse();
+        assertThat(shares.share(bens.id()).orElseThrow().revoked()).isFalse();
+        assertThat(shares.revokeAllActive(ana, now.plusSeconds(60))).isZero(); // idempotent
+        assertThat(shares.activeCount(ana, now)).isZero();
+        assertThat(shares.activeCount(ben, now)).isEqualTo(1);
+    }
+
+    @Test
+    void theFundHelpCountIsFrozenWithTheSnapshot() {
+        UUID ana = member();
+        Instant issued = Instant.parse("2026-11-10T20:00:00Z");
+        Snapshot snapshot = new Snapshot(UUID.randomUUID(), ana, 2, LocalDate.of(2026, 1, 1), 1, "STRONG", 0,
+                LocalDate.of(2026, 11, 10), 3);
+        Share share = new Share(UUID.randomUUID(), ana, snapshot.id(), ShareDetail.SUMMARY, "k1", "idem-fund", "SUMMARY:7", issued,
+                issued.plus(7, ChronoUnit.DAYS), null);
+
+        shares.insert(snapshot, share);
+
+        assertThat(shares.snapshot(snapshot.id()).orElseThrow().loansWithFundHelp()).isEqualTo(3);
+        assertThat(shares.snapshot(snapshot.id())).contains(snapshot);
+    }
+
+    @Test
+    void fundCoveredFactsAreStoredAndFoldedWithTheMarkersTheFoldKeeps() {
+        UUID ana = member();
+        UUID loan = UUID.randomUUID();
+        RecordIngest ingest = new RecordIngest(records, event -> {
+        });
+        LocalDate on = LocalDate.of(2026, 10, 10);
+
+        tx.executeWithoutResult(s -> {
+            ingest.ingest(RecordFact.instalmentFundCovered(ana, loan, 1, on));
+            ingest.ingest(RecordFact.instalmentPaid(ana, loan, 1, 0, on));
+            ingest.ingest(RecordFact.loanRepaid(ana, loan, 0, on));
+        });
+        IngestOutcome again = tx.execute(s -> ingest.ingest(RecordFact.instalmentFundCovered(ana, loan, 1, on)));
+        assertThat(again).isEqualTo(IngestOutcome.DUPLICATE);
+
+        RecordState state = records.find(ana).orElseThrow();
+        assertThat(state.loansCompletedWithFundHelp()).isEqualTo(1);
+        assertThat(state.lifetime().loansRepaidOnPlan()).isZero();
+        assertThat(state.lifetime().instalmentsOnTime()).isZero();
+        assertThat(new RecordQueries(records).record(ana).loans().completedWithFundHelp()).isEqualTo(1);
+        assertThat(new RecordQueries(records).history(ana, null, 10).items()).extracting(i -> i.kind())
+                .containsExactly("LOAN_REPAID", "INSTALMENT_PAID", "INSTALMENT_FUND_COVERED");
+    }
+
+    @Test
+    void aVoidedLoanIsRebuiltOutOfTheStateAndHiddenFromTheHistoryButItsFactsStayStored() {
+        UUID ana = member();
+        UUID loan = UUID.randomUUID();
+        List<Object> published = new ArrayList<>();
+        RecordIngest ingest = new RecordIngest(records, published::add);
+        for (int month = 1; month <= 6; month++) {
+            int m = month;
+            tx.executeWithoutResult(s -> ingest.ingest(RecordFact.savingsDeposit("void-dep-" + ana + m, ana, LocalDate.of(2026, m, 5))));
+        }
+        LocalDate on = LocalDate.of(2026, 10, 10);
+        tx.executeWithoutResult(s -> {
+            ingest.ingest(RecordFact.loanDisbursed("void-disb-" + ana, ana, loan, on));
+            ingest.ingest(RecordFact.instalmentPaid(ana, loan, 1, 0, on));
+            ingest.ingest(RecordFact.loanRepaid(ana, loan, 0, on));
+        });
+        assertThat(records.find(ana).orElseThrow().level()).isEqualTo(RecordLevel.STEADY);
+
+        IngestOutcome first = tx.execute(s -> ingest.ingest(RecordFact.loanVoided(ana, loan, on.plusDays(30))));
+        IngestOutcome second = tx.execute(s -> ingest.ingest(RecordFact.loanVoided(ana, loan, on.plusDays(31))));
+        assertThat(first).isEqualTo(IngestOutcome.RECORDED);
+        assertThat(second).isEqualTo(IngestOutcome.DUPLICATE);
+        tx.executeWithoutResult(s -> ingest.ingest(RecordFact.instalmentPaid(ana, loan, 2, 0, on)));
+
+        RecordState state = records.find(ana).orElseThrow();
+        assertThat(state.level()).isEqualTo(RecordLevel.BUILDING);
+        assertThat(state.loansDisbursed()).isZero();
+        assertThat(state.lifetime().loansRepaidOnPlan()).isZero();
+        assertThat(state.lifetime().instalmentsOnTime()).isZero();
+        assertThat(state.settled()).containsExactly("void:" + loan);
+        assertThat(published).last().isInstanceOfSatisfying(com.paypalseed.creditrecord.api.events.RecordLevelChanged.class,
+                e -> assertThat(e.cause()).isEqualTo("CORRECTION"));
+        assertThat(new RecordQueries(records).history(ana, null, 50).items()).extracting(i -> i.kind()).containsOnly("SAVINGS_DEPOSIT")
+                .hasSize(6);
+        assertThat(records.facts(ana)).extracting(RecordFact::kind).contains(RecordFact.Kind.LOAN_DISBURSED, RecordFact.Kind.LOAN_VOIDED)
+                .hasSize(11);
+        assertThat(records.facts(ana)).extracting(RecordFact::factKey).first().isEqualTo("void-dep-" + ana + "1");
+    }
+
+    @Test
+    void aFundCoveredFactMustNameItsLoanAndInstalment() {
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO creditrecord.record_fact (fact_key, member_id, kind, occurred_on) "
+                + "VALUES ('bad-fund', ?, 'INSTALMENT_FUND_COVERED', '2026-10-10')", member())).hasMessageContaining("fact_shape");
+    }
+
+    private static Share storedShare(UUID memberId, String key, Instant issued, int days) {
+        Snapshot snapshot = new Snapshot(UUID.randomUUID(), memberId, 1, LocalDate.of(2026, 1, 1), 0, "FAIR", 0, LocalDate.of(2026, 11, 10));
+        Share share = new Share(UUID.randomUUID(), memberId, snapshot.id(), ShareDetail.LEVEL, "k1", key, "LEVEL:" + days, issued,
+                issued.plus(days, ChronoUnit.DAYS), null);
+        shares.insert(snapshot, share);
+        return share;
+    }
 }

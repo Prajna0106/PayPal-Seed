@@ -59,6 +59,14 @@ class IdentityUnitTest {
         assertThat(ConsentType.parse("marketing")).isEmpty();
     }
 
+    @Test
+    void theFairCheckIsAConsentTypeWithItsOwnLine() {
+        assertThat(ConsentType.parse(" fair_check ")).contains(ConsentType.FAIR_CHECK);
+        ConsentLedger ledger = new ConsentLedger(List.of(open(ConsentType.INCOME_READ, "v1")));
+        assertThat(ledger.active(ConsentType.FAIR_CHECK)).isEmpty();
+        assertThat(ledger.stepForGrant(ConsentType.FAIR_CHECK, "v1")).isEqualTo(Step.APPEND);
+    }
+
     // login merging
 
     @Test

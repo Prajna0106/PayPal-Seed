@@ -54,6 +54,7 @@ public class RestPayPalGateway implements PayPalGateway {
     private static final DateTimeFormatter PAYPAL_COMPACT_OFFSET = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss[.SSS]xx");
     private volatile String accessToken;
     private volatile Instant tokenExpiresAt = Instant.EPOCH;
+    private boolean venmoPayouts;
 
     public RestPayPalGateway(ObjectMapper json,
                              @Value("${seed.paypal.base-url:https://api-m.sandbox.paypal.com}") String baseUrl,
@@ -73,6 +74,12 @@ public class RestPayPalGateway implements PayPalGateway {
         this.webhookId = webhookId;
         this.planId = planId;
         this.brandName = brandName;
+    }
+
+    /** Off by default: see {@link #createPayout}. */
+    @Value("${seed.paypal.payouts.venmo-enabled:false}")
+    public void setVenmoPayouts(boolean venmoPayouts) {
+        this.venmoPayouts = venmoPayouts;
     }
 
     @Override
@@ -245,8 +252,10 @@ public class RestPayPalGateway implements PayPalGateway {
                 .put("email_message", r.note() == null ? "You received a payment from " + brandName : r.note());
         ObjectNode item = body.putArray("items").addObject().put("recipient_type", r.recipientType().name());
         item.putObject("amount").put("value", Money.ofCents(r.amountCents()).toDecimalString()).put("currency", Money.CURRENCY);
+        // PayPal's sandbox refuses Venmo payouts, so unless they are switched on a Venmo member is paid into the PayPal
+        // account the same receiver address belongs to.
         item.put("receiver", r.receiver()).put("sender_item_id", r.senderItemId())
-                .put("recipient_wallet", r.wallet().name());
+                .put("recipient_wallet", venmoPayouts ? r.wallet().name() : "PAYPAL");
         if (r.note() != null) {
             item.put("note", r.note());
         }
@@ -427,7 +436,8 @@ public class RestPayPalGateway implements PayPalGateway {
     private Subscription subscription(JsonNode s) {
         return new Subscription(s.path("id").asText(), s.path("status").asText(), s.path("quantity").asLong(1),
                 instant(s.path("billing_info").path("next_billing_time")), link(s, "approve"),
-                Optional.ofNullable(s.path("custom_id").asText(null)));
+                Optional.ofNullable(s.path("custom_id").asText(null)),
+                instant(s.path("status_update_time")).or(() -> instant(s.path("update_time"))));
     }
 
     private static Plan plan(JsonNode p, String productId) {

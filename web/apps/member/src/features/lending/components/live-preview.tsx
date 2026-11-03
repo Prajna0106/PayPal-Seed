@@ -84,6 +84,11 @@ function PreviewBody({ state, onTry }: { state: PreviewState; onTry: LivePreview
   }
   const { preview } = state;
   const notice = previewNotice(preview);
+  const stale = preview.incomeStale ? (
+    <p className="text-sm text-muted-ink text-pretty">
+      We could not refresh your PayPal history just now, so this uses what we saw earlier.
+    </p>
+  ) : null;
   if (notice) {
     return (
       <>
@@ -98,6 +103,7 @@ function PreviewBody({ state, onTry }: { state: PreviewState; onTry: LivePreview
             Try {formatMoney(notice.suggestion.amountDollars * 100)} over {notice.suggestion.term} months
           </Button>
         ) : null}
+        {stale}
       </>
     );
   }
@@ -110,6 +116,7 @@ function PreviewBody({ state, onTry }: { state: PreviewState; onTry: LivePreview
         {preview.termMonths} payments, 0% interest and no fees: you repay {formatMoney(preview.totalRepayableCents)} in all.
         {preview.firstDueDate ? ` First payment ${formatBusinessDate(preview.firstDueDate)}.` : ""}
       </p>
+      {stale}
     </>
   );
 }

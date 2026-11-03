@@ -15,7 +15,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class InboxRepository {
 
-    public record InboxEvent(UUID id, String paypalEventId, String eventType, String payload, int attempts) {
+    /** {@code receivedAt} is when the webhook reached Seed; it orders reports that carry no time of their own. */
+    public record InboxEvent(UUID id, String paypalEventId, String eventType, String payload, int attempts, Instant receivedAt) {
+        public InboxEvent(UUID id, String paypalEventId, String eventType, String payload, int attempts) {
+            this(id, paypalEventId, eventType, payload, attempts, null);
+        }
     }
 
     private final DSLContext dsl;
@@ -45,7 +49,7 @@ public class InboxRepository {
                 .limit(limit)
                 .forUpdate().skipLocked()
                 .fetch(r -> new InboxEvent(r.getId(), r.getPaypalEventId(), r.getEventType(), r.getPayload().data(),
-                        r.getAttempts()));
+                        r.getAttempts(), r.getReceivedAt()));
     }
 
     public void done(UUID id, String status) {

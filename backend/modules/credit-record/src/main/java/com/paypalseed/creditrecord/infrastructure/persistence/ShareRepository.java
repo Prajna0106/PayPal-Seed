@@ -39,6 +39,7 @@ public class ShareRepository implements ShareStore {
                 .set(RECORD_SNAPSHOT.ON_TIME_BAND, s.onTimeBand())
                 .set(RECORD_SNAPSHOT.DEFAULTS_AT_CAPTURE, s.defaultsAtCapture())
                 .set(RECORD_SNAPSHOT.CAPTURED_ON, s.capturedOn())
+                .set(RECORD_SNAPSHOT.LOANS_FUND_HELP, s.loansWithFundHelp())
                 .execute();
         dsl.insertInto(RECORD_SHARE)
                 .set(RECORD_SHARE.ID, share.id())
@@ -69,7 +70,7 @@ public class ShareRepository implements ShareStore {
     public Optional<Snapshot> snapshot(UUID snapshotId) {
         return dsl.selectFrom(RECORD_SNAPSHOT).where(RECORD_SNAPSHOT.ID.eq(snapshotId))
                 .fetchOptional(r -> new Snapshot(r.getId(), r.getMemberId(), r.getLevel(), r.getRecordSince(),
-                        r.getLoansOnPlan(), r.getOnTimeBand(), r.getDefaultsAtCapture(), r.getCapturedOn()));
+                        r.getLoansOnPlan(), r.getOnTimeBand(), r.getDefaultsAtCapture(), r.getCapturedOn(), r.getLoansFundHelp()));
     }
 
     @Override
@@ -93,6 +94,14 @@ public class ShareRepository implements ShareStore {
                 .where(RECORD_SHARE.ID.eq(shareId).and(RECORD_SHARE.MEMBER_ID.eq(memberId)).and(RECORD_SHARE.REVOKED_AT.isNull()))
                 .execute();
         return true;
+    }
+
+    @Override
+    public int revokeAllActive(UUID memberId, Instant at) {
+        return dsl.update(RECORD_SHARE).set(RECORD_SHARE.REVOKED_AT, at)
+                .where(RECORD_SHARE.MEMBER_ID.eq(memberId).and(RECORD_SHARE.REVOKED_AT.isNull())
+                        .and(RECORD_SHARE.EXPIRES_AT.gt(at)))
+                .execute();
     }
 
     private static Share map(RecordShareRecord r) {
