@@ -16,14 +16,17 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Staff sign-in. The {@code /internal} routes take the service token, so only the desk's server and the first-admin
- * script can reach them. The {@code /api} routes are for signed-in staff.
+ * Staff sign-in and accounts. The {@code /internal} routes take the staff service token, which only the desk's server
+ * and the first-admin script hold: the member app's service token can't reach them. The {@code /api} routes are for
+ * signed-in staff, and the account changes on them for admins.
  */
 @RestController
 class StaffAuthController {
@@ -32,17 +35,22 @@ class StaffAuthController {
                        @NotBlank @Size(max = 80) String displayName,
                        @NotEmpty Set<@Pattern(regexp = "OFFICER|CHECKER|ADMIN") String> roles,
                        UUID memberId,
-                       @Size(min = 12, max = 128) String password) {
+                       @NotBlank @Size(min = 12, max = 128) String password) {
         @Override
         public String toString() {
             return "SaveAccount[roles=" + roles + ", personal data redacted]";
         }
     }
 
-    record SavedAccount(UUID staffId) {
+    record SavedAccount(UUID staffId, boolean created) {
     }
 
-    record PasswordLogin(@NotBlank @Size(max = 254) String email, @NotBlank @Size(max = 128) String password) {
+    record NewAccount(UUID staffId) {
+    }
+
+    /** {@code clientAddress} is the address the desk saw, so a guesser locks only their own address out. */
+    record PasswordLogin(@NotBlank @Size(max = 254) String email, @NotBlank @Size(max = 128) String password,
+                         @Size(max = 64) String clientAddress) {
         @Override
         public String toString() {
             return "PasswordLogin[personal data redacted]";
@@ -52,6 +60,7 @@ class StaffAuthController {
     record NewColleague(@NotBlank @Email @Size(max = 254) String email,
                         @NotBlank @Size(max = 80) String displayName,
                         @NotEmpty Set<@Pattern(regexp = "OFFICER|CHECKER|ADMIN") String> roles,
+                        UUID memberId,
                         @NotBlank @Size(min = 12, max = 128) String password) {
         @Override
         public String toString() {
@@ -67,7 +76,18 @@ class StaffAuthController {
         }
     }
 
-    record CurrentAccess(UUID staffId, Set<Role> roles) {
+    record AccessChange(@Size(min = 1) Set<@Pattern(regexp = "OFFICER|CHECKER|ADMIN") String> roles, Boolean active,
+                        UUID linkMemberId, Boolean unlinkMember) {
+    }
+
+    record NewPassword(@NotBlank @Size(min = 12, max = 128) String password) {
+        @Override
+        public String toString() {
+            return "NewPassword[redacted]";
+        }
+    }
+
+    record CurrentAccess(UUID staffId, Set<Role> roles, boolean passwordChangeRequired) {
     }
 
     private final StaffLoginService logins;
@@ -78,22 +98,39 @@ class StaffAuthController {
 
     @PostMapping("/internal/auth/staff/accounts")
     SavedAccount saveAccount(Actor actor, @Valid @RequestBody SaveAccount body) {
-        actor.requireAnyRole(Role.SERVICE);
-        return new SavedAccount(logins.saveAccount(body.email(), body.displayName(), body.roles(), body.memberId(), body.password()));
+        actor.requireAnyRole(Role.STAFF_ACCOUNTS);
+        StaffLoginService.SavedAccount saved = logins.saveAccount(body.email(), body.displayName(), body.roles(), body.memberId(),
+                body.password());
+        return new SavedAccount(saved.staffId(), saved.created());
     }
 
     @PostMapping("/internal/auth/staff/password/login")
     StaffLoggedIn passwordLogin(Actor actor, @Valid @RequestBody PasswordLogin body) {
-        actor.requireAnyRole(Role.SERVICE);
-        return logins.logInWithPassword(body.email(), body.password());
+        actor.requireAnyRole(Role.STAFF_ACCOUNTS);
+        return logins.logInWithPassword(body.email(), body.password(), body.clientAddress());
     }
 
-    /** Admins only: anyone else could create themselves a stronger account. */
     @PostMapping("/api/v1/desk/staff")
     @ResponseStatus(HttpStatus.CREATED)
-    SavedAccount createColleague(Actor actor, @Valid @RequestBody NewColleague body) {
+    NewAccount createColleague(Actor actor, @Valid @RequestBody NewColleague body) {
         actor.requireAnyRole(Role.ADMIN);
-        return new SavedAccount(logins.createColleague(actor.id(), body.email(), body.displayName(), body.roles(), body.password()));
+        return new NewAccount(logins.createColleague(actor.id(), body.email(), body.displayName(), body.roles(), body.memberId(),
+                body.password()));
+    }
+
+    @PatchMapping("/api/v1/desk/staff/{staffId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changeAccess(Actor actor, @PathVariable UUID staffId, @Valid @RequestBody AccessChange body) {
+        actor.requireAnyRole(Role.ADMIN);
+        logins.changeAccess(actor.id(), staffId, new StaffLoginService.AccessChange(body.roles(), body.active(),
+                body.linkMemberId(), Boolean.TRUE.equals(body.unlinkMember())));
+    }
+
+    @PostMapping("/api/v1/desk/staff/{staffId}/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resetPassword(Actor actor, @PathVariable UUID staffId, @Valid @RequestBody NewPassword body) {
+        actor.requireAnyRole(Role.ADMIN);
+        logins.resetPassword(actor.id(), staffId, body.password());
     }
 
     @PostMapping("/api/v1/auth/staff/password")
@@ -102,10 +139,17 @@ class StaffAuthController {
         logins.changePassword(staffId(actor), body.currentPassword(), body.newPassword());
     }
 
+    @PostMapping("/api/v1/auth/staff/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void logOut(Actor actor) {
+        logins.endSessions(staffId(actor));
+    }
+
     /** For the desk's server, before it uses the service token on someone's behalf: the backend can't see them then. */
     @GetMapping("/api/v1/auth/staff/me")
     CurrentAccess currentAccess(Actor actor) {
-        return new CurrentAccess(staffId(actor), actor.roles());
+        UUID id = staffId(actor);
+        return new CurrentAccess(id, actor.roles(), logins.passwordChangeRequired(id));
     }
 
     private static UUID staffId(Actor actor) {

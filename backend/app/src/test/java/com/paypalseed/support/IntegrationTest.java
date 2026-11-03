@@ -53,6 +53,8 @@ import org.springframework.test.web.servlet.MockMvc;
 public abstract class IntegrationTest {
 
     public static final String SERVICE_TOKEN = "Bearer test-internal-token-0123456789";
+    /** The desk's own token for staff logins and accounts (ADR 0023). */
+    public static final String STAFF_SERVICE_TOKEN = "Bearer test-staff-service-token-0123456789";
 
     @TestConfiguration(proxyBeanMethods = false)
     public static class Fakes {

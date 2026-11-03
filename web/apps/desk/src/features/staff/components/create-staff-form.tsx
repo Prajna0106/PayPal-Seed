@@ -6,12 +6,7 @@ import { Label } from "@paypal-seed/ui/components/label";
 import { Loader2 } from "lucide-react";
 import { useActionState } from "react";
 import { createStaff, type CreateStaffState } from "../actions";
-
-const ROLES = [
-  { value: "OFFICER", label: "Officer", hint: "Makes the first decision" },
-  { value: "CHECKER", label: "Checker", hint: "Gives the second approval" },
-  { value: "ADMIN", label: "Admin", hint: "Runs operations and adds staff" },
-];
+import { ROLES } from "./roles";
 
 export function CreateStaffForm() {
   const [state, action, pending] = useActionState<CreateStaffState, FormData>(createStaff, {});
@@ -38,9 +33,14 @@ export function CreateStaffForm() {
         ))}
       </fieldset>
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="memberId">Their own member ID (optional)</Label>
+        <Input id="memberId" name="memberId" maxLength={36} autoComplete="off" spellCheck={false} className="h-10 font-mono" />
+        <p className="text-xs text-muted-ink">If they also use Seed as a member, so they can never decide their own case.</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Starting password (12 or more characters)</Label>
         <Input id="password" name="password" type="password" required minLength={12} maxLength={128} autoComplete="new-password" className="h-10" />
-        <p className="text-xs text-muted-ink">Tell them privately, and ask them to change it under Your login.</p>
+        <p className="text-xs text-muted-ink">Tell them privately. They must choose their own the first time they log in.</p>
       </div>
       <Button type="submit" className="self-start" disabled={pending}>
         {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}

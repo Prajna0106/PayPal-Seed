@@ -4,7 +4,9 @@ const LIFETIME_SECONDS = 60;
 const FIRST_KEY = /^([A-Za-z0-9._-]{1,32}):([^,]{32,})/;
 const encoder = new TextEncoder();
 
-export type ActorClaims = { type: "member"; id: string } | { type: "staff"; id: string; roles: readonly StaffRole[] };
+export type ActorClaims =
+  | { type: "member"; id: string }
+  | { type: "staff"; id: string; roles: readonly StaffRole[]; authTime?: number };
 
 function encode(value: unknown): string {
   return bytesToBase64Url(encoder.encode(JSON.stringify(value)));
@@ -35,6 +37,7 @@ export async function signActorToken(secrets: string, actor: ActorClaims): Promi
     sub: actor.id,
     act: actor.type,
     ...(actor.type === "staff" ? { roles: actor.roles } : {}),
+    ...(actor.type === "staff" && actor.authTime !== undefined ? { auth_time: actor.authTime } : {}),
     iat: now,
     exp: now + LIFETIME_SECONDS,
     jti: crypto.randomUUID(),

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PayPal Seed API",
-    "description": "Postman collection for PayPal Seed: savings (F1), microloans (F2), the fair loan check (F3), the repayment schedule (F4), the credit record (F6), identity, the PayPal catalog bootstrap, the desk queues, the reserve, fraud flags and the member home call.\n\nRun the folders in order. Ids (goalId, assessmentId, applicationId, loanId, shareId, flagId, coverRequestId) are saved to collection variables.\n\nAuthentication: against a dev, test or demo backend the requests send X-Seed-Member-Id, X-Seed-Staff-Id and X-Seed-Staff-Roles. Against a deployed backend set the variables actorToken (member) and staffToken (staff): the pre-request script then sends Authorization: Bearer instead of the X-Seed headers. /internal/** routes always use internalToken (SEED_INTERNAL_TOKEN).",
+    "description": "Postman collection for PayPal Seed: savings (F1), microloans (F2), the fair loan check (F3), the repayment schedule (F4), the credit record (F6), identity, the PayPal catalog bootstrap, the desk queues, the reserve, fraud flags and the member home call.\n\nRun the folders in order. Ids (goalId, assessmentId, applicationId, loanId, shareId, flagId, coverRequestId) are saved to collection variables.\n\nAuthentication: against a dev, test or demo backend the requests send X-Seed-Member-Id, X-Seed-Staff-Id and X-Seed-Staff-Roles. Against a deployed backend set the variables actorToken (member) and staffToken (staff): the pre-request script then sends Authorization: Bearer instead of the X-Seed headers. /internal/** routes use internalToken (SEED_INTERNAL_TOKEN), except the staff login and account routes, which use staffServiceToken (SEED_STAFF_SERVICE_TOKEN, ADR 0023).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -55,6 +55,16 @@
       "key": "internalToken",
       "value": "local-dev-internal-token",
       "description": "SEED_INTERNAL_TOKEN for /internal/**"
+    },
+    {
+      "key": "staffServiceToken",
+      "value": "local-dev-staff-service-token",
+      "description": "SEED_STAFF_SERVICE_TOKEN for /internal/auth/staff/** and /internal/staff/**"
+    },
+    {
+      "key": "staffId",
+      "value": "",
+      "description": "A colleague the admin requests change"
     },
     {
       "key": "goalId",
@@ -978,7 +988,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{internalToken}}",
+                "value": "Bearer {{staffServiceToken}}",
                 "description": "SEED_INTERNAL_TOKEN (service role)"
               },
               {
@@ -2143,7 +2153,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{internalToken}}"
+                "value": "Bearer {{staffServiceToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2175,7 +2185,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{internalToken}}"
+                "value": "Bearer {{staffServiceToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2197,7 +2207,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"at least twelve characters\"\n}"
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"at least twelve characters\",\n  \"clientAddress\": \"203.0.113.10\"\n}"
             }
           }
         },
@@ -2287,6 +2297,98 @@
                 "auth",
                 "staff",
                 "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change a colleague's access (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{staffToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/desk/staff/{{staffId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "desk",
+                "staff",
+                "{{staffId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"OFFICER\",\n    \"CHECKER\"\n  ],\n  \"active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset a colleague's password (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{staffToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/desk/staff/{{staffId}}/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "desk",
+                "staff",
+                "{{staffId}}",
+                "password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"a new starting password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Log out everywhere",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{staffToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/staff/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "staff",
+                "logout"
               ]
             }
           }

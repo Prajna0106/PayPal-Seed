@@ -24,7 +24,9 @@ import java.util.regex.Pattern;
  * <p>The algorithm is fixed to HS256 here, never read from the token: a header that says anything
  * else (none, HS384/512, RS*, ES*) is refused before any key is touched, which closes the
  * alg-none and key-confusion attacks. The header may carry only {@code alg}, {@code typ} and
- * {@code kid}. Claims are looked at only after the signature checked out.
+ * {@code kid}. Claims are trusted only after the signature checked out. Staff tokens verify only against the desk's
+ * keys and member tokens only against the member app's, so neither app can sign the other's kind of token. A staff
+ * token may carry {@code auth_time}, when its desk session began, so a session ended on the backend stays ended.
  */
 public final class ActorTokenVerifier {
 
@@ -40,30 +42,46 @@ public final class ActorTokenVerifier {
             Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
     /** Roles a staff token may never carry: they belong to other credentials. */
     private static final Set<Actor.Role> NOT_FOR_STAFF_TOKENS =
-            EnumSet.of(Actor.Role.MEMBER, Actor.Role.SERVICE, Actor.Role.AGENT_READ);
+            EnumSet.of(Actor.Role.MEMBER, Actor.Role.SERVICE, Actor.Role.STAFF_ACCOUNTS, Actor.Role.AGENT_READ);
+
+    /** What a token proves. {@code authTime} is when the desk session behind a staff token began, if it says. */
+    public record Verified(Actor actor, Instant authTime) {
+    }
 
     private final ActorTokenKeys keys;
+    private final ActorTokenKeys staffKeys;
     private final Duration clockSkew;
     private final Clock clock;
 
-    /** @param clock wall clock: token lifetimes are real time, not the business date */
+    /** One key set for both kinds of token, as in dev and tests. */
     public ActorTokenVerifier(ActorTokenKeys keys, Duration clockSkew, Clock clock) {
+        this(keys, keys, clockSkew, clock);
+    }
+
+    /** @param clock wall clock: token lifetimes are real time, not the business date */
+    public ActorTokenVerifier(ActorTokenKeys keys, ActorTokenKeys staffKeys, Duration clockSkew, Clock clock) {
         if (clockSkew.isNegative() || clockSkew.compareTo(ActorTokenSettings.MAX_SKEW) > 0) {
             throw new IllegalArgumentException("clock skew must be between 0 and 30 seconds");
         }
         this.keys = keys;
+        this.staffKeys = staffKeys;
         this.clockSkew = clockSkew;
         this.clock = clock;
     }
 
     /** False when no secret is configured (dev without tokens): every token is then refused. */
     public boolean enabled() {
-        return !keys.isEmpty();
+        return !keys.isEmpty() || !staffKeys.isEmpty();
     }
 
     /** Returns the actor the token proves, or throws {@link ActorTokenException} naming the failed check. */
     public Actor verify(String token) {
-        if (keys.isEmpty()) {
+        return verifyWithSession(token).actor();
+    }
+
+    /** Like {@link #verify}, and also says when the desk session behind a staff token began. */
+    public Verified verifyWithSession(String token) {
+        if (!enabled()) {
             throw new ActorTokenException(ActorTokenFailure.NOT_CONFIGURED);
         }
         if (token == null || token.isEmpty() || token.length() > MAX_TOKEN_CHARS) {
@@ -74,10 +92,14 @@ public final class ActorTokenVerifier {
             throw new ActorTokenException(ActorTokenFailure.MALFORMED);
         }
         String kid = checkHeader(parts[0]);
-        byte[] secret = secretFor(kid);
         SignedJWT jwt = parse(token);
+        // The unverified actor type only picks the key set; the signature check below must still pass with it.
+        boolean staff = "staff".equals(claims(jwt).getClaim("act"));
+        byte[] secret = secretFor(staff ? staffKeys : keys, kid);
         verifySignature(jwt, secret);
-        return actorFrom(claims(jwt));
+        JWTClaimsSet claims = claims(jwt);
+        Actor actor = actorFrom(claims);
+        return new Verified(actor, staff ? authTime(claims) : null);
     }
 
     /** Returns the {@code kid} header (null when absent) after the fixed-algorithm checks. */
@@ -102,7 +124,10 @@ public final class ActorTokenVerifier {
     }
 
     /** A kid must be known; no kid is accepted only while a single key is configured (no rotation). */
-    private byte[] secretFor(String kid) {
+    private static byte[] secretFor(ActorTokenKeys keys, String kid) {
+        if (keys.isEmpty()) {
+            throw new ActorTokenException(ActorTokenFailure.NOT_CONFIGURED);
+        }
         byte[] secret = kid == null ? keys.soleSecret() : keys.secret(kid);
         if (secret == null) {
             throw new ActorTokenException(ActorTokenFailure.UNKNOWN_KEY);
@@ -159,6 +184,22 @@ public final class ActorTokenVerifier {
             return Actor.member(subject);
         }
         return new Actor(Actor.Type.STAFF, subject, staffRoles(claims.getClaim("roles")));
+    }
+
+    /** Optional; when present it must be a time in seconds that has already happened. */
+    private Instant authTime(JWTClaimsSet claims) {
+        Object value = claims.getClaim("auth_time");
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof Number seconds)) {
+            throw new ActorTokenException(ActorTokenFailure.MALFORMED);
+        }
+        Instant at = Instant.ofEpochSecond(seconds.longValue());
+        if (at.isAfter(clock.instant().plus(clockSkew))) {
+            throw new ActorTokenException(ActorTokenFailure.NOT_YET_VALID);
+        }
+        return at;
     }
 
     private static UUID subject(String sub) {

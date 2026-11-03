@@ -225,6 +225,9 @@ class IdentityIT extends IntegrationTest {
         send(asMember(post("/internal/members/login"), someone), body).andExpect(status().isForbidden());
         send(asStaff(post("/internal/members/login"), someone, "ADMIN"), body).andExpect(status().isForbidden());
         send(asStaff(put("/internal/staff/{id}", someone), someone, "ADMIN"), staffBody).andExpect(status().isForbidden());
+        // the member app's service token can't hand out staff roles
+        send(put("/internal/staff/{id}", someone).header("Authorization", SERVICE_TOKEN), staffBody)
+                .andExpect(status().isForbidden());
         assertThat(identity.staff(someone)).isEmpty();
     }
 
@@ -441,14 +444,14 @@ class IdentityIT extends IntegrationTest {
         UUID id = UUID.randomUUID();
         String body = "{\"displayName\":\"Marta Lopez\",\"email\":\"marta@example.org\",\"roles\":[\"officer\",\"CHECKER\"]}";
 
-        send(put("/internal/staff/{id}", id).header("Authorization", SERVICE_TOKEN), body).andExpect(status().isOk())
+        send(put("/internal/staff/{id}", id).header("Authorization", STAFF_SERVICE_TOKEN), body).andExpect(status().isOk())
                 .andExpect(jsonPath("$.staffId").value(id.toString()))
                 .andExpect(jsonPath("$.displayName").value("Marta Lopez"))
                 .andExpect(jsonPath("$.roles.length()").value(2))
                 .andExpect(jsonPath("$.active").value(true));
         // the same call again changes nothing; a different body replaces the record
-        send(put("/internal/staff/{id}", id).header("Authorization", SERVICE_TOKEN), body).andExpect(status().isOk());
-        send(put("/internal/staff/{id}", id).header("Authorization", SERVICE_TOKEN),
+        send(put("/internal/staff/{id}", id).header("Authorization", STAFF_SERVICE_TOKEN), body).andExpect(status().isOk());
+        send(put("/internal/staff/{id}", id).header("Authorization", STAFF_SERVICE_TOKEN),
                 "{\"displayName\":\"Marta L. Lopez\",\"roles\":[\"ADMIN\"],\"active\":true}").andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Marta L. Lopez"))
                 .andExpect(jsonPath("$.roles[0]").value("ADMIN"))
@@ -464,7 +467,7 @@ class IdentityIT extends IntegrationTest {
     @Test
     void inactiveStaffAreHiddenFromTheListButKeepTheirNames() throws Exception {
         UUID id = UUID.randomUUID();
-        send(put("/internal/staff/{id}", id).header("Authorization", SERVICE_TOKEN),
+        send(put("/internal/staff/{id}", id).header("Authorization", STAFF_SERVICE_TOKEN),
                 "{\"displayName\":\"Left Company\",\"roles\":[\"OFFICER\"],\"active\":false}").andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(false));
 
@@ -478,7 +481,7 @@ class IdentityIT extends IntegrationTest {
     @Test
     void staffInputIsValidated() throws Exception {
         UUID id = UUID.randomUUID();
-        String auth = SERVICE_TOKEN;
+        String auth = STAFF_SERVICE_TOKEN;
 
         send(put("/internal/staff/{id}", id).header("Authorization", auth), "{\"displayName\":\"X\",\"roles\":[]}")
                 .andExpect(status().isBadRequest());

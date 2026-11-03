@@ -27,6 +27,15 @@ public final class IdentityErrors {
     public static final ErrorCode STAFF_EMAIL_TAKEN = ErrorCode.conflict("staff-email-taken", "Someone already has this email");
     public static final ErrorCode CURRENT_PASSWORD_WRONG =
             ErrorCode.validation("current-password-wrong", "That isn't your current password");
+    public static final ErrorCode PASSWORD_UNCHANGED =
+            ErrorCode.validation("password-unchanged", "Choose a password different from your current one");
+    public static final ErrorCode STAFF_NOT_FOUND = ErrorCode.notFound("staff-not-found", "No such staff member");
+    public static final ErrorCode STAFF_SELF_LOCKOUT =
+            ErrorCode.validation("staff-self-lockout", "You can't remove your own admin role or suspend yourself");
+    public static final ErrorCode STAFF_LAST_ADMIN =
+            ErrorCode.conflict("staff-last-admin", "The desk needs at least one active admin");
+    public static final ErrorCode STAFF_MEMBER_LINKED =
+            ErrorCode.conflict("member-already-linked", "Another staff login is already linked to this member account");
 
     private IdentityErrors() {
     }

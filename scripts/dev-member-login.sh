@@ -36,6 +36,7 @@ GRADLE=./gradlew
 case "$OSTYPE" in msys*|cygwin*) GRADLE=./gradlew.bat ;; esac
 
 export SEED_ACTOR_TOKEN_SECRETS="local:$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
+export SEED_STAFF_ACTOR_TOKEN_SECRETS="desk:$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
 
 trap 'kill 0' EXIT
 (cd "$ROOT/backend" && "$GRADLE" :app:bootRun --console=plain) &

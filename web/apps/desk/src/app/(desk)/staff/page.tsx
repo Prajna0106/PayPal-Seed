@@ -1,7 +1,8 @@
 import { EmptyState } from "@paypal-seed/ui/brand/empty-state";
 import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { Lock } from "lucide-react";
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
+import Link from "next/link";
 import { CreateStaffForm } from "@/features/staff/components/create-staff-form";
 import { staffDirectory } from "@/features/staff/server/queries";
 import { hasRole, requireSession } from "@/server/session";
@@ -26,14 +27,19 @@ export default async function StaffPage() {
         <CreateStaffForm />
         <ul className="flex flex-col divide-y divide-hairline self-start rounded-2xl border border-hairline bg-surface">
           {staff.map((person) => (
-            <li key={person.staffId} className="flex flex-col gap-0.5 p-4">
-              <span className="font-medium text-ink">
-                {person.displayName}
-                {person.active ? null : <span className="text-sm font-normal text-muted-ink"> · Suspended</span>}
-              </span>
-              <span className="text-sm text-muted-ink">
-                {person.email ?? "No email"} · {person.roles.join(", ")}
-              </span>
+            <li key={person.staffId}>
+              <Link href={`/staff/${person.staffId}` as Route}
+                className="flex min-h-11 flex-col gap-0.5 p-4 hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
+                <span className="font-medium text-ink">
+                  {person.displayName}
+                  {person.active ? null : <span className="text-sm font-normal text-muted-ink"> · Suspended</span>}
+                  {person.passwordChangeRequired ? <span className="text-sm font-normal text-muted-ink"> · Hasn&apos;t chosen a password yet</span> : null}
+                </span>
+                <span className="text-sm text-muted-ink">
+                  {person.email ?? "No email"} · {person.roles.join(", ")}
+                  {person.canLogIn ? "" : " · No password (demo or directory only)"}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>

@@ -79,6 +79,12 @@ public final class ActorTokenKeys {
         return secret == null ? null : secret.clone();
     }
 
+    /** Whether any secret here is also one of {@code other}'s: member and staff tokens must never share a key. */
+    boolean sharesASecretWith(ActorTokenKeys other) {
+        return secrets.values().stream().anyMatch(mine -> other.secrets.values().stream()
+                .anyMatch(theirs -> java.security.MessageDigest.isEqual(mine, theirs)));
+    }
+
     /** The only key, when rotation is not in progress; null otherwise. */
     byte[] soleSecret() {
         return secrets.size() == 1 ? secrets.values().iterator().next().clone() : null;
