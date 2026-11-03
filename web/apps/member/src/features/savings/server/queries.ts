@@ -4,7 +4,7 @@ import { ApiProblem, type Schemas, unwrap, unwrapOrNull } from "@paypal-seed/api
 import { notFound, unstable_rethrow } from "next/navigation";
 import { memberApi } from "@/server/api";
 import { requireSession } from "@/server/session";
-import { type Goal, toGoal, toWithdrawal, type Wallet, type Withdrawal } from "../model";
+import { type Deposit, type Goal, toDeposit, toGoal, toWithdrawal, type Wallet, type Withdrawal } from "../model";
 
 type HomeView = Schemas["HomeView"];
 
@@ -20,12 +20,41 @@ export async function readHome(): Promise<HomeView | null> {
   }
 }
 
+/** Each goal's next monthly deposit date as PayPal last reported it (home summary); goals without one are absent. */
+function nextDepositDates(home: HomeView | null): Record<string, string> {
+  const dates: Record<string, string> = {};
+  for (const card of home?.savings?.goals ?? []) {
+    if (card.nextDepositDate) {
+      dates[card.goalId] = card.nextDepositDate;
+    }
+  }
+  return dates;
+}
+
+/**
+ * The deposits that reached one goal, newest first, or `null` when they cannot be read: the pages that show them draw
+ * what they can without them.
+ */
+export async function getGoalDeposits(goalId: string, limit = 50): Promise<Deposit[] | null> {
+  try {
+    const api = await memberApi();
+    const deposits = await unwrap(api.GET("/api/v1/savings/goals/{goalId}/deposits", { params: { path: { goalId }, query: { limit } } }));
+    return deposits.map(toDeposit);
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("[savings] deposits unavailable", error);
+    return null;
+  }
+}
+
 export interface SavingsOverview {
   goals: Goal[];
   /** The member's saving streak (one streak across all goals), when the summary could be read. */
   streakMonths: number | null;
   /** Saved across all goals, as the home summary reports it. */
   totalSavedCents: number | null;
+  /** By goal id; see `nextDepositDates`. */
+  nextDeposits: Record<string, string>;
 }
 
 /** Every goal, oldest first, with the member's streak, read in parallel. */
@@ -39,6 +68,7 @@ export async function getSavingsOverview(): Promise<SavingsOverview> {
     goals: goals.map(toGoal),
     streakMonths: home?.savings?.currentStreakMonths ?? null,
     totalSavedCents: home?.savings?.totalSaved.cents ?? null,
+    nextDeposits: nextDepositDates(home),
   };
 }
 
@@ -46,6 +76,9 @@ export interface GoalDetail {
   goal: Goal;
   withdrawals: Withdrawal[];
   streakMonths: number | null;
+  /** `null` when the deposit list could not be read. */
+  deposits: Deposit[] | null;
+  nextDepositDate: string | null;
 }
 
 /** One goal with its withdrawals. Another member's goal and a missing goal both answer 404. */
@@ -53,15 +86,18 @@ export async function getGoalDetail(goalId: string): Promise<GoalDetail> {
   const api = await memberApi();
   const path = { params: { path: { goalId } } };
   try {
-    const [goal, withdrawals, home] = await Promise.all([
+    const [goal, withdrawals, home, deposits] = await Promise.all([
       unwrap(api.GET("/api/v1/savings/goals/{goalId}", path)),
       unwrap(api.GET("/api/v1/savings/goals/{goalId}/withdrawals", path)),
       readHome(),
+      getGoalDeposits(goalId, 10),
     ]);
     return {
       goal: toGoal(goal),
       withdrawals: withdrawals.map(toWithdrawal),
       streakMonths: home?.savings?.currentStreakMonths ?? null,
+      deposits,
+      nextDepositDate: nextDepositDates(home)[goalId] ?? null,
     };
   } catch (error) {
     unstable_rethrow(error);

@@ -1,5 +1,6 @@
 package com.paypalseed.reserve.api;
 
+import com.paypalseed.reserve.api.dto.ReserveDtos.CoverReturn;
 import com.paypalseed.reserve.api.dto.ReserveDtos.DonationIntent;
 import com.paypalseed.reserve.api.dto.ReserveDtos.DonationReceipt;
 import com.paypalseed.reserve.api.dto.ReserveDtos.ReserveSummary;
@@ -29,6 +30,15 @@ public interface ReserveFacade {
 
     /** Remembers the donor's choices and returns the custom id for the PayPal order. Idempotent on the key. */
     DonationIntent createDonationIntent(String idempotencyKey, boolean anonymous, String displayName);
+
+    /**
+     * Gives back to the fund the part of an approved cover that the loan could not take, in the caller's transaction
+     * (MANDATORY): the cover credited the loan's receivable in the ledger for more than the schedule owed because the
+     * member paid in the same moment. Posts {@code debit LOANS_RECEIVABLE, credit LOSS_RESERVE}, puts the cents back in
+     * the fund and publishes {@code CoverReturned}. Idempotent on {@code approvalRef}: the same reference again returns
+     * the first result; another amount is {@code idempotency-key-reused}. {@code reasonCode} is an upper-case name.
+     */
+    CoverReturn returnUnusedCover(String approvalRef, long amountCents, String reasonCode);
 
     ReserveSummary summary();
 }

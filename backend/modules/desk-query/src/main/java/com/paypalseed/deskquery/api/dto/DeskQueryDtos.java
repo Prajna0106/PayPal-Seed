@@ -21,7 +21,9 @@ public final class DeskQueryDtos {
         LOANS,
         HARDSHIP,
         APPROVALS,
-        SAVINGS
+        SAVINGS,
+        /** The member Home activity list; replaying the publication log refills what the events carry. */
+        ACTIVITY
     }
 
     /** A row count. {@code exact} is false once the table is too large to count and the value is the planner's estimate. */
@@ -35,9 +37,15 @@ public final class DeskQueryDtos {
     public record Page<T>(List<T> rows, String nextCursor, Total total, Instant asOf) {
     }
 
+    /**
+     * @param payoutIssue {@code RETURNED_AFTER_DISBURSEMENT} on an {@code APPROVED} application whose loan was voided
+     *                    because PayPal took the payout back: it needs to be paid again (after the recipient is fixed) or
+     *                    rejected. Null otherwise.
+     */
     public record ApplicationRow(UUID applicationId, UUID memberRef, String status, long requestedAmountCents, int termMonths,
                                  int savingStreakMonths, String assessmentOutcome, Instant submittedAt, long ageDays,
-                                 Instant slaDueAt, String slaState, boolean slaBreached, String assignedOfficerRef) {
+                                 Instant slaDueAt, String slaState, boolean slaBreached, String assignedOfficerRef,
+                                 String payoutIssue) {
     }
 
     public record AssessmentRow(UUID assessmentId, UUID memberRef, UUID applicationId, boolean recommended,
@@ -80,5 +88,14 @@ public final class DeskQueryDtos {
     }
 
     public record Workload(Instant asOf, List<WorkloadItem> items, List<RoleWorkload> byRole) {
+    }
+
+    /**
+     * One thing that happened in a member's Seed account. {@code kind} is one of DEPOSIT, WITHDRAWAL, WITHDRAWAL_RETURNED,
+     * LOAN_DISBURSED, LOAN_PAYMENT, LOAN_PAYMENT_REVERSED, COVER_APPLIED (the safety fund paid on the loan) and LOAN_VOIDED
+     * (the payout came back). {@code occurredAt} is the source's instant, or the start of the business day for a source that
+     * gives only a date. {@code goalId} is set for savings kinds, {@code loanId} for loan kinds.
+     */
+    public record MemberActivityItem(String kind, long amountCents, Instant occurredAt, UUID goalId, UUID loanId) {
     }
 }

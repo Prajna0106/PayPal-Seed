@@ -75,6 +75,11 @@ export async function SchedulePreview({ amountCents, termMonths, dueDay }: { amo
           </tr>
         </tfoot>
       </table>
+      {preview.incomeStale ? (
+        <p className="text-sm text-muted-ink text-pretty">
+          We could not refresh your PayPal history just now, so this uses what we saw earlier.
+        </p>
+      ) : null}
       <p className="text-sm text-muted-ink text-pretty">
         Dates are counted from today. If the money is sent on a later day, they move with it. Payments are whole dollars, so one or two
         may differ by $1.

@@ -116,7 +116,8 @@
             "TERMS",
             "PRIVACY",
             "INCOME_READ",
-            "RECORD_SHARING"
+            "RECORD_SHARING",
+            "FAIR_CHECK"
           ]
         },
         "version": {
@@ -157,7 +158,8 @@
             "TERMS",
             "PRIVACY",
             "INCOME_READ",
-            "RECORD_SHARING"
+            "RECORD_SHARING",
+            "FAIR_CHECK"
           ]
         },
         "version": {
@@ -986,6 +988,204 @@
         "loanId",
         "memberId",
         "reason",
+        "businessDate"
+      ]
+    },
+    "LoanRepaid": {
+      "description": "Published by lending inside the transaction that settled a loan in full. reserveCoveredCents is how much of the loan the loss reserve paid (repayment source RESERVE); 0 when the member paid it all. Additive: a consumer that ignores it behaves as before.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "instalmentsOnPlan": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "instalmentsMissed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overpaidCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reserveCoveredCents": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "eventId",
+        "loanId",
+        "memberId",
+        "businessDate",
+        "instalmentsOnPlan",
+        "instalmentsMissed",
+        "overpaidCents",
+        "reserveCoveredCents"
+      ]
+    },
+    "LoanVoided": {
+      "description": "Published by lending inside the transaction that voided a loan because the payout that funded it was taken back by PayPal after the loan was registered (ADR 0024). The loan is closed with status DISBURSEMENT_RETURNED, owes nothing and plans nothing; the disbursement was reversed in the ledger by a new entry; the application is APPROVED again. A consumer that kept state for the loan from ScheduleGenerated drops it, and it must not count as a loan, a payment history or a default. refundDueCents is what the member had paid in before the return (lending asks PayPal to refund it after the commit); reserveCoverCents is what the loss reserve had paid on the loan, returned to the fund in the same ledger entry.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payoutReference": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "principalCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "refundDueCents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reserveCoverCents": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "eventId",
+        "loanId",
+        "memberId",
+        "businessDate",
+        "applicationId",
+        "payoutReference",
+        "reason",
+        "principalCents",
+        "refundDueCents",
+        "reserveCoverCents"
+      ]
+    },
+    "VoidedLoanPaymentHeld": {
+      "description": "Money from the member reached a loan that was already void (an autopay charge or a checkout in flight when the payout came back). It is not a repayment: all of it is held for the member and a refund is asked of PayPal. It must not count on a credit record.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "transactionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "heldCents": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "eventId",
+        "loanId",
+        "memberId",
+        "businessDate",
+        "transactionId",
+        "amountCents",
+        "heldCents"
+      ]
+    },
+    "CoverReturned": {
+      "description": "Published by reserve inside the transaction that put money back in the fund after a cover paid it out (ADR 0024). UNUSED_COVER: a cover credited a loan's receivable for more than its schedule took because the member paid in the same moment; reserve posted debit LOANS_RECEIVABLE, credit LOSS_RESERVE (journalEntryId). LOAN_VOIDED: the loan was voided and lending's own ledger entry carried the cover back (journalEntryId is null). returnRef is the idempotency key. No cash moved.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "returnRef": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "UNUSED_COVER",
+            "LOAN_VOIDED"
+          ]
+        },
+        "loanId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "journalEntryId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "eventId",
+        "returnRef",
+        "kind",
+        "loanId",
+        "amountCents",
+        "reasonCode",
         "businessDate"
       ]
     },

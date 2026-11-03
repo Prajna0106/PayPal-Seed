@@ -1,0 +1,22 @@
+$kind: http-example
+name: '201 Created'
+order: 1000
+request:
+  url: '{{baseUrl}}/internal/loans/disbursed'
+  method: POST
+response:
+  statusCode: 201
+  statusText: 'Created'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "loanId": "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01",
+        "memberId": "0197f3a2-0000-7b3a-9d10-3c4f1a2b9e00",
+        "principalCents": 120000,
+        "outstandingCents": 120000,
+        "status": "ACTIVE"
+      }

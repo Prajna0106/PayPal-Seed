@@ -34,7 +34,7 @@ export function loginFailureReason(error: unknown): string {
   return BAD_IDENTITY_CODES.has(error.code) ? "identity" : "refused";
 }
 
-const tokenSchema = z.object({ access_token: z.string().min(1) });
+const tokenSchema = z.object({ access_token: z.string().min(1), scope: z.string().optional().catch(undefined) });
 const userSchema = z.object({
   payer_id: z.string().min(1).max(64),
   email: z.email().max(254).optional().catch(undefined),
@@ -94,6 +94,8 @@ async function exchangeCode(code: string, codeVerifier: string, clientId: string
     console.warn("[paypal-login] token response had no access token");
     throw new PayPalLoginError("unavailable");
   }
+  // Only the scopes the app's Log in with PayPal settings allow are granted; a missing one shows up here as a 401 on userinfo.
+  console.info(`[paypal-login] granted scopes: ${token.data.scope ?? "none reported"}`);
   return token.data.access_token;
 }
 

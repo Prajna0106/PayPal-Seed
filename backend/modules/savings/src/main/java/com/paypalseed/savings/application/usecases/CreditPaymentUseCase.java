@@ -4,6 +4,7 @@ import com.paypalseed.platform.kernel.Money;
 import com.paypalseed.savings.application.ports.CreditedPayments;
 import com.paypalseed.savings.application.ports.CreditedPayments.Source;
 import com.paypalseed.savings.application.ports.SavingsGoalRepository;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -16,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
  * yet (the member has not approved the subscription) throws, which rolls the claim back and leaves the event
  * to be delivered again. A payment for a goal Seed has no record of can never succeed on a retry, so it is logged
  * and dropped: the event completes instead of being redelivered for ever.
+ *
+ * <p>{@link #creditEvent} is the entry point of the event listener, and it tells the two apart (ADR 0027): a webhook can
+ * beat the commit of the goal it names, so a missing goal fails the listener, and the event is delivered again, until the
+ * event is older than the window of {@link GoalVisibility}; after that the goal is taken as never going to exist.
  */
 public class CreditPaymentUseCase {
 
@@ -24,11 +29,32 @@ public class CreditPaymentUseCase {
     private final CreditedPayments credited;
     private final RecordDepositUseCase deposits;
     private final SavingsGoalRepository goals;
+    private final GoalVisibility visibility;
 
     public CreditPaymentUseCase(CreditedPayments credited, RecordDepositUseCase deposits, SavingsGoalRepository goals) {
+        this(credited, deposits, goals, GoalVisibility.never());
+    }
+
+    public CreditPaymentUseCase(CreditedPayments credited, RecordDepositUseCase deposits, SavingsGoalRepository goals,
+                                GoalVisibility visibility) {
         this.credited = Objects.requireNonNull(credited);
         this.deposits = Objects.requireNonNull(deposits);
         this.goals = Objects.requireNonNull(goals);
+        this.visibility = Objects.requireNonNull(visibility);
+    }
+
+    /**
+     * Credits a payment announced by an event that happened at {@code happenedAt}. Throws
+     * {@link GoalNotVisibleYetException} while the goal is missing and the event is young enough that the goal's own
+     * commit may still be on its way; nothing is claimed or written then. Otherwise as {@link #credit}.
+     */
+    @Transactional
+    public boolean creditEvent(UUID goalId, String paypalTxnId, long amountCents, Source source, Instant happenedAt) {
+        if (goals.findById(goalId).isEmpty() && visibility.worthWaitingFor(happenedAt)) {
+            log.debug("Payment {} ({}) names goal {} before it is visible; waiting for it", paypalTxnId, source, goalId);
+            throw new GoalNotVisibleYetException(goalId, "Payment " + paypalTxnId + " (" + source + ")");
+        }
+        return credit(goalId, paypalTxnId, amountCents, source);
     }
 
     /** True when this call credited the goal, false when the payment had been credited before or its goal is unknown. */

@@ -35,7 +35,7 @@ class FacadeMemberReads implements MemberReads {
     public List<Goal> goals(UUID memberId) {
         return savings.goalsOfMember(id(memberId).toString()).stream()
             .map(g -> new Goal(g.goalId(), g.name(), g.status(), g.targetCents(), g.savedCents(), g.monthlyCents(),
-                g.currency(), g.targetDate()))
+                g.currency(), g.targetDate(), g.nextDepositDate()))
             .toList();
     }
 

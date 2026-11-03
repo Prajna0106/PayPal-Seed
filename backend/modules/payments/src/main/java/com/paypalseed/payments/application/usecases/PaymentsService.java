@@ -21,6 +21,7 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionSync;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsTopUp;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
@@ -74,12 +75,14 @@ class PaymentsService implements PaymentsFacade {
     private final ApplicationEventPublisher events;
     private final PaypalCatalogService catalog;
     private final SavingsCollectionService savings;
+    private final SavingsSyncService savingsSync;
     private final PayoutService payoutService;
     private final IncomeService income;
 
     PaymentsService(PayPalGateway paypal, PayPalCommandExecutor executor, MandateRepository mandates, MoneyRegistry registry,
                     MoneyFacts facts, BusinessClock clock, ApplicationEventPublisher events, PaypalCatalogService catalog,
-                    SavingsCollectionService savings, PayoutService payoutService, IncomeService income) {
+                    SavingsCollectionService savings, SavingsSyncService savingsSync, PayoutService payoutService,
+                    IncomeService income) {
         this.paypal = paypal;
         this.executor = executor;
         this.mandates = mandates;
@@ -89,6 +92,7 @@ class PaymentsService implements PaymentsFacade {
         this.events = events;
         this.catalog = catalog;
         this.savings = savings;
+        this.savingsSync = savingsSync;
         this.payoutService = payoutService;
         this.income = income;
     }
@@ -382,6 +386,12 @@ class PaymentsService implements PaymentsFacade {
     @Transactional
     public void cancelSavingsSubscription(UUID goalId, String requestId, String reason) {
         savings.cancel(goalId, requestId, reason);
+    }
+
+    @Override
+    @Transactional
+    public Optional<SavingsSubscriptionSync> syncSavingsSubscription(UUID goalId) {
+        return savingsSync.sync(goalId);
     }
 
     @Override

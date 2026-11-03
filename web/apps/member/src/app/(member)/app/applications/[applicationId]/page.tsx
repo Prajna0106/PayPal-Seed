@@ -11,7 +11,7 @@ import { z } from "zod";
 import { ApplicationTimeline } from "@/features/lending/components/application-timeline";
 import { CancelCoolingOff } from "@/features/lending/components/cancel-cooling-off";
 import { getApplication } from "@/features/lending/server/queries";
-import { APPLICATION_STATUS } from "@/features/lending/status";
+import { APPLICATION_STATUS, RETURNED_NOTE } from "@/features/lending/status";
 
 export const metadata: Metadata = { title: "Your application" };
 
@@ -40,7 +40,11 @@ export default async function ApplicationPage({ params }: PageProps<"/app/applic
         actions={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
       />
 
-      {application.payoutTrouble && application.status === "APPROVED" ? (
+      {application.payoutReturned && application.status === "APPROVED" ? (
+        <Notice icon={<LifeBuoy aria-hidden="true" />} title="The money did not reach your PayPal account">
+          {RETURNED_NOTE} Your loan stays approved, and there is nothing for you to do right now.
+        </Notice>
+      ) : application.payoutTrouble && application.status === "APPROVED" ? (
         <Notice icon={<LifeBuoy aria-hidden="true" />} title="We are sorting out the payment">
           Your loan is approved, but the money did not reach you the first time. Someone at Seed is on it. You do not need to do anything,
           and we will get in touch if we need a detail from you.

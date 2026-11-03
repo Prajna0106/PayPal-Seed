@@ -23,7 +23,11 @@ public final class CreditRecordDtos {
     public record SavingsCounts(int onTimeMonths, int missedMonths) {
     }
 
-    public record LoanCounts(int disbursed, int repaidOnPlan, int repaidOffPlan) {
+    /**
+     * {@code completedWithFundHelp} counts loans the safety fund paid in full: repaid, never held against the member, and
+     * not counted as completed by them (ADR 0025). It says nothing about why help was needed.
+     */
+    public record LoanCounts(int disbursed, int repaidOnPlan, int repaidOffPlan, int completedWithFundHelp) {
     }
 
     public record InstalmentCounts(int onTime, int late, int openLate) {
@@ -63,9 +67,12 @@ public final class CreditRecordDtos {
                             Instant revokedAt) {
     }
 
-    /** Fields beyond the level are null unless the member chose a wider detail. */
-    public record VerifiedRecord(boolean valid, String level, LocalDate since, Integer loansRepaidOnPlan, String onTimeBand,
-                                 Instant issuedAt, Instant expiresAt) {
+    /**
+     * Fields beyond the level are null unless the member chose a wider detail. {@code loansCompletedWithFundHelp} is a
+     * count of loans the community safety fund paid in full; they are not in {@code loansRepaidOnPlan}.
+     */
+    public record VerifiedRecord(boolean valid, String level, LocalDate since, Integer loansRepaidOnPlan,
+                                 Integer loansCompletedWithFundHelp, String onTimeBand, Instant issuedAt, Instant expiresAt) {
     }
 
     public record DeskRecordView(UUID memberId, RecordView record, List<HistoryItem> recent) {

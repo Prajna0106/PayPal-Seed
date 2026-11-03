@@ -1,0 +1,36 @@
+$kind: http-request
+name: 'HS15. Choosing from the stale offer is refused'
+method: POST
+url: '{{baseUrl}}/api/v1/hardship/cases/{{hardshipCaseId}}/choice'
+order: 15000
+description: 'The schedule changed since the offer. The backend rebuilds the offer as a new revision and answers 409 hardship-offer-stale: re-read it and ask the member again. Nothing is chosen.'
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Idempotency-Key'
+    value: '{{hardshipStaleKey}}'
+    description: 'One key per user action; reuse it only to replay the same request.'
+body:
+  type: json
+  content: |-
+    {
+      "offerId": "{{hardshipOfferId}}",
+      "optionId": "{{hardshipOptionBId}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('hardshipStaleKey', 'postman-stale-' + pm.variables.replaceIn('{{$guid}}'));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 409', () => pm.response.to.have.status(409));
+      pm.test('Problem type is hardship-offer-stale', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');
+        pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/hardship-offer-stale');
+      });
+examples: './.resources/HS15. Choosing from the stale offer is refused.resources/examples/'

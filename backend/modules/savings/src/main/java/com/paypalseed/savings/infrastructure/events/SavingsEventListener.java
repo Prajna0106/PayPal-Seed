@@ -16,6 +16,10 @@ import org.springframework.stereotype.Component;
  * commits, in their own; a failure leaves the publication incomplete so it is delivered again (at least
  * once). Every use case below is idempotent on a business key (the PayPal transaction id, the withdrawal
  * id, the subscription state), so a repeat changes nothing.
+ *
+ * <p>A report that names a goal whose transaction has not committed yet throws {@code GoalNotVisibleYetException}, which
+ * leaves the publication incomplete so the registry delivers it again; a goal still missing after the visibility window
+ * is dropped (ADR 0027).
  */
 @Component
 class SavingsEventListener {
@@ -32,12 +36,12 @@ class SavingsEventListener {
 
     @ApplicationModuleListener
     void on(PaymentEvents.SavingsDepositReceived e) {
-        credits.credit(e.goalId(), e.paypalTxnId(), e.amountCents(), Source.SUBSCRIPTION);
+        credits.creditEvent(e.goalId(), e.paypalTxnId(), e.amountCents(), Source.SUBSCRIPTION, e.occurredAt());
     }
 
     @ApplicationModuleListener
     void on(PaymentEvents.SavingsTopUpCaptured e) {
-        credits.credit(e.goalId(), e.paypalCaptureId(), e.amountCents(), Source.TOPUP);
+        credits.creditEvent(e.goalId(), e.paypalCaptureId(), e.amountCents(), Source.TOPUP, e.occurredAt());
     }
 
     @ApplicationModuleListener

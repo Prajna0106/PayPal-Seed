@@ -14,6 +14,8 @@ const PROBLEM_WORDS: Record<string, string> = {
   "record-nothing-to-share": "There is nothing to share yet. Your record starts when you save or repay a loan.",
   "share-limit-reached": "You already have 25 active links. Stop sharing one of them first.",
   "dependency-unavailable": "Sharing is not available right now. Please try again later.",
+  "record-sharing-consent-required":
+    "Sharing your record needs your OK first. Please allow it below, then make the link. You can stop sharing at any time.",
   "consent-version-stale": "The sharing terms were just updated. Please reload the page and try again.",
   "idempotency-key-reused": "That was already sent with different details. Please reload and try again.",
 };
@@ -22,7 +24,7 @@ function words(error: unknown): string {
   return isProblem(error) ? (PROBLEM_WORDS[error.code] ?? GENERIC) : GENERIC;
 }
 
-export type ConsentState = { status: "idle" } | { status: "error"; message: string };
+export type ConsentState = { status: "idle" } | { status: "granted" } | { status: "error"; message: string };
 
 /** The member's explicit yes to sharing the record. Nothing is shared until they press the button. */
 export async function allowSharing(_previous: ConsentState): Promise<ConsentState> {
@@ -35,13 +37,13 @@ export async function allowSharing(_previous: ConsentState): Promise<ConsentStat
     return { status: "error", message: words(error) };
   }
   revalidatePath("/app/record");
-  return { status: "idle" };
+  return { status: "granted" };
 }
 
 export type ShareState =
   | { status: "idle" }
   | { status: "created"; link: string; expiresAt: string; detail: ShareDetail }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; consentNeeded?: true };
 
 const createSchema = z.object({
   expiresInDays: z.coerce.number().int().min(1).max(30),
@@ -59,11 +61,12 @@ export async function createShare(_previous: ShareState, formData: FormData): Pr
   }
   const api = await memberApi();
   try {
-    // The backend does not enforce the consent, so this screen does: no link without an explicit yes.
+    // The backend refuses a link without a current RECORD_SHARING consent (ADR 0025). Checking first saves a round
+    // trip; the problem below still covers a consent given for an older text.
     const consents = await unwrap(api.GET("/api/v1/members/me/consents"));
     if (!consents.some((consent) => consent.type === "RECORD_SHARING" && consent.active)) {
       revalidatePath("/app/record");
-      return { status: "error", message: "Please allow sharing your record first." };
+      return { status: "error", message: PROBLEM_WORDS["record-sharing-consent-required"] ?? GENERIC, consentNeeded: true };
     }
     const share = await unwrap(
       api.POST("/api/v1/members/me/record/shares", {
@@ -81,7 +84,11 @@ export async function createShare(_previous: ShareState, formData: FormData): Pr
   } catch (error) {
     unstable_rethrow(error);
     console.error("[record] create share failed", error);
-    return { status: "error", message: words(error) };
+    return {
+      status: "error",
+      message: words(error),
+      ...(isProblem(error, "record-sharing-consent-required") ? { consentNeeded: true as const } : {}),
+    };
   }
 }
 

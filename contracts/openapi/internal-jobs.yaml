@@ -168,6 +168,32 @@ paths:
       parameters: [ { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } } ]
       responses:
         '200': { description: Timers fired, content: { application/json: { schema: { type: object, properties: { fired: { type: integer } } } } } }
+  /internal/jobs/savings/reconcile:
+    post:
+      tags: [jobs]
+      operationId: reconcileSavingsGoals
+      summary: Read the PayPal subscription of savings goals that may have missed a webhook
+      description: |
+        For each goal that is waiting for approval (inside its approval window) or is active or paused and has not been
+        read in the last hour (`seed.savings.reconcile-gap`), reads its subscription and sales from PayPal and applies
+        them through the same steps the webhooks use. Idempotent: a deposit is credited once however often it is read.
+        A batch of at most `limit` goals; a goal that fails is logged and skipped and never stops the batch. The worker
+        role runs it every 15 minutes (`seed.jobs.savings-reconcile-ms`).
+      parameters: [ { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } } ]
+      responses:
+        '200':
+          description: What the batch did
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [examined, synced, failed]
+                properties:
+                  examined: { type: integer, description: Goals picked for this batch }
+                  synced: { type: integer, description: Goals read from PayPal }
+                  failed: { type: integer, description: Goals whose read failed and were skipped }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
   /internal/jobs/governance/verify-audit-chain:
     post:
       tags: [jobs]

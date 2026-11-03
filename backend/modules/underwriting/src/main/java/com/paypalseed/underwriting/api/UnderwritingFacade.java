@@ -41,6 +41,27 @@ public interface UnderwritingFacade {
     }
 
     /**
+     * The slow half of submitting a loan application with the fair check ticked: with the real income source it
+     * reads PayPal and stores the weekly income (and records the consent the member gives in the request), and it
+     * must be called <em>before</em> the caller opens its database transaction. Nothing is read when the source is
+     * seeded, or when the stored income is still fresh (a day, by default), and a failed read stores nothing.
+     * The later {@link #assessForLoanApplication} then needs no PayPal call.
+     *
+     * @throws com.paypalseed.platform.kernel.DomainException {@code income-source-unavailable} (503, retryable) or
+     *         {@code paypal-account-not-linked} (422)
+     */
+    default void prepareIncomeForApplication(UUID memberId) {
+    }
+
+    /**
+     * Brings the stored income up to date when the member has already consented and it is stale; the same read and
+     * the same failures as {@link #prepareIncomeForApplication}, but it never records a consent. For callers that
+     * only want better numbers (a preview) and must call it before their transaction as well.
+     */
+    default void refreshIncomeIfConsented(UUID memberId) {
+    }
+
+    /**
      * Resolves the member's verified monthly income in cents from their latest Fair Loan Check assessment
      * or their 13-week consented PayPal income summary.
      */

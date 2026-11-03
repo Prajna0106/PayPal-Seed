@@ -85,6 +85,13 @@ public class IncomeRefresher {
         return source == IncomeSource.TRANSACTION_SEARCH;
     }
 
+    /** Weeks read from PayPal and not yet stored: the product of the slow, transaction-free half of a refresh. */
+    public record FetchedIncome(List<Week> weeks, LocalDate anchor, Instant at) {
+        public FetchedIncome {
+            weeks = List.copyOf(weeks);
+        }
+    }
+
     /**
      * Reads PayPal when the source, the consent and the age of the stored weeks call for it.
      *
@@ -92,18 +99,29 @@ public class IncomeRefresher {
      * @throws DomainException {@code paypal-account-not-linked} (422) or {@code income-source-unavailable} (503)
      */
     public boolean refreshIfStale(UUID memberId) {
+        Optional<FetchedIncome> fetched = fetchIfStale(memberId, false);
+        fetched.ifPresent(f -> store(memberId, f));
+        return fetched.isPresent();
+    }
+
+    /**
+     * The slow half of a refresh: reads PayPal and writes nothing, so a caller can do it before it opens a
+     * transaction. Empty when nothing needs reading (source off, no consent, weeks still fresh).
+     *
+     * @param consentGivenNow true when the member is giving the consent in the request being served (a loan
+     *                        application with the fair check ticked), so a missing consent does not stop the read
+     */
+    public Optional<FetchedIncome> fetchIfStale(UUID memberId, boolean consentGivenNow) {
         if (!usesTransactionSearch()) {
-            return false;
+            return Optional.empty();
         }
-        Optional<Consent> consent = income.consent(memberId).filter(Consent::active);
-        if (consent.isEmpty()) {
-            return false;
+        boolean consented = income.consent(memberId).filter(Consent::active).isPresent();
+        if (!consented && !consentGivenNow) {
+            return Optional.empty();
         }
         Instant now = clock.now();
-        Optional<Instant> last = income.refreshState(memberId).map(RefreshState::refreshedAt);
-        // A read stamped in the future means the demo clock went back; treat it as stale rather than trusting it.
-        if (last.isPresent() && !last.get().isAfter(now) && !last.get().plus(maxAge).isBefore(now)) {
-            return false;
+        if (consented && isFresh(memberId, now)) {
+            return Optional.empty();
         }
         String account = accounts.accountOf(memberId).orElseThrow(() -> new DomainException(
             UnderwritingErrors.PAYPAL_ACCOUNT_NOT_LINKED, "Link your PayPal account before Seed can read your income"));
@@ -121,8 +139,35 @@ public class IncomeRefresher {
         List<Week> weeks = IncomeBuckets.weekly(today, credits).stream()
             .map((Bucket b) -> new Week(b.weekStart(), b.inflowCents()))
             .toList();
-        income.replaceFetchedWeeks(memberId, weeks, today, now);
-        return true;
+        return Optional.of(new FetchedIncome(weeks, today, now));
+    }
+
+    /** The fast half: replaces the stored weeks in one short transaction. Needs an existing consent row to stamp. */
+    public void store(UUID memberId, FetchedIncome fetched) {
+        income.replaceFetchedWeeks(memberId, fetched.weeks(), fetched.anchor(), fetched.at());
+    }
+
+    /**
+     * For code that already runs inside a transaction and so must not call PayPal: passes when the stored weeks need
+     * no refresh and otherwise refuses with the same retryable problem as a failed read. The caller is expected to
+     * have refreshed before it opened its transaction; this guards the case where it did not, or where the weeks
+     * went stale in between, so a decision never rests on stale income.
+     */
+    public void requireFresh(UUID memberId) {
+        if (!usesTransactionSearch()) {
+            return;
+        }
+        boolean consented = income.consent(memberId).filter(Consent::active).isPresent();
+        if (consented && !isFresh(memberId, clock.now())) {
+            throw new DomainException(UnderwritingErrors.INCOME_SOURCE_UNAVAILABLE,
+                "PayPal income is out of date and must be read again before this can be decided");
+        }
+    }
+
+    private boolean isFresh(UUID memberId, Instant now) {
+        Optional<Instant> last = income.refreshState(memberId).map(RefreshState::refreshedAt);
+        // A read stamped in the future means the demo clock went back; treat it as stale rather than trusting it.
+        return last.isPresent() && !last.get().isAfter(now) && !last.get().plus(maxAge).isBefore(now);
     }
 
     /**
@@ -134,6 +179,14 @@ public class IncomeRefresher {
             return Optional.empty();
         }
         refreshIfStale(memberId);
+        return storedMonthlyIncomes(memberId);
+    }
+
+    /** The same figures from the weeks already stored, with no PayPal read: for callers inside a transaction. */
+    public Optional<List<IncomeMonthDto>> storedMonthlyIncomes(UUID memberId) {
+        if (!usesTransactionSearch()) {
+            return Optional.empty();
+        }
         LocalDate today = clock.today();
         Optional<IncomeSummary> summary = IncomeSummaries.read(income, memberId, today);
         if (summary.isPresent() && summary.get().activeWeeks() > 0) {

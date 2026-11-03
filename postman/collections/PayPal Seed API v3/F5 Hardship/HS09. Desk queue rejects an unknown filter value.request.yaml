@@ -1,0 +1,21 @@
+$kind: http-request
+name: 'HS09. Desk queue rejects an unknown filter value'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/hardship/cases?status=NOT_A_STATUS'
+order: 9000
+description: 'Filters are an allowlist. The contract names the code hardship-invalid-filter for a bad sort or filter; the enum check on the parameter may answer first, so this asserts the status and the problem media type.'
+queryParams:
+  - key: 'status'
+    value: 'NOT_A_STATUS'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 422', () => pm.response.to.have.status(422));
+      pm.test('Problem is RFC 9457', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));

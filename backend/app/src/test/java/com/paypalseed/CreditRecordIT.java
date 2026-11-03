@@ -17,6 +17,10 @@ import com.paypalseed.creditrecord.api.events.RecordLevelChanged;
 import com.paypalseed.creditrecord.domain.token.ShareClaims;
 import com.paypalseed.creditrecord.domain.token.ShareTokenCodec;
 import com.paypalseed.engagement.infrastructure.persistence.ReminderRepository;
+import com.paypalseed.identity.api.IdentityFacade;
+import com.paypalseed.identity.api.dto.ConsentType;
+import com.paypalseed.identity.api.dto.IdentityDtos.ConsentGrant;
+import com.paypalseed.identity.api.dto.IdentityDtos.PayPalLogin;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.api.events.LendingEvents.InstalmentMissed;
 import com.paypalseed.lending.application.usecases.RepaymentService;
@@ -57,8 +61,8 @@ class CreditRecordIT extends IntegrationTest {
 
     static final String SECRET = "it-record-signing-secret-0123456789abcdef";
     private static final String MEMBER = "X-Seed-Member-Id";
-    private static final Set<String> PARTNER_FIELDS = Set.of("valid", "level", "since", "loansRepaidOnPlan", "onTimeBand",
-            "issuedAt", "expiresAt");
+    private static final Set<String> PARTNER_FIELDS = Set.of("valid", "level", "since", "loansRepaidOnPlan",
+            "loansCompletedWithFundHelp", "onTimeBand", "issuedAt", "expiresAt");
 
     /** Collects the level changes the record publishes. */
     static class LevelEvents {
@@ -89,6 +93,8 @@ class CreditRecordIT extends IntegrationTest {
     LevelEvents levelEvents;
     @Autowired
     CreditRecordFacade creditRecord;
+    @Autowired
+    IdentityFacade identity;
     @Autowired
     CreateGoalUseCase createGoal;
     @Autowired
@@ -401,8 +407,8 @@ class CreditRecordIT extends IntegrationTest {
         assertThat(fieldNames(level)).containsExactlyInAnyOrder("valid", "level", "issuedAt", "expiresAt");
 
         JsonNode summary = verify(createShare(ana, "detail-2", 7, "SUMMARY"));
-        assertThat(fieldNames(summary)).containsExactlyInAnyOrder("valid", "level", "since", "loansRepaidOnPlan", "issuedAt",
-                "expiresAt");
+        assertThat(fieldNames(summary)).containsExactlyInAnyOrder("valid", "level", "since", "loansRepaidOnPlan",
+                "loansCompletedWithFundHelp", "issuedAt", "expiresAt");
 
         JsonNode full = verify(createShare(ana, "detail-3", 7, "FULL"));
         assertThat(PARTNER_FIELDS).containsAll(fieldNames(full));
@@ -412,7 +418,7 @@ class CreditRecordIT extends IntegrationTest {
         // What is stored for a snapshot holds no personal data either.
         assertThat(jdbc.sql("SELECT column_name FROM information_schema.columns WHERE table_schema = 'creditrecord' AND table_name = 'record_snapshot'")
                 .query(String.class).list()).containsExactlyInAnyOrder("id", "member_id", "level", "record_since", "loans_on_plan",
-                "on_time_band", "defaults_at_capture", "captured_on", "created_at");
+                "on_time_band", "defaults_at_capture", "captured_on", "created_at", "loans_fund_help");
     }
 
     @Test
@@ -476,7 +482,7 @@ class CreditRecordIT extends IntegrationTest {
         }
         mvc.perform(post("/api/v1/members/me/record/shares").header(MEMBER, ana.toString()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"expiresInDays\":7,\"detail\":\"LEVEL\"}")).andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/members/me/record/shares").header(MEMBER, UUID.randomUUID().toString()).header("Idempotency-Key", "empty")
+        mvc.perform(post("/api/v1/members/me/record/shares").header(MEMBER, consentingMember().toString()).header("Idempotency-Key", "empty")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"expiresInDays\":7,\"detail\":\"LEVEL\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("record-nothing-to-share"));
         // The longest allowed life is 30 days.
@@ -532,11 +538,19 @@ class CreditRecordIT extends IntegrationTest {
 
     /** A member with three months of saving, recorded straight into the facade (the same path the wiring uses). */
     private UUID recordWithThreeSavingMonths() {
-        UUID member = UUID.randomUUID();
+        UUID member = consentingMember();
         for (int month = 1; month <= 3; month++) {
             creditRecord.ingest(RecordFact.savingsDeposit("seed-" + member + "-" + month, member, LocalDate.of(2026, month, 5)));
         }
         return member;
+    }
+
+    /** A registered member who agreed to share their record: a link needs that consent (ADR 0025). */
+    private UUID consentingMember() {
+        UUID id = identity.loginWithPayPal(new PayPalLogin("PAYER-" + UUID.randomUUID(), "member@example.test", "Member", true, "en"))
+                .member().memberId();
+        identity.grantConsent(id, new ConsentGrant(ConsentType.RECORD_SHARING, null));
+        return id;
     }
 
     private JsonNode recordOf(UUID member) throws Exception {

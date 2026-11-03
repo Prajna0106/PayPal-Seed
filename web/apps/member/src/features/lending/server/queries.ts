@@ -102,6 +102,8 @@ export interface ApplicationModel {
   rejectionNote: string | null;
   /** A payout PayPal did not complete. The member sees a calm sentence, never the code. */
   payoutTrouble: boolean;
+  /** PayPal took the payout back after the loan was registered; the loan was cancelled and nothing is owed (ADR 0024). */
+  payoutReturned: boolean;
   coolingOff: { expiresAt: string; open: boolean; relative: string } | null;
 }
 
@@ -119,6 +121,7 @@ function toApplication(a: Application, now: Date): ApplicationModel {
     loanId: a.loanId ?? null,
     rejectionNote: a.rejectionReason?.trim() || null,
     payoutTrouble: Boolean(a.payoutIssue),
+    payoutReturned: a.payoutIssue === "RETURNED_AFTER_DISBURSEMENT",
     coolingOff:
       expiresAt && a.status === "DISBURSED"
         ? { expiresAt, open: new Date(expiresAt).getTime() > now.getTime(), relative: formatRelative(expiresAt, now) }

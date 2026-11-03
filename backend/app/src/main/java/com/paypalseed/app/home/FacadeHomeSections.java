@@ -1,6 +1,7 @@
 package com.paypalseed.app.home;
 
 import com.paypalseed.app.home.HomeView.ActiveLoanCard;
+import com.paypalseed.app.home.HomeView.ActivityItem;
 import com.paypalseed.app.home.HomeView.AssessmentStatus;
 import com.paypalseed.app.home.HomeView.AutopayCard;
 import com.paypalseed.app.home.HomeView.CreditRecordSection;
@@ -18,6 +19,8 @@ import com.paypalseed.app.home.HomeView.UnderwritingSection;
 import com.paypalseed.creditrecord.api.CreditRecordFacade;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.NextStepView;
 import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.RecordView;
+import com.paypalseed.deskquery.api.DeskQueryFacade;
+import com.paypalseed.engines.rules.record.RecordLevels;
 import com.paypalseed.hardship.api.dto.HardshipDtos.MemberCaseView;
 import com.paypalseed.identity.api.IdentityFacade;
 import com.paypalseed.lending.api.dto.LendingDtos.EligibilityView;
@@ -29,11 +32,14 @@ import com.paypalseed.savings.api.SavingsFacade;
 import com.paypalseed.savings.api.dto.MemberSavingsSummary;
 import com.paypalseed.underwriting.api.UnderwritingFacade;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,6 +49,8 @@ import org.springframework.stereotype.Component;
 @Component
 class FacadeHomeSections implements HomeSections {
 
+    private static final int DEFAULT_ACTIVITY_LIMIT = 10;
+    private static final int MAX_ACTIVITY_LIMIT = 50;
     private static final Set<String> OPEN_APPLICATION =
         Set.of("SUBMITTED", "PENDING_SECOND_APPROVAL", "APPROVED", "DISBURSING");
 
@@ -52,16 +60,29 @@ class FacadeHomeSections implements HomeSections {
     private final UnderwritingFacade underwriting;
     private final CreditRecordFacade creditRecord;
     private final ObjectProvider<MemberReads> reads;
+    private final ObjectProvider<DeskQueryFacade> activity;
+    private final int activityLimit;
 
+    /** Without an activity source: the activity section is an empty list. */
     FacadeHomeSections(IdentityFacade identity, SavingsFacade savingsFacade, PaymentsFacade payments,
                        UnderwritingFacade underwriting, CreditRecordFacade creditRecord,
                        ObjectProvider<MemberReads> reads) {
+        this(identity, savingsFacade, payments, underwriting, creditRecord, reads, null, DEFAULT_ACTIVITY_LIMIT);
+    }
+
+    @Autowired
+    FacadeHomeSections(IdentityFacade identity, SavingsFacade savingsFacade, PaymentsFacade payments,
+                       UnderwritingFacade underwriting, CreditRecordFacade creditRecord,
+                       ObjectProvider<MemberReads> reads, ObjectProvider<DeskQueryFacade> activity,
+                       @Value("${seed.home.activity-limit:10}") int activityLimit) {
         this.identity = identity;
         this.savings = savingsFacade;
         this.payments = payments;
         this.underwriting = underwriting;
         this.creditRecord = creditRecord;
         this.reads = reads;
+        this.activity = activity;
+        this.activityLimit = Math.max(1, Math.min(activityLimit, MAX_ACTIVITY_LIMIT));
     }
 
     private MemberReads memberReads() {
@@ -79,12 +100,17 @@ class FacadeHomeSections implements HomeSections {
     }
 
     @Override
+    public boolean payoutRecipientReady(UUID memberId) {
+        return identity.payoutRecipient(memberId).isPresent();
+    }
+
+    @Override
     public Optional<SavingsSection> savings(Context context) {
         MemberSavingsSummary summary = savings.getMemberSavingsSummary(context.memberId().toString());
         List<GoalCard> goals = null;
         MemberReads available = reads.getIfAvailable();
         if (available != null) {
-            goals = available.goals(context.memberId()).stream().map(FacadeHomeSections::goalCard).toList();
+            goals = available.goals(context.memberId()).stream().map(g -> goalCard(g, context.today())).toList();
         }
         return Optional.of(new SavingsSection(summary.currentStreakMonths(), MoneyView.usd(summary.monthlySavingCents()),
             MoneyView.usd(summary.totalSavedBalanceCents()), summary.missedDepositsInQuarter(),
@@ -126,7 +152,7 @@ class FacadeHomeSections implements HomeSections {
         RecordView record = creditRecord.record(context.memberId());
         NextStepView next = record.next();
         NextStep step = next == null ? null : new NextStep(next.level(), next.onTimeSavingMonthsToGo(),
-            next.loansRepaidOnPlanToGo(), NextStepHint.of(next, context.language()));
+            next.loansRepaidOnPlanToGo(), requiredMonths(next.level()), NextStepHint.of(next, context.language()));
         return Optional.of(new CreditRecordSection(record.level(), record.since(), step));
     }
 
@@ -139,10 +165,30 @@ class FacadeHomeSections implements HomeSections {
             .orElseGet(() -> new HardshipSection(false, null, null, null)));
     }
 
-    private static GoalCard goalCard(MemberReads.Goal goal) {
+    @Override
+    public Optional<List<ActivityItem>> recentActivity(Context context) {
+        DeskQueryFacade source = activity == null ? null : activity.getIfAvailable();
+        if (source == null) {
+            return Optional.of(List.of());
+        }
+        return Optional.of(source.memberActivity(context.memberId(), activityLimit).stream()
+            .map(a -> new ActivityItem(a.kind(), MoneyView.usd(a.amountCents()), a.occurredAt(), a.goalId(), a.loanId()))
+            .toList());
+    }
+
+    /** What the level asks in all, from the rules themselves; the month count the page draws is never worked out here. */
+    private static Integer requiredMonths(String level) {
+        return RecordLevels.ladder().stream().filter(r -> r.level().name().equals(level)).findFirst()
+            .map(RecordLevels.Requirement::onTimeSavingMonths).orElse(null);
+    }
+
+    /** A date PayPal gave that is already behind us is a report that has not been renewed yet, not a date to show. */
+    private static GoalCard goalCard(MemberReads.Goal goal, LocalDate today) {
+        LocalDate next = goal.nextDepositDate() == null || goal.nextDepositDate().isBefore(today) ? null
+            : goal.nextDepositDate();
         return new GoalCard(goal.goalId(), goal.name(), goal.status(),
             new MoneyView(goal.targetCents(), goal.currency()), new MoneyView(goal.savedCents(), goal.currency()),
-            new MoneyView(goal.monthlyCents(), goal.currency()), goal.targetDate());
+            new MoneyView(goal.monthlyCents(), goal.currency()), goal.targetDate(), next);
     }
 
     private static EligibilityCard eligibilityCard(EligibilityView e) {

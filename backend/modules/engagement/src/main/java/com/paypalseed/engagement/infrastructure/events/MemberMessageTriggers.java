@@ -40,6 +40,13 @@ class MemberMessageTriggers {
         reminders.remind(e.memberId(), e.loanId(), Type.AUTOPAY_ATTENTION, e.eventId().toString(), 0, null);
     }
 
+    /** The loan never stood: stop what is queued for it and tell the member once, calmly (ADR 0024). */
+    @ApplicationModuleListener
+    void on(LendingEvents.LoanVoided e) {
+        reminders.loanVoided(e.memberId(), e.loanId(), e.refundDueCents(),
+                LendingEvents.LoanVoided.COOLING_OFF_CANCELLED.equals(e.reason()));
+    }
+
     @ApplicationModuleListener
     void on(LendingEvents.CollectionModeChanged e) {
         if ("MANUAL".equals(e.toMode()) && e.cause().endsWith("MEMBER")) {

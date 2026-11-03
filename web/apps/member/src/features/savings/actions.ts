@@ -1,6 +1,6 @@
 "use server";
 
-import { isProblem, unwrap } from "@paypal-seed/api-client";
+import { idempotent, isProblem, unwrap } from "@paypal-seed/api-client";
 import { formatMoney } from "@paypal-seed/ui/lib/format";
 import { createHash, randomUUID } from "node:crypto";
 import type { Route } from "next";
@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { memberApi } from "@/server/api";
 import { dollarsToCents, type Goal, safeApprovalUrl, toGoal } from "./model";
-import { captureSchema, coachSchema, createGoalSchema, fieldErrors, goalIdSchema, topUpSchema, withdrawSchema } from "./schema";
+import { captureSchema, changeAmountSchema, coachSchema, createGoalSchema, fieldErrors, goalIdSchema, topUpSchema, withdrawSchema } from "./schema";
 import { isMissingRecipient, savingsMessage } from "./server/messages";
 
 /**
@@ -166,6 +166,27 @@ export async function captureTopUp(input: { goalId: string; orderId: string }): 
   }
 }
 
+/**
+ * Asks the backend to read the goal's subscription and payments from PayPal and apply what it finds, the same way a
+ * webhook would. It is a safe re-read (the backend rate-limits it per goal), and it is what moves a goal on when PayPal
+ * cannot reach the backend with a webhook. A failure is quiet: the page keeps its stored state and tries again.
+ */
+export async function syncGoal(goalId: string): Promise<void> {
+  const parsed = goalIdSchema.safeParse({ goalId });
+  if (!parsed.success) {
+    return;
+  }
+  try {
+    const api = await memberApi();
+    await unwrap(api.POST("/api/v1/savings/goals/{goalId}/sync", { params: { path: { goalId: parsed.data.goalId } } }));
+    revalidatePath(`/app/savings/${parsed.data.goalId}`);
+    revalidatePath("/app/savings");
+  } catch (error) {
+    unstable_rethrow(error);
+    console.warn("[savings] sync failed", error instanceof Error ? error.name : "unknown");
+  }
+}
+
 export type ToggleState = { status: "idle" } | { status: "done" } | { status: "error"; message: string };
 
 /** Pauses saving. The backend suspends the PayPal plan; money already saved stays. */
@@ -258,4 +279,48 @@ async function freeBalance(goalId: string): Promise<number | null> {
     unstable_rethrow(error);
     return null;
   }
+}
+
+export type ChangeAmountState =
+  | { status: "idle" }
+  | { status: "done"; monthlyCents: number }
+  | { status: "error"; message: string; fields: Record<string, string> };
+
+/**
+ * Changes the monthly amount. PayPal may need the member to agree to the new amount: the goal then carries an approval
+ * link and the member goes there, as after resuming. A refusal because the goal is not in a state to change (409) or
+ * the amount is not whole dollars (422) is said in plain words.
+ */
+export async function changeMonthlyAmount(_previous: ChangeAmountState, formData: FormData): Promise<ChangeAmountState> {
+  const parsed = changeAmountSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { status: "error", message: "", fields: fieldErrors(parsed.error) };
+  }
+  const { goalId, monthly, attemptKey } = parsed.data;
+  // Savings routes speak decimal dollars; the amount is whole cents until this one conversion.
+  const body = { monthlyAmount: monthly / 100, currency: "USD" };
+  let approval: string | null = null;
+  try {
+    const api = await memberApi();
+    const goal = toGoal(
+      await unwrap(
+        api.POST("/api/v1/savings/goals/{goalId}/amount", {
+          ...idempotent(keyFor(attemptKey, body)),
+          params: { path: { goalId } },
+          body,
+        }),
+      ),
+    );
+    approval = safeApprovalUrl(goal.approvalUrl);
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("[savings] change amount failed", error);
+    return { status: "error", message: savingsMessage(error, "amount"), fields: {} };
+  }
+  revalidatePath(`/app/savings/${goalId}`);
+  revalidatePath("/app/savings");
+  if (approval) {
+    redirect(approval as Route);
+  }
+  return { status: "done", monthlyCents: monthly };
 }

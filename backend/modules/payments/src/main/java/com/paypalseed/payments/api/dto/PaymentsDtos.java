@@ -1,6 +1,8 @@
 package com.paypalseed.payments.api.dto;
 
 import com.paypalseed.engines.schedule.MandateReconciliation.MandateStatus;
+import com.paypalseed.payments.api.events.PaymentEvents;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -92,9 +94,32 @@ public final class PaymentsDtos {
         }
     }
 
-    /** {@code approveUrl} is where the member consents; the subscription bills only after that. */
+    /**
+     * {@code approveUrl} is where the member consents; the subscription bills only after that. {@code nextBillingTime} is
+     * PayPal's next charge as last reported (webhooks, and a read after each deposit); empty while none is scheduled.
+     */
     public record SavingsSubscriptionView(UUID goalId, String subscriptionId, String status, Optional<String> approveUrl,
-                                          long monthlyCents) {
+                                          long monthlyCents, Optional<Instant> nextBillingTime) {
+
+        public SavingsSubscriptionView(UUID goalId, String subscriptionId, String status, Optional<String> approveUrl,
+                                       long monthlyCents) {
+            this(goalId, subscriptionId, status, approveUrl, monthlyCents, Optional.empty());
+        }
+    }
+
+    /**
+     * What PayPal says now about a goal's savings subscription, as the same facts the webhooks announce: {@code state} is
+     * empty while PayPal reports none the goal cares about (the member has not approved yet), and {@code deposits} holds
+     * one fact per completed sale in the window. The ids and times are the ones a webhook would carry, so applying a fact
+     * that a webhook already delivered, or delivering it later, changes nothing.
+     */
+    public record SavingsSubscriptionSync(String subscriptionId, String paypalStatus,
+                                          Optional<PaymentEvents.SavingsSubscriptionStateChanged> state,
+                                          List<PaymentEvents.SavingsDepositReceived> deposits) {
+
+        public SavingsSubscriptionSync {
+            deposits = List.copyOf(deposits);
+        }
     }
 
     public enum FundingSource {
@@ -146,12 +171,30 @@ public final class PaymentsDtos {
         }
     }
 
+    /** Why money is being paid out; fraud reads it with the recipient fingerprint (ADR 0027). */
+    public enum PayoutPurpose {
+        /** A member takes savings out of a goal. */
+        WITHDRAWAL,
+        /** A loan is paid out to the member. */
+        DISBURSEMENT
+    }
+
     /**
      * One payout to one recipient. {@code referenceId} is the caller's idempotency key (for example a
      * loan disbursement reference): the same reference with another amount or recipient is a {@code 409}.
+     *
+     * <p>{@code memberId} and {@code purpose} say who is being paid and why. When both are present, payments announces
+     * the request with a keyed fingerprint of the recipient (never the recipient itself) so that fraud can see a change
+     * of recipient. The six-argument form leaves them out and announces nothing.
      */
     public record SendPayout(String referenceId, long amountCents, RecipientType recipientType, String recipient,
-                             PayoutWallet wallet, String note) {
+                             PayoutWallet wallet, String note, UUID memberId, PayoutPurpose purpose) {
+
+        public SendPayout(String referenceId, long amountCents, RecipientType recipientType, String recipient,
+                          PayoutWallet wallet, String note) {
+            this(referenceId, amountCents, recipientType, recipient, wallet, note, null, null);
+        }
+
         public SendPayout {
             Objects.requireNonNull(referenceId, "referenceId");
             Objects.requireNonNull(recipientType, "recipientType");
@@ -168,6 +211,9 @@ public final class PaymentsDtos {
             }
             if (note != null && note.length() > 4000) {
                 throw new IllegalArgumentException("note is too long");
+            }
+            if ((memberId == null) != (purpose == null)) {
+                throw new IllegalArgumentException("memberId and purpose go together");
             }
         }
     }

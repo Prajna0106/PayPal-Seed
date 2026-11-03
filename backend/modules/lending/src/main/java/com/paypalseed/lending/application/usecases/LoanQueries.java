@@ -29,7 +29,9 @@ import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.platform.kernel.DomainException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -102,16 +104,29 @@ public class LoanQueries {
 
     public ScheduleView view(LoanRow loan, Schedule schedule, Allocation allocation, LocalDate asOf) {
         List<InstalmentLine> lines = new ArrayList<>();
+        Map<Integer, Long> reserveBySeq = reserveCoveredBySeq(loan.id(), allocation);
         schedule.instalments().forEach(i -> {
             InstalmentAllocation a = allocation.of(i.seq());
             lines.add(new InstalmentLine(i.seq(), i.dueDate(), i.amountCents(), a.paidCents(), a.remainingCents(),
-                    InstalmentStatus.of(i, a, asOf, loan.policy()).name(), a.fullyPaidOn()));
+                    InstalmentStatus.of(i, a, asOf, loan.policy()).name(), a.fullyPaidOn(),
+                    Math.min(a.paidCents(), reserveBySeq.getOrDefault(i.seq(), 0L))));
         });
         var aging = com.paypalseed.engines.schedule.Aging.of(schedule, allocation, asOf, loan.policy());
         return new ScheduleView(loan.id(), schedule.version(), schedule.reason().name(), asOf, schedule.principalCents(),
                 allocation.outstandingCents(), allocation.overpaymentCents(), loan.status().name(),
                 loan.collectionMode().name(), loan.isActive() ? aging.dpd() : 0,
                 loan.isActive() ? aging.bucket().name() : "CURRENT", lines);
+    }
+
+    /** How much of each instalment the loss reserve paid: the allocation's portions of the receipts whose source is RESERVE. */
+    private Map<Integer, Long> reserveCoveredBySeq(UUID loanId, Allocation allocation) {
+        Map<Integer, Long> bySeq = new HashMap<>();
+        for (LoanTransaction t : transactions.forLoan(loanId)) {
+            if (t.type() == LoanTransaction.Type.RECEIPT && t.source() == LoanTransaction.Source.RESERVE) {
+                allocation.portionsOf(t.id()).forEach(p -> bySeq.merge(p.seq(), p.cents(), Long::sum));
+            }
+        }
+        return bySeq;
     }
 
     public List<VersionView> versions(LoanRow loan) {
@@ -163,10 +178,16 @@ public class LoanQueries {
         long receivable = ledger.balanceCents(AccountRef.of(AccountType.LOANS_RECEIVABLE, loanId));
         long memberOverpaid = loans.byMember(loan.memberId()).stream().mapToLong(LoanRow::overpaidCents).sum();
         long ledgerOverpaid = ledger.balanceCents(AccountRef.of(AccountType.MEMBER_OVERPAYMENT, loan.memberId()));
-        Allocation refolded = recalculator.project(loan, List.of()).allocation();
-        boolean consistent = receivable == loan.outstandingCents() && memberOverpaid == ledgerOverpaid
-                && refolded.outstandingCents() == loan.outstandingCents()
-                && refolded.overpaymentCents() == loan.overpaidCents();
+        boolean consistent;
+        if (loan.isVoided() || loan.isCancelled()) {
+            // Not re-folded (ADR 0024): the schedule is history, the loan owes nothing, and the ledger must say so.
+            consistent = receivable == 0 && loan.outstandingCents() == 0 && memberOverpaid == ledgerOverpaid;
+        } else {
+            Allocation refolded = recalculator.project(loan, List.of()).allocation();
+            consistent = receivable == loan.outstandingCents() && memberOverpaid == ledgerOverpaid
+                    && refolded.outstandingCents() == loan.outstandingCents()
+                    && refolded.overpaymentCents() == loan.overpaidCents();
+        }
         return new Integrity(loanId, loan.outstandingCents(), receivable, loan.overpaidCents(), memberOverpaid,
                 ledgerOverpaid, consistent);
     }

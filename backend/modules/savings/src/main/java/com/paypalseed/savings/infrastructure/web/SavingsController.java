@@ -9,12 +9,14 @@ import com.paypalseed.savings.api.dto.ChangeAmountRequest;
 import com.paypalseed.savings.api.dto.CoachSuggestionRequest;
 import com.paypalseed.savings.api.dto.CoachSuggestionResponse;
 import com.paypalseed.savings.api.dto.CreateGoalRequest;
+import com.paypalseed.savings.api.dto.GoalDepositResponse;
 import com.paypalseed.savings.api.dto.SavingsGoalResponse;
 import com.paypalseed.savings.api.dto.TopUpCaptureResponse;
 import com.paypalseed.savings.api.dto.TopUpOrderResponse;
 import com.paypalseed.savings.api.dto.TopUpRequest;
 import com.paypalseed.savings.api.dto.WithdrawRequest;
 import com.paypalseed.savings.api.dto.WithdrawalResponse;
+import com.paypalseed.savings.application.ports.CreditedPayments;
 import com.paypalseed.savings.application.ports.SavingsGoalRepository;
 import com.paypalseed.savings.application.ports.SavingsPayments.Order;
 import com.paypalseed.savings.application.ports.SavingsPayments.OrderCapture;
@@ -51,6 +53,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -68,6 +71,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class SavingsController {
 
     private static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    private static final int DEFAULT_DEPOSITS = 50;
+    private static final int MAX_DEPOSITS = 200;
 
     private final CreateGoalUseCase createGoalUseCase;
     private final RecordDepositUseCase recordDepositUseCase;
@@ -82,6 +87,7 @@ public class SavingsController {
     private final WithdrawalStore withdrawals;
     private final ActorAuthentication authentication;
     private final boolean legacyAllowed;
+    private final CreditedPayments credited;
 
     public SavingsController(
         CreateGoalUseCase createGoalUseCase,
@@ -91,7 +97,7 @@ public class SavingsController {
         SavingsGoalRepository repository
     ) {
         this(createGoalUseCase, recordDepositUseCase, processWithdrawalUseCase, pauseResumeGoalUseCase, repository,
-            new SuggestSavingsPlanUseCase(), null, null, null, null, null, null, null);
+            new SuggestSavingsPlanUseCase(), null, null, null, null, null, null, null, null);
     }
 
     @Autowired
@@ -108,7 +114,8 @@ public class SavingsController {
         @Autowired(required = false) WithdrawUseCase withdraw,
         @Autowired(required = false) WithdrawalStore withdrawals,
         @Autowired(required = false) ActorAuthentication authentication,
-        @Autowired(required = false) Environment environment
+        @Autowired(required = false) Environment environment,
+        @Autowired(required = false) CreditedPayments credited
     ) {
         this.createGoalUseCase = createGoalUseCase;
         this.recordDepositUseCase = recordDepositUseCase;
@@ -125,6 +132,7 @@ public class SavingsController {
         this.withdrawals = withdrawals;
         this.authentication = authentication;
         this.legacyAllowed = environment == null || environment.acceptsProfiles(Profiles.of("dev", "test", "demo"));
+        this.credited = credited;
     }
 
     @PostMapping("/coach/suggest")
@@ -232,6 +240,27 @@ public class SavingsController {
         ownedGoal(id, http);
         List<WithdrawalResponse> body = withdrawals == null ? List.of()
             : withdrawals.findByGoal(id).stream().map(WithdrawalResponse::from).toList();
+        return ResponseEntity.ok(body);
+    }
+
+    /** The deposits that reached the goal, newest first, so the savings timeline can draw real ones. */
+    @GetMapping("/goals/{id}/deposits")
+    public ResponseEntity<List<GoalDepositResponse>> listDeposits(@PathVariable("id") UUID id,
+                                                                  @RequestParam(value = "limit", required = false) Integer limit,
+                                                                  HttpServletRequest http) {
+        SavingsGoal goal = ownedGoal(id, http);
+        int size = limit == null ? DEFAULT_DEPOSITS : limit;
+        if (size < 1 || size > MAX_DEPOSITS) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_DEPOSITS);
+        }
+        String currency = goal.getMonthlyAmount().currency();
+        List<GoalDepositResponse> body = credited == null ? List.of()
+            : credited.newestOfGoal(id, size).stream()
+                .map(c -> {
+                    Money amount = Money.ofCents(c.amountCents());
+                    return new GoalDepositResponse(c.source().name(), amount.amount(), c.amountCents(), currency, c.creditedAt());
+                })
+                .toList();
         return ResponseEntity.ok(body);
     }
 
