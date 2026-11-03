@@ -3,6 +3,7 @@
 import { isProblem, problemMessage, unwrap } from "@paypal-seed/api-client";
 import { refresh } from "next/cache";
 import { z } from "zod";
+import { unstable_rethrow } from "next/navigation";
 import { staffApi } from "@/server/api";
 import { requireSession } from "@/server/session";
 import { REASON_CODES } from "./model";
@@ -55,6 +56,7 @@ export async function decide(_previous: ActionResult, formData: FormData): Promi
     }
     return { status: "ok", message: "Decision recorded." };
   } catch (error) {
+    unstable_rethrow(error);
     if (isProblem(error)) {
       if (error.code === "approval-stale" || error.code === "hardship-offer-stale") {
         refresh();
@@ -80,6 +82,7 @@ export async function retryExecution(_previous: ActionResult, formData: FormData
     refresh();
     return { status: "ok", message: "Retry started. The case updates when the plan is applied." };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       status: "error",
       message: isProblem(error) ? problemMessage(error) : "We could not reach the Seed backend.",

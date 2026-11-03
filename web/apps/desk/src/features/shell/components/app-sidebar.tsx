@@ -14,7 +14,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@paypal-seed/ui/components/sidebar";
-import { Bot, LayoutDashboard, LifeBuoy, ServerCog } from "lucide-react";
+import { Bot, LayoutDashboard, LifeBuoy, ServerCog, Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -34,6 +34,7 @@ const WORK: NavItem[] = [
 const PLATFORM: NavItem[] = [
   { href: "/agents", label: "Agents", icon: <Bot /> },
   { href: "/operations", label: "Operations", icon: <ServerCog /> },
+  { href: "/staff", label: "Staff", icon: <Users /> },
 ];
 
 function isActive(pathname: string, href: string): boolean {

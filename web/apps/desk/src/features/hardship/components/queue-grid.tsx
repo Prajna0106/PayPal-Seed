@@ -172,6 +172,11 @@ export function QueueGrid({ query }: QueueGridProps) {
           signal: controller.signal,
           cache: "no-store",
         });
+        // The backend refused this session, so the route handed over to the login page.
+        if (response.redirected) {
+          window.location.assign(response.url);
+          return;
+        }
         if (!response.ok) {
           const body = (await response.json().catch(() => ({}))) as { title?: string };
           throw new Error(body.title ?? "The queue could not be loaded.");

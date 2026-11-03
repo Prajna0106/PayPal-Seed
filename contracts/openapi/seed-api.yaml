@@ -675,6 +675,33 @@ paths:
           content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StaffRecord' } } } }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [identity-desk]
+      operationId: createStaff
+      summary: Create a colleague's account. Admins only. An email that is already taken gets 409
+      security: [ { staffSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, displayName, roles, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                displayName: { type: string, maxLength: 80 }
+                roles: { type: array, minItems: 1, items: { $ref: '#/components/schemas/StaffRole' } }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { type: object, required: [staffId], properties: { staffId: { type: string, format: uuid } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
 
 
   # ---------------------------------------------------------------- Credit record (ADR 0014)
@@ -1585,6 +1612,49 @@ paths:
       responses:
         '200': { description: accepted | duplicate, content: { application/json: { schema: { type: object, properties: { status: { type: string, enum: [accepted, duplicate] } } } } } }
         '422': { description: invalid-webhook (signature failed; never stored), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /api/v1/auth/staff/password:
+    post:
+      tags: [identity]
+      operationId: changeStaffPassword
+      summary: Change your own password. A wrong current password counts towards the lockout
+      security: [ { staffSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, maxLength: 128 }
+                newPassword: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '204': { description: Changed }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/staff/me:
+    get:
+      tags: [identity]
+      operationId: currentStaffAccess
+      summary: What this staff member may do right now, according to the directory. A suspended person gets 401
+      security: [ { staffSession: [] } ]
+      responses:
+        '200':
+          description: Their current access
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [staffId, roles]
+                properties:
+                  staffId: { type: string, format: uuid }
+                  roles: { type: array, items: { type: string, enum: [OFFICER, CHECKER, ADMIN] } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
 components:
   securitySchemes:
     memberSession: { type: http, scheme: bearer, bearerFormat: actor token, description: 'Signed actor token of a member (ADR 0016). Dev, test and demo profiles accept X-Seed-Member-Id instead' }

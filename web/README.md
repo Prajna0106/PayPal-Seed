@@ -51,15 +51,15 @@ pnpm gen:api        # after a contract change: regenerates packages/api-client/s
 
 - The browser never calls the backend. Pages and Server Actions call it from the server through
   `@paypal-seed/api-client`, with the identity taken from a signed, httpOnly session cookie.
-- Members log in with PayPal, and each backend call signs a short actor token from the session (ADR 0016). Without
-  `SEED_ACTOR_TOKEN_SECRETS`, local development sends dev headers instead. `proxy.ts` redirects signed-out visitors to
-  `/login`.
-- Ana's story and the member id box need no login, so they work only with `SEED_DEMO_LOGIN` (on by default outside
-  production, off in production).
-- The desk is still demo sign-in only, as one of three fixed personas.
+- Members log in with PayPal. Staff log in with their email and a password. Admins add staff on the desk's Staff page;
+  `scripts/create-staff.sh` is only for the first admin. `proxy.ts` redirects signed-out visitors to `/login`.
+- Each backend call signs a short actor token from the session (ADR 0016). Without `SEED_ACTOR_TOKEN_SECRETS`, local
+  development sends dev headers instead, which only the backend's dev and demo profiles read.
+- Ana's story, the member id box and the desk personas need no password, so they work only with `SEED_DEMO_LOGIN`
+  (on by default outside production, off in production).
 - `SEED_INTERNAL_TOKEN` is used only on the server: to finish a login, for demo seeding on the member app and for the
   admin-only operations page on the desk.
 
-To try a real login on this machine, run `bash scripts/dev-member-login.sh`. It needs Java 21 (on `JAVA_HOME` if set,
+To try real logins on this machine, run `bash scripts/dev-member-login.sh`. It needs Java 21 (on `JAVA_HOME` if set,
 otherwise on `PATH`), and `PAYPAL_LOGIN_CLIENT_ID`, `PAYPAL_LOGIN_CLIENT_SECRET` and `SEED_INTERNAL_TOKEN` in
-`apps/member/.env.local`. Then log in at http://127.0.0.1:3000/login.
+`apps/member/.env.local`. Members log in at http://127.0.0.1:3000/login and staff at http://localhost:3001/login.

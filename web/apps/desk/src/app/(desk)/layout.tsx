@@ -14,7 +14,14 @@ export default async function DeskLayout({ children }: { children: ReactNode }) 
   const sidebarOpen = store.get("sidebar_state")?.value !== "false";
   return (
     <SidebarProvider defaultOpen={sidebarOpen}>
-      <AppSidebar footer={<PersonaMenu current={session} personas={PERSONAS} />} />
+      <AppSidebar
+        footer={
+          <PersonaMenu
+            current={{ staffId: session.staffId, name: session.name, roles: session.roles }}
+            personas={session.demo ? PERSONAS : []}
+          />
+        }
+      />
       <SidebarInset className="bg-canvas">
         <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-hairline bg-canvas/85 px-4 backdrop-blur-md">
           <SidebarTrigger className="-ml-1" />

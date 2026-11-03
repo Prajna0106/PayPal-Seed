@@ -153,7 +153,7 @@ services:
         sync: false # the login-only PayPal app, not the payments one
       - key: PAYPAL_LOGIN_CLIENT_SECRET
         sync: false
-      # SEED_DEMO_LOGIN=true turns on sign-in with no login for this app. Set it only on a demo deployment.
+      # SEED_DEMO_LOGIN=true turns on sign-in with no password. Set it only on a demo deployment.
       - fromGroup: seed-shared
   - type: web
     name: seed-desk-web

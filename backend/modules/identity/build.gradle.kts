@@ -8,5 +8,7 @@ dependencies {
     implementation(project(":platform:kernel"))
     implementation(project(":platform:persistence"))
     implementation(project(":platform:messaging"))
+    implementation("org.springframework.security:spring-security-crypto")
+    implementation(libs.bouncycastle.prov)
     testImplementation(project(":platform:testing"))
 }

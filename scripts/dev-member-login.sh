@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Runs Postgres, the backend and the member app on this machine for trying a real PayPal login.
+# Runs Postgres, the backend and both web apps on this machine for trying real logins.
 # Reads SEED_INTERNAL_TOKEN from web/apps/member/.env.local, where the member app also finds its PayPal login values.
 # Needs Java 21: on JAVA_HOME if it is set, otherwise on PATH.
-# Log in at http://127.0.0.1:3000/login. Ctrl+C stops them; the database keeps its data.
+# Members: http://127.0.0.1:3000/login. Staff: http://localhost:3001/login. Ctrl+C stops them; the database keeps its data.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -39,5 +39,5 @@ export SEED_ACTOR_TOKEN_SECRETS="local:$(node -e 'console.log(require("crypto").
 
 trap 'kill 0' EXIT
 (cd "$ROOT/backend" && "$GRADLE" :app:bootRun --console=plain) &
-(cd "$ROOT/web" && npx --yes pnpm@10.22.0 --filter @paypal-seed/member dev) &
+(cd "$ROOT/web" && npx --yes pnpm@10.22.0 --filter @paypal-seed/member --filter @paypal-seed/desk --parallel dev) &
 wait

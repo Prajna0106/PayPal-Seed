@@ -12,6 +12,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +30,9 @@ import org.springframework.stereotype.Component;
  * Dev headers ({@code X-Seed-Member-Id}, {@code X-Seed-Staff-*}) let a caller choose any identity, so
  * they are honoured only when {@code seed.security.dev-header-auth=true}, and only when no bearer
  * credential is present (a token always wins). Startup refuses that flag outside dev, test and demo.
+ *
+ * <p>Staff are then checked against the directory: someone suspended is refused, and a role they have lost no longer
+ * counts, whatever the token says. People the directory doesn't know keep what the token says.
  */
 @Component
 public class ActorAuthentication {
@@ -41,17 +46,43 @@ public class ActorAuthentication {
     private final byte[] internalTokenDigest;
     private final boolean devHeaders;
     private final ActorTokenVerifier actorTokens;
+    private final ObjectProvider<StaffAccessLookup> staffDirectory;
 
+    @Autowired
     public ActorAuthentication(@Value("${seed.security.internal-token:}") String internalToken,
                                @Value("${seed.security.dev-header-auth:false}") boolean devHeaders,
-                               ActorTokenVerifier actorTokens) {
+                               ActorTokenVerifier actorTokens,
+                               ObjectProvider<StaffAccessLookup> staffDirectory) {
         // Compare digests so neither the content nor the length of the secret leaks through timing.
         this.internalTokenDigest = internalToken.length() >= 16 ? sha256(internalToken) : null;
         this.devHeaders = devHeaders;
         this.actorTokens = actorTokens;
+        this.staffDirectory = staffDirectory;
     }
 
     public Optional<Actor> authenticate(HttpServletRequest request) {
+        return credentialActor(request).flatMap(this::withCurrentAccess);
+    }
+
+    private Optional<Actor> withCurrentAccess(Actor actor) {
+        StaffAccessLookup directory = staffDirectory == null ? null : staffDirectory.getIfAvailable();
+        if (actor.type() != Actor.Type.STAFF || directory == null) {
+            return Optional.of(actor);
+        }
+        Optional<StaffAccessLookup.StaffAccess> access = directory.access(actor.id());
+        if (access.isEmpty()) {
+            return Optional.of(actor);
+        }
+        if (!access.get().active()) {
+            log.warn("Staff credential rejected: SUSPENDED");
+            return Optional.empty();
+        }
+        Set<Actor.Role> roles = EnumSet.noneOf(Actor.Role.class);
+        actor.roles().stream().filter(access.get().roles()::contains).forEach(roles::add);
+        return Optional.of(new Actor(Actor.Type.STAFF, actor.id(), roles, access.get().linkedMemberId()));
+    }
+
+    private Optional<Actor> credentialActor(HttpServletRequest request) {
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith(BEARER)) {
             return bearer(authorization.substring(BEARER.length()), path(request));

@@ -3,6 +3,7 @@
 import { isProblem, problemMessage, unwrap } from "@paypal-seed/api-client";
 import { refresh } from "next/cache";
 import { z } from "zod";
+import { unstable_rethrow } from "next/navigation";
 import type { ActionResult } from "@/features/hardship/actions";
 import { adminInternalApi } from "@/server/api";
 import { getSession, hasRole } from "@/server/session";
@@ -19,6 +20,7 @@ async function asAdmin<T>(run: () => Promise<T>, done: (result: T) => string): P
     refresh();
     return { status: "ok", message: done(result) };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       status: "error",
       message: isProblem(error) ? problemMessage(error) : "We could not reach the Seed backend.",
