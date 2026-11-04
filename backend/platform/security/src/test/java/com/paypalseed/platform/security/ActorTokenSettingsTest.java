@@ -13,6 +13,8 @@ import org.springframework.mock.env.MockEnvironment;
 
 class ActorTokenSettingsTest {
 
+    private static final String STAFF_SECRET = "desk-secret-0123456789-0123456789-0123456789-0123456789-xy";
+
     private static MockEnvironment env(String... profiles) {
         MockEnvironment env = new MockEnvironment();
         env.setActiveProfiles(profiles);
@@ -41,10 +43,40 @@ class ActorTokenSettingsTest {
     @Test
     void productionStartsWithASecretAndNoDevHeaders() {
         MockEnvironment env = env("prod").withProperty("seed.security.actor-token.secrets[0]", "k1:" + SECRET_1)
+                .withProperty("seed.security.staff-actor-token.secrets[0]", "d1:" + STAFF_SECRET)
                 .withProperty("seed.security.dev-header-auth", "false");
         ActorTokenSettings settings = ActorTokenSettings.from(env);
         assertThat(settings.keys().size()).isEqualTo(1);
+        assertThat(settings.staffKeys().signingKid()).isEqualTo("d1");
         assertThat(settings.clockSkew()).isEqualTo(Duration.ofSeconds(30));
+    }
+
+    @Test
+    void productionNeedsTheDesksOwnStaffKeysAndRefusesToShareOne() {
+        MockEnvironment withoutStaffKeys = env("prod").withProperty("seed.security.actor-token.secrets[0]", "k1:" + SECRET_1);
+        assertThatThrownBy(() -> ActorTokenSettings.from(withoutStaffKeys))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("seed.security.staff-actor-token.secrets");
+
+        MockEnvironment shared = env("prod").withProperty("seed.security.actor-token.secrets[0]", "k1:" + SECRET_1)
+                .withProperty("seed.security.staff-actor-token.secrets[0]", "d1:" + SECRET_1);
+        assertThatThrownBy(() -> ActorTokenSettings.from(shared))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must not reuse")
+                .hasMessageNotContaining(SECRET_1);
+
+        ActorTokenSettings fromEnv = ActorTokenSettings.from(env("prod").withProperty("SEED_ACTOR_TOKEN_SECRETS", "k1:" + SECRET_1)
+                .withProperty("SEED_STAFF_ACTOR_TOKEN_SECRETS", "d1:" + STAFF_SECRET));
+        assertThat(fromEnv.staffKeys().secret("d1")).isEqualTo(STAFF_SECRET.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void outsideProductionStaffTokensShareTheMemberKeysUnlessTheDeskHasItsOwn() {
+        ActorTokenSettings shared = ActorTokenSettings.from(env("dev").withProperty("seed.security.actor-token.secrets[0]", "k1:" + SECRET_1));
+        assertThat(shared.staffKeys().signingKid()).isEqualTo("k1");
+        ActorTokenSettings split = ActorTokenSettings.from(env("dev").withProperty("seed.security.actor-token.secrets[0]", "k1:" + SECRET_1)
+                .withProperty("seed.security.staff-actor-token.secrets[0]", "d1:" + STAFF_SECRET));
+        assertThat(split.staffKeys().signingKid()).isEqualTo("d1");
     }
 
     @Test
@@ -58,12 +90,12 @@ class ActorTokenSettingsTest {
     @Test
     void secretsBindFromACommaSeparatedValueAndFromTheDocumentedEnvironmentVariable() {
         ActorTokenSettings fromProperty = ActorTokenSettings.from(env("prod")
-                .withProperty("seed.security.actor-token.secrets", "k2:" + SECRET_2 + ", k1:" + SECRET_1));
+                .withProperty("seed.security.actor-token.secrets", "k2:" + SECRET_2 + ", k1:" + SECRET_1).withProperty("seed.security.staff-actor-token.secrets[0]", "d1:" + STAFF_SECRET));
         assertThat(fromProperty.keys().size()).isEqualTo(2);
         assertThat(fromProperty.keys().signingKid()).isEqualTo("k2");
 
         ActorTokenSettings fromEnv = ActorTokenSettings.from(env("prod")
-                .withProperty("SEED_ACTOR_TOKEN_SECRETS", "k1:" + SECRET_1 + ",k2:" + SECRET_2));
+                .withProperty("SEED_ACTOR_TOKEN_SECRETS", "k1:" + SECRET_1 + ",k2:" + SECRET_2).withProperty("seed.security.staff-actor-token.secrets[0]", "d1:" + STAFF_SECRET));
         assertThat(fromEnv.keys().signingKid()).isEqualTo("k1");
         assertThat(fromEnv.keys().secret("k2")).isEqualTo(SECRET_2.getBytes(StandardCharsets.UTF_8));
     }

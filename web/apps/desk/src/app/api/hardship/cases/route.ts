@@ -1,6 +1,7 @@
 import { isProblem } from "@paypal-seed/api-client";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { unstable_rethrow } from "next/navigation";
 import { queuePage } from "@/features/hardship/server/queries";
 import { getSession } from "@/server/session";
 
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
     const page = await queuePage(filters, before, limit);
     return Response.json(page, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    unstable_rethrow(error);
     if (isProblem(error)) {
       return Response.json({ title: error.title, code: error.code }, { status: error.status });
     }

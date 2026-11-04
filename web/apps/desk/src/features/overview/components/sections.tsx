@@ -22,6 +22,7 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { CASE_STATUSES, RISK_LEVELS } from "@/features/hardship/model";
 import {
   agentState,
@@ -40,6 +41,7 @@ async function load<T>(fetcher: () => Promise<T>): Promise<Loaded<T>> {
   try {
     return { ok: true, value: await fetcher() };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: isProblem(error)

@@ -13,6 +13,7 @@ seed:
   security:
     dev-header-auth: true
     internal-token: test-internal-token-0123456789
+    staff-service-token: test-staff-service-token-0123456789
   zapier:
     signing-secret: test-zapier-secret
 

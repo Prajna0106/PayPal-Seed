@@ -55,11 +55,20 @@ public final class ActorTokenIssuer {
     }
 
     public String staff(UUID staffId, Set<Actor.Role> roles, Duration ttl) {
+        return staff(staffId, roles, ttl, null);
+    }
+
+    /** A staff token naming when its desk session began, as the desk sends it. */
+    public String staff(UUID staffId, Set<Actor.Role> roles, Duration ttl, Instant authTime) {
         List<String> names = roles.stream().map(Enum::name).sorted().toList();
-        return sign(staffId, "staff", names, ttl);
+        return sign(staffId, "staff", names, ttl, authTime);
     }
 
     private String sign(UUID subject, String actorType, List<String> roles, Duration ttl) {
+        return sign(subject, actorType, roles, ttl, null);
+    }
+
+    private String sign(UUID subject, String actorType, List<String> roles, Duration ttl, Instant authTime) {
         if (ttl.isNegative() || ttl.isZero() || ttl.compareTo(ActorTokenVerifier.MAX_LIFETIME) > 0) {
             throw new IllegalArgumentException("ttl must be between 1 second and 5 minutes");
         }
@@ -74,6 +83,9 @@ public final class ActorTokenIssuer {
                 .jwtID(UUID.randomUUID().toString());
         if (roles != null) {
             claims.claim("roles", roles);
+        }
+        if (authTime != null) {
+            claims.claim("auth_time", authTime.getEpochSecond());
         }
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.HS256).type(JOSEObjectType.JWT).keyID(kid).build();
         SignedJWT jwt = new SignedJWT(header, claims.build());

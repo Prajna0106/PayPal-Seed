@@ -16,6 +16,6 @@ public class ActorTokenConfiguration {
 
     @Bean
     ActorTokenVerifier actorTokenVerifier(ActorTokenSettings settings) {
-        return new ActorTokenVerifier(settings.keys(), settings.clockSkew(), Clock.systemUTC());
+        return new ActorTokenVerifier(settings.keys(), settings.staffKeys(), settings.clockSkew(), Clock.systemUTC());
     }
 }

@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@paypal-seed/ui/components/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@paypal-seed/ui/components/sidebar";
-import { Check, ChevronsUpDown, LogOut } from "lucide-react";
+import { Check, ChevronsUpDown, KeyRound, LogOut } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signInAs, signOut } from "@/features/auth/actions";
 
@@ -26,7 +27,6 @@ export interface PersonaMenuProps {
   personas: readonly PersonaOption[];
 }
 
-/** Switch demo persona without leaving the page: makers and checkers must be different people. */
 export function PersonaMenu({ current, personas }: PersonaMenuProps) {
   const pathname = usePathname();
   return (
@@ -46,7 +46,7 @@ export function PersonaMenu({ current, personas }: PersonaMenuProps) {
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-64">
-            <DropdownMenuLabel>Act as</DropdownMenuLabel>
+            {personas.length > 0 ? <DropdownMenuLabel>Act as</DropdownMenuLabel> : null}
             {personas.map((persona) => (
               <form key={persona.id} action={signInAs}>
                 <input type="hidden" name="personaId" value={persona.id} />
@@ -63,7 +63,13 @@ export function PersonaMenu({ current, personas }: PersonaMenuProps) {
                 </DropdownMenuItem>
               </form>
             ))}
-            <DropdownMenuSeparator />
+            {personas.length > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuItem asChild>
+              <Link href="/account">
+                <KeyRound aria-hidden="true" />
+                Your login
+              </Link>
+            </DropdownMenuItem>
             <form action={signOut}>
               <DropdownMenuItem asChild>
                 <button type="submit" className="w-full">

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@payp
 import { formatDateTime, formatRelative } from "@paypal-seed/ui/lib/format";
 import { ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
+import { unstable_rethrow } from "next/navigation";
 import { KillSwitchForm } from "@/features/agents/components/kill-switch-form";
 import { agentState } from "@/features/overview/server/queries";
 import { hasRole, requireSession } from "@/server/session";
@@ -31,6 +32,7 @@ export default async function AgentsPage() {
   try {
     state = await agentState();
   } catch (error) {
+    unstable_rethrow(error);
     return (
       <>
         <PageHeader eyebrow="Platform" title="Agents" />

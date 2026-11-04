@@ -17,27 +17,26 @@ import org.springframework.core.env.Environment;
  * <ul>
  *   <li>{@code seed.security.actor-token.secrets}: list of {@code kid:secret} (env
  *       {@code SEED_ACTOR_TOKEN_SECRETS}, comma separated)</li>
+ *   <li>{@code seed.security.staff-actor-token.secrets}: the desk's own keys for staff tokens (env
+ *       {@code SEED_STAFF_ACTOR_TOKEN_SECRETS}). The member app never holds them, so it can't sign a staff token. In dev,
+ *       test and demo they default to the member keys.</li>
  *   <li>{@code seed.security.actor-token.clock-skew-seconds}: 0 to 30, default 30</li>
  * </ul>
  */
-public record ActorTokenSettings(ActorTokenKeys keys, Duration clockSkew) {
+public record ActorTokenSettings(ActorTokenKeys keys, ActorTokenKeys staffKeys, Duration clockSkew) {
 
     static final String SECRETS_PROPERTY = "seed.security.actor-token.secrets";
     static final String SECRETS_ENV = "SEED_ACTOR_TOKEN_SECRETS";
+    static final String STAFF_SECRETS_PROPERTY = "seed.security.staff-actor-token.secrets";
+    static final String STAFF_SECRETS_ENV = "SEED_STAFF_ACTOR_TOKEN_SECRETS";
     static final String SKEW_PROPERTY = "seed.security.actor-token.clock-skew-seconds";
     static final String DEV_HEADERS_PROPERTY = "seed.security.dev-header-auth";
     static final Duration MAX_SKEW = Duration.ofSeconds(30);
     private static final Set<String> NON_PRODUCTION_PROFILES = Set.of("dev", "test", "demo");
 
     public static ActorTokenSettings from(Environment env) {
-        List<String> entries = Binder.get(env).bind(SECRETS_PROPERTY, Bindable.listOf(String.class)).orElse(List.of());
-        if (entries.isEmpty()) {
-            String fromEnv = env.getProperty(SECRETS_ENV);
-            if (fromEnv != null) {
-                entries = Arrays.asList(fromEnv.split(","));
-            }
-        }
-        ActorTokenKeys keys = ActorTokenKeys.parse(entries);
+        ActorTokenKeys keys = ActorTokenKeys.parse(entries(env, SECRETS_PROPERTY, SECRETS_ENV));
+        ActorTokenKeys staffKeys = ActorTokenKeys.parse(entries(env, STAFF_SECRETS_PROPERTY, STAFF_SECRETS_ENV));
 
         long skewSeconds = env.getProperty(SKEW_PROPERTY, Long.class, MAX_SKEW.toSeconds());
         if (skewSeconds < 0 || skewSeconds > MAX_SKEW.toSeconds()) {
@@ -57,7 +56,25 @@ public record ActorTokenSettings(ActorTokenKeys keys, Duration clockSkew) {
                 throw new IllegalStateException(SECRETS_PROPERTY + " (" + SECRETS_ENV
                         + ") must name at least one kid:secret outside the dev, test and demo profiles");
             }
+            if (staffKeys.isEmpty()) {
+                throw new IllegalStateException(STAFF_SECRETS_PROPERTY + " (" + STAFF_SECRETS_ENV
+                        + ") must name at least one kid:secret outside the dev, test and demo profiles");
+            }
+            if (keys.sharesASecretWith(staffKeys)) {
+                throw new IllegalStateException(STAFF_SECRETS_PROPERTY + " must not reuse a secret from " + SECRETS_PROPERTY);
+            }
         }
-        return new ActorTokenSettings(keys, Duration.ofSeconds(skewSeconds));
+        return new ActorTokenSettings(keys, staffKeys.isEmpty() ? keys : staffKeys, Duration.ofSeconds(skewSeconds));
+    }
+
+    private static List<String> entries(Environment env, String property, String envName) {
+        List<String> entries = Binder.get(env).bind(property, Bindable.listOf(String.class)).orElse(List.of());
+        if (entries.isEmpty()) {
+            String fromEnv = env.getProperty(envName);
+            if (fromEnv != null) {
+                return Arrays.asList(fromEnv.split(","));
+            }
+        }
+        return entries;
     }
 }

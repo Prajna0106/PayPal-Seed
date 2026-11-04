@@ -3,6 +3,7 @@ seed:
   security:
     dev-header-auth: true
     internal-token: ${SEED_INTERNAL_TOKEN:local-dev-internal-token}
+    staff-service-token: ${SEED_STAFF_SERVICE_TOKEN:local-dev-staff-service-token}
     actor-token:
       # The web apps in dev send X-Seed-* headers, so this is only needed to try signed tokens locally.
       secrets: ${SEED_ACTOR_TOKEN_SECRETS:k1:dev-only-actor-token-secret-0123456789abcdef}

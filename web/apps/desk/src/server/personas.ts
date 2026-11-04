@@ -2,7 +2,7 @@ import type { StaffRole } from "@paypal-seed/api-client/types";
 
 /**
  * Demo staff. Fixed ids so the maker and the checker are always different people; the backend enforces separation
- * of duties on these ids. Real staff sign-in (passkeys) belongs to the identity feature.
+ * of duties on these ids. Real staff log in with an email and a password.
  */
 export interface Persona {
   id: string;

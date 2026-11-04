@@ -3,6 +3,7 @@
 import { isProblem, problemMessage, unwrap } from "@paypal-seed/api-client";
 import { refresh } from "next/cache";
 import { z } from "zod";
+import { unstable_rethrow } from "next/navigation";
 import type { ActionResult } from "@/features/hardship/actions";
 import { staffApi } from "@/server/api";
 import { requireSession } from "@/server/session";
@@ -29,6 +30,7 @@ export async function setKillSwitch(_previous: ActionResult, formData: FormData)
     refresh();
     return { status: "ok", message: `Guardian is now ${state.mode === "TEMPLATES_ONLY" ? "on templates only" : (state.mode ?? "").toLowerCase()}.` };
   } catch (error) {
+    unstable_rethrow(error);
     if (isProblem(error, "kill-switch-up-needs-admin")) {
       return { status: "error", code: error.code, message: "Only an admin can move the agents to a less restrictive mode." };
     }

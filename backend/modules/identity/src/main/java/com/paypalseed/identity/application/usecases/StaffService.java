@@ -1,5 +1,7 @@
 package com.paypalseed.identity.application.usecases;
 
+import com.paypalseed.governance.api.GovernanceFacade;
+import com.paypalseed.governance.api.dto.GovernanceDtos.AuditCommand;
 import com.paypalseed.identity.api.dto.IdentityDtos.StaffUpsert;
 import com.paypalseed.identity.api.dto.IdentityDtos.StaffView;
 import com.paypalseed.identity.domain.model.StaffMember;
@@ -16,19 +18,22 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The desk staff directory. Names only matter to people, so nothing here publishes events. */
+/** The desk staff directory. Names only matter to people, so nothing here publishes events; role changes are audited. */
 @Service
 public class StaffService {
 
     private final StaffRepository staff;
     private final BusinessClock clock;
+    private final GovernanceFacade governance;
 
-    StaffService(StaffRepository staff, BusinessClock clock) {
+    StaffService(StaffRepository staff, BusinessClock clock, GovernanceFacade governance) {
         this.staff = staff;
         this.clock = clock;
+        this.governance = governance;
     }
 
     @Transactional
@@ -36,7 +41,13 @@ public class StaffService {
         Instant now = now();
         StaffMember member = StaffMember.of(staffId, command.displayName(), command.email(), command.roles(), command.active(),
                 now, now);
+        Optional<StaffMember> before = staff.find(staffId);
         staff.upsert(member);
+        if (before.isEmpty() || !before.get().roles().equals(member.roles()) || before.get().active() != member.active()) {
+            governance.audit(new AuditCommand("STAFF_DIRECTORY_SAVED", staffId, "SERVICE", "staff-accounts",
+                    "{\"roles\":[" + member.roles().stream().map(r -> "\"" + r.name() + "\"").sorted().collect(Collectors.joining(","))
+                            + "],\"active\":" + member.active() + "}"));
+        }
         return staff.find(staffId).map(StaffService::view).orElseThrow();
     }
 

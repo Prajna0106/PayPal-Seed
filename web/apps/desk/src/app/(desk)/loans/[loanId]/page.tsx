@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatMoney } from "@paypal-seed/ui/lib/format";
 import { CircleAlert, CircleCheck, Landmark, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { DeskTimeline } from "@/features/loans/components/desk-timeline";
 import { deskIntegrity, deskSchedule, deskTimeline, deskVersions } from "@/features/loans/server/queries";
 
@@ -47,6 +47,7 @@ export default async function LoanPage({ params }: PageProps<"/loans/[loanId]">)
   try {
     [schedule, versions, integrity] = await Promise.all([deskSchedule(loanId), deskVersions(loanId), deskIntegrity(loanId)]);
   } catch (error) {
+    unstable_rethrow(error);
     if (isProblem(error) && (error.status === 404 || error.status === 400)) {
       notFound();
     }

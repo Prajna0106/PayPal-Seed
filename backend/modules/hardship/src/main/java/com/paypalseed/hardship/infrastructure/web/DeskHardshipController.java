@@ -75,7 +75,7 @@ class DeskHardshipController {
     DecisionResult decide(Actor actor, @PathVariable UUID caseId, @Valid @RequestBody DecisionRequest body,
                           @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String key) {
         actor.requireAnyRole(Role.OFFICER, Role.CHECKER);
-        return approvals.decide(caseId, actor.id(), actor.roles().stream().map(Enum::name).collect(Collectors.toSet()),
+        return approvals.decide(caseId, actor.id(), actor.linkedMemberId(), actor.roles().stream().map(Enum::name).collect(Collectors.toSet()),
                 body.decision(), body.reasonCode(), body.note(), body.evidenceViewedMs(), key);
     }
 
