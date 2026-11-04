@@ -129,7 +129,7 @@ export function DonateForm({ clientId }: DonateFormProps) {
                 throw new Error(message);
               }
               // The intent is made here, on the click, so a page view alone never creates a row.
-              const intent = await createDonationIntent({ anonymous: !shown || typed.trim() === "", displayName: typed });
+              const intent = await createDonationIntent({ amountCents: cents, anonymous: !shown || typed.trim() === "", displayName: typed });
               if (!intent.ok) {
                 setOutcome({ kind: "error", message: intent.message });
                 throw new Error(intent.message);

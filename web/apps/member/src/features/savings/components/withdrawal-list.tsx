@@ -1,6 +1,7 @@
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
 import { formatDateTime, formatMoney } from "@paypal-seed/ui/lib/format";
 import { type Withdrawal, WITHDRAWAL_STATUS } from "../model";
+import { WithdrawalRefresher } from "./withdrawal-refresher";
 
 /** Money taken out of the goal, newest first, in words: on its way, sent, or back in the goal. */
 export function WithdrawalList({ withdrawals }: { withdrawals: Withdrawal[] }) {
@@ -8,7 +9,9 @@ export function WithdrawalList({ withdrawals }: { withdrawals: Withdrawal[] }) {
     return <p className="text-sm text-body">Nothing taken out yet.</p>;
   }
   return (
-    <ul className="flex flex-col divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
+    <>
+      <WithdrawalRefresher active={withdrawals.some((w) => w.status === "REQUESTED")} />
+      <ul aria-live="polite" className="flex flex-col divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
       {withdrawals.map((withdrawal) => {
         const status = WITHDRAWAL_STATUS[withdrawal.status];
         return (
@@ -24,6 +27,7 @@ export function WithdrawalList({ withdrawals }: { withdrawals: Withdrawal[] }) {
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </>
   );
 }

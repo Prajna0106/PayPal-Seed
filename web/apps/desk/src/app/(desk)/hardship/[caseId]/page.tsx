@@ -72,6 +72,15 @@ export default async function CasePage({ params }: PageProps<"/hardship/[caseId]
                 </Link>
               </Button>
             ) : null}
+            {summary.loanId && (hasRole(session, "OFFICER") || hasRole(session, "ADMIN")) ? (
+              // The case carries no member id, so the officer still adds that one field on the form.
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/reserve?loanId=${summary.loanId}&hardshipCaseId=${caseId}` as Route}>
+                  Ask for cover
+                  <ArrowUpRight aria-hidden="true" />
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />
