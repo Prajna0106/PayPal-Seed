@@ -9,7 +9,7 @@ info:
     Authentication: `/api/**` takes a signed actor token (ADR 0016) in `Authorization: Bearer`; the dev, test and demo
     profiles also accept `X-Seed-Member-Id` or `X-Seed-Staff-Id` and `X-Seed-Staff-Roles`. Two routes are public and
     declare `security: []`: `GET /api/v1/reserve/summary` and `GET /api/v1/records/verify/{token}` (plus
-    `POST /api/v1/reserve/donations/intent` and the webhooks). Put an edge rate limit in front of the public routes.
+    `POST /api/v1/reserve/donations/intent` and the webhooks). The app limits each client address on these three routes (429 `rate-limited`, ADR 0030); an edge rule in front is still advisable.
 
     Features: F1 savings, F2 microloans, F3 fair loan check, F4 repayment and autopay, F5 hardship safety net,
     F6 credit record, plus identity, the reserve, fraud flags, desk read models and the member home call.
@@ -828,6 +828,7 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '409': { description: 'idempotency-key-reused | record-nothing-to-share | share-limit-reached | record-sharing-consent-required', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { description: rate-limited (too many requests from this address; see Retry-After), headers: { Retry-After: { schema: { type: integer }, description: Seconds to wait } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '503': { description: dependency-unavailable (no signing key is configured), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     get:
       tags: [record]
@@ -1032,6 +1033,7 @@ paths:
           headers:
             Cache-Control: { schema: { type: string }, description: 'public, max-age=30' }
           content: { application/json: { schema: { $ref: '#/components/schemas/ReserveSummary' } } }
+        '429': { description: rate-limited (too many requests from this address; see Retry-After), headers: { Retry-After: { schema: { type: integer }, description: Seconds to wait } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /api/v1/reserve/donations/intent:
     post:
@@ -1058,6 +1060,7 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/DonationIntent' } } }
         '400': { $ref: '#/components/responses/Problem' }
         '409': { description: idempotency-key-reused, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { description: rate-limited (too many requests from this address; see Retry-After), headers: { Retry-After: { schema: { type: integer }, description: Seconds to wait } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /api/v1/desk/reserve/cover-requests:
     post:
