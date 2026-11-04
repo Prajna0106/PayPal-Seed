@@ -37,7 +37,23 @@ public final class LoanMessages {
 
     /** The member cancelled inside the cooling-off window: a short confirmation, since they chose it. */
     public static String cancelled(String locale) {
-        return "es".equals(locale)
+        return cancelled(locale, 0);
+    }
+
+    /**
+     * As {@link #cancelled(String)}; {@code refundDueCents} is what the member had already paid in, which is on its way back
+     * to them. Zero when they had paid nothing, so no refund is promised.
+     */
+    public static String cancelled(String locale, long refundDueCents) {
+        boolean es = "es".equals(locale);
+        if (refundDueCents > 0) {
+            String amount = amount(refundDueCents);
+            return es
+                    ? "Seed: Tu préstamo está cancelado. No debes nada y no hay cargos. Los " + amount + " que pagaste te los devolvemos."
+                    : "Seed: Your loan is cancelled. You owe nothing and there are no fees. The " + amount
+                            + " you paid is coming back to you.";
+        }
+        return es
                 ? "Seed: Tu préstamo está cancelado. No debes nada y no hay cargos."
                 : "Seed: Your loan is cancelled. You owe nothing and there are no fees.";
     }

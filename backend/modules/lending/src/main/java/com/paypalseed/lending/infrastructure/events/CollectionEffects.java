@@ -73,15 +73,18 @@ class CollectionEffects {
         if (loan.status() != LoanStatus.REPAID || loan.overpaidCents() == 0) {
             return;
         }
+        String reference = HeldRefunds.autoRefundReference(e.transactionId());
         long refundable = payments.refundableCents(loan.id());
         if (refundable < loan.overpaidCents()) {
-            // Retrying will not change this; the overpayment stays held and visible to the desk.
-            log.error("Cannot auto-refund {} cents for loan {}: only {} cents of PayPal captures are refundable",
-                    loan.overpaidCents(), loan.id(), refundable);
+            // Retrying the event cannot change this, so the refund becomes a held-refund row: the worker retries it with
+            // backoff, and if PayPal never has enough it ends FAILED with a governance entry instead of only a log line.
+            heldRefunds.owe(loan.id(), loan.memberId(), reference, loan.overpaidCents());
+            log.warn("Cannot auto-refund {} cents for loan {} yet: only {} cents of PayPal captures are refundable; kept as refund {}",
+                    loan.overpaidCents(), loan.id(), refundable, reference);
             return;
         }
         // A PayPal outage throws and leaves the event incomplete, so the refund is retried.
-        payments.refundOverpayment(new RefundOverpayment(loan.id(), loan.overpaidCents(), "auto-refund:" + e.transactionId()));
+        payments.refundOverpayment(new RefundOverpayment(loan.id(), loan.overpaidCents(), reference));
         log.info("Auto-refunding {} cents overpaid on repaid loan {}", loan.overpaidCents(), loan.id());
     }
 }
