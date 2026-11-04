@@ -27,8 +27,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class SummaryRepository {
 
-    /** Loans the desk counts: schedule seen, and not returned in the cooling-off window. */
-    private static final String REAL_LOANS = "deskquery.loan_view where principal_cents is not null and status <> 'CANCELLED'";
+    /** Statuses of loans that never stood: cancelled in the cooling-off window, or whose payout came back (ADR 0024). */
+    private static final String NEVER_STOOD = "('CANCELLED', 'DISBURSEMENT_RETURNED')";
+
+    /** Loans the desk counts: schedule seen, and not cancelled or void. */
+    private static final String REAL_LOANS = "deskquery.loan_view where principal_cents is not null and status not in " + NEVER_STOOD;
 
     private final DSLContext dsl;
 
@@ -53,7 +56,7 @@ public class SummaryRepository {
     public OnTimeRate onTime(LocalDate today) {
         Record due = dsl.fetchOne("select count(*) from deskquery.loan_instalment_view i "
                 + "join deskquery.loan_view l using (loan_id) "
-                + "where l.principal_cents is not null and l.status <> 'CANCELLED' and i.due_date <= {0}",
+                + "where l.principal_cents is not null and l.status not in " + NEVER_STOOD + " and i.due_date <= {0}",
                 DSL.val(today, SQLDataType.LOCALDATE));
         Record missed = dsl.fetchOne("select coalesce(sum(missed_instalments), 0) from " + REAL_LOANS);
         return OnTimeRate.of(due.get(0, Long.class), missed.get(0, Long.class));
@@ -76,7 +79,7 @@ public class SummaryRepository {
                   (select count(*) from (select member_ref from deskquery.member_savings
                                           union
                                          select member_ref from deskquery.loan_view
-                                          where principal_cents is not null and status <> 'CANCELLED') m),
+                                          where principal_cents is not null and status not in %2$s) m),
                   (select count(distinct member_ref) from %1$s),
                   (select count(*) from %1$s),
                   (select coalesce(sum(principal_cents), 0) from %1$s),
@@ -85,7 +88,7 @@ public class SummaryRepository {
                   (select count(*) from (select distinct on (member_ref) status, repaid_on_plan from %1$s
                                           order by member_ref, disbursed_on, loan_id) f
                     where f.status = 'REPAID' and f.repaid_on_plan)
-                """.formatted(REAL_LOANS));
+                """.formatted(REAL_LOANS, NEVER_STOOD));
         return new ImpactFigures.Raw(r.get(0, Long.class), r.get(1, Long.class), r.get(2, Long.class), r.get(3, Long.class),
                 r.get(4, Long.class), r.get(5, Long.class));
     }

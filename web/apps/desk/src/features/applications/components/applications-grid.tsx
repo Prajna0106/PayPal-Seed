@@ -22,6 +22,7 @@ import {
   type ApplicationFilters,
   type DeskApplicationRow,
   OUTCOMES,
+  payoutIssueLabel,
   shortRef,
   SLA_STATES,
 } from "../model";
@@ -76,6 +77,21 @@ function OutcomeCell({ data }: Params) {
     </StatusPill>
   ) : (
     <Muted />
+  );
+}
+
+function PayoutIssueCell({ data }: Params) {
+  if (!data) {
+    return <Pending />;
+  }
+  if (!data.payoutIssue) {
+    return <Muted />;
+  }
+  const issue = payoutIssueLabel(data.payoutIssue);
+  return (
+    <StatusPill tone={issue.tone} dot={false}>
+      {issue.label}
+    </StatusPill>
   );
 }
 
@@ -211,6 +227,15 @@ export function ApplicationsGrid({ initialFilters }: ApplicationsGridProps) {
         headerName: "Fair check",
         cellRenderer: OutcomeCell,
         width: 190,
+      },
+      {
+        colId: "payoutIssue",
+        field: "payoutIssue",
+        headerName: "Payout",
+        headerTooltip: "Set when PayPal did not complete the payout; open the application for what to do",
+        cellRenderer: PayoutIssueCell,
+        width: 170,
+        sortable: false,
       },
       {
         colId: "age",

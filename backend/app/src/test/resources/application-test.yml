@@ -6,6 +6,8 @@ spring:
     republish-outstanding-events-on-restart: false
 
 seed:
+  savings:
+    goal-visibility-window: PT1S  # tests that name goals which never exist expect them dropped at once; SavingsWebhookRetryIT sets its own
   jobs:
     enabled: false              # tests drive the inbox, reminders and COB explicitly
   security:

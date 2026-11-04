@@ -1,0 +1,28 @@
+$kind: http-request
+name: 'HS19. Desk sees the choice and an open approval'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}'
+order: 19000
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('B was chosen in the app and waits for approval', () => {
+        pm.expect(body.summary.status).to.eql('PENDING_APPROVAL');
+        pm.expect(body.chosenOption).to.eql('B');
+        pm.expect(body.choiceChannel).to.eql('APP');
+      });
+      pm.test('Maker-checker approval is open with no decision yet', () => {
+        pm.expect(body.approval.tier).to.eql('MAKER_CHECKER');
+        pm.expect(body.approval.status).to.eql('OPEN');
+        pm.expect(body.approval.checkerRequired).to.eql(true);
+        pm.expect(body.approval.decisions).to.have.lengthOf(0);
+      });

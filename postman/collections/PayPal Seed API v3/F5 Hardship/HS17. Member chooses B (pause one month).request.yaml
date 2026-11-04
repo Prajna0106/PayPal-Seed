@@ -1,0 +1,42 @@
+$kind: http-request
+name: 'HS17. Member chooses B (pause one month)'
+method: POST
+url: '{{baseUrl}}/api/v1/hardship/cases/{{hardshipCaseId}}/choice'
+order: 17000
+description: 'The choice is the recorded consent, and it is final: the code only suggests an option. B needs a maker and a checker, so the case goes to PENDING_APPROVAL with an officer deadline.'
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Idempotency-Key'
+    value: '{{hardshipChoiceKey}}'
+    description: 'One key per user action; reuse it only to replay the same request.'
+body:
+  type: json
+  content: |-
+    {
+      "offerId": "{{hardshipOfferId}}",
+      "optionId": "{{hardshipOptionBId}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('hardshipChoiceKey', 'postman-choice-' + pm.variables.replaceIn('{{$guid}}'));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has caseId, status, optionLabel, tier, decisionDueAt', () => ['caseId', 'status', 'optionLabel', 'tier', 'decisionDueAt'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('B waits for two officers', () => {
+        pm.expect(body.caseId).to.eql(pm.collectionVariables.get('hardshipCaseId'));
+        pm.expect(body.status).to.eql('PENDING_APPROVAL');
+        pm.expect(body.optionLabel).to.eql('B');
+        pm.expect(body.tier).to.eql('MAKER_CHECKER');
+        pm.expect(body.decisionDueAt).to.be.a('string');
+        pm.expect(body.payNowCents).to.eql(null);
+      });
+examples: './.resources/HS17. Member chooses B (pause one month).resources/examples/'

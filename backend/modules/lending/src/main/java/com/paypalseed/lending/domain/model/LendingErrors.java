@@ -37,6 +37,8 @@ public final class LendingErrors {
     // Feature 2: Savings-linked microloans
     public static final ErrorCode APPLICATION_NOT_FOUND =
             ErrorCode.notFound("application-not-found", "Loan application not found");
+    public static final ErrorCode PAYOUT_NOT_FOUND =
+            ErrorCode.notFound("payout-not-found", "This application has no payout");
     public static final ErrorCode INELIGIBLE_FOR_LOAN =
             ErrorCode.validation("ineligible-for-loan", "Member is not currently eligible for a microloan");
     public static final ErrorCode SIZING_RULE_VIOLATION =

@@ -14,6 +14,8 @@ import com.paypalseed.lending.api.dto.LendingDtos.InstalmentLine;
 import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.api.dto.LendingDtos.ReserveCover;
 import com.paypalseed.lending.api.dto.LendingDtos.ScheduleView;
+import com.paypalseed.lending.application.usecases.RepaymentService;
+import com.paypalseed.lending.domain.model.LoanTransaction.Source;
 import com.paypalseed.reserve.api.ReserveFacade;
 import com.paypalseed.support.IntegrationTest;
 import java.time.LocalDate;
@@ -43,6 +45,8 @@ class CoverRepaymentIT extends IntegrationTest {
     TransactionTemplate tx;
     @Autowired
     ObjectMapper json;
+    @Autowired
+    RepaymentService repayments;
 
     @Test
     void anApprovedCoverPaysTheDueInstalmentOnTheScheduleAndTheLedgerIsPostedOnce() throws Exception {
@@ -164,6 +168,30 @@ class CoverRepaymentIT extends IntegrationTest {
         assertThat(late.unusedCents()).isEqualTo(5_000);
         assertThat(jdbc.sql("SELECT COUNT(*) FROM lending.loan_transaction WHERE loan_id = :l").param("l", loan.loanId())
                 .query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void theScheduleAndTheRepaidEventSayHowMuchOfTheLoanTheReserveAndHowMuchTheMemberPaid() throws Exception {
+        UUID member = UUID.randomUUID();
+        fund(50_000);
+        LoanSummary loan = disburse(member, 100, 4, 15, DISBURSED);
+        settle();
+        repayments.recordReceipt(new RepaymentService.Receipt(loan.loanId(), "PAY-MIXED-1", Source.CHECKOUT, 1_000, 0,
+                java.time.Instant.now(), null, "it"));
+
+        coverApprovedByTwoOfficers(member, loan.loanId(), 9_000, "mixed");
+        settle();
+
+        ScheduleView schedule = lending.currentSchedule(loan.loanId());
+        assertThat(schedule.loanStatus()).isEqualTo("REPAID");
+        assertThat(schedule.instalments()).allSatisfy(line -> assertThat(line.reserveCoveredCents())
+                .as("never more than the instalment received").isBetween(0L, line.paidCents()));
+        assertThat(schedule.instalments().stream().mapToLong(InstalmentLine::reserveCoveredCents).sum())
+                .as("what the reserve paid of the loan").isEqualTo(9_000);
+        assertThat(schedule.instalments().stream().mapToLong(InstalmentLine::paidCents).sum()).isEqualTo(10_000);
+        assertThat(jdbc.sql("SELECT serialized_event FROM event_publication WHERE event_type LIKE '%LoanRepaid' AND serialized_event LIKE :l")
+                .param("l", "%" + loan.loanId() + "%").query(String.class).list())
+                .isNotEmpty().allSatisfy(event -> assertThat(event).contains("\"reserveCoveredCents\":9000"));
     }
 
     // ---- helpers ----

@@ -6,10 +6,11 @@ import { Kpi } from "@paypal-seed/ui/brand/kpi";
 import { Money } from "@paypal-seed/ui/brand/money";
 import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { StatusPill, type StatusTone } from "@paypal-seed/ui/brand/status-pill";
+import { Alert, AlertDescription, AlertTitle } from "@paypal-seed/ui/components/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@paypal-seed/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@paypal-seed/ui/components/table";
 import { formatMoney } from "@paypal-seed/ui/lib/format";
-import { CircleAlert, CircleCheck, Landmark } from "lucide-react";
+import { CircleAlert, CircleCheck, Landmark, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound, unstable_rethrow } from "next/navigation";
 import { DeskTimeline } from "@/features/loans/components/desk-timeline";
@@ -67,6 +68,18 @@ export default async function LoanPage({ params }: PageProps<"/loans/[loanId]">)
         title={`${formatMoney(schedule.principalCents ?? 0)} over ${lines.length} payments`}
         description={`Plan version ${schedule.version ?? 1} · ${REASONS[schedule.reason ?? ""] ?? schedule.reason}. Business date ${schedule.businessDate ?? "—"}.`}
       />
+
+      {schedule.loanStatus === "DISBURSEMENT_RETURNED" ? (
+        <Alert>
+          <TriangleAlert aria-hidden="true" />
+          <AlertTitle>Payout returned: this loan was voided</AlertTitle>
+          <AlertDescription>
+            PayPal took the payout back after the loan was registered. Nothing is outstanding, no instalment can be missed and the loan is
+            out of every open queue. The application is Approved again with a payout issue: open it to send the payout again or reject it.
+            Payments the member made were refunded through PayPal; any amount PayPal could not refund stays held on this loan.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi label="Outstanding" value={<Money cents={schedule.outstandingCents ?? 0} />} icon={<Landmark />} />

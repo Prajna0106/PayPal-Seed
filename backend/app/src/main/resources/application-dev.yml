@@ -13,9 +13,12 @@ seed:
   desk-query:
     # Fixed so desk grid cursors survive a restart while developing.
     cursor-key: ${SEED_DESK_QUERY_CURSOR_KEY:dev-only-desk-cursor-key-0123456789abcdef}
+  payments:
+    # Fixed so a restart does not look like a change of recipient while developing.
+    recipient-fingerprint-key: ${SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY:dev-only-recipient-fingerprint-key-0123456789abcdef}
   savings:
-    return-url: ${SEED_SAVINGS_RETURN_URL:http://localhost:3000/app/savings/return}
-    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://localhost:3000/app/savings/cancelled}
+    return-url: ${SEED_SAVINGS_RETURN_URL:http://127.0.0.1:3000/app/savings/return}
+    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://127.0.0.1:3000/app/savings/cancelled}
   underwriting:
     income:
       source: ${SEED_UNDERWRITING_INCOME_SOURCE:SEEDED}   # TRANSACTION_SEARCH needs PayPal sandbox access to Transaction Search

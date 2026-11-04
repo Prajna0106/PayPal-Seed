@@ -1,0 +1,35 @@
+$kind: http-request
+name: 'HS21. Same person as checker is refused'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/decision'
+order: 21000
+description: 'Separation of duties: the maker cannot also be the checker, even with the CHECKER role.'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'The maker acting as checker: separation of duties must refuse it.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'CHECKER'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Idempotency-Key'
+    value: '{{$guid}}'
+    description: 'One key per user action; reuse it only to replay the same request.'
+body:
+  type: json
+  content: |-
+    {
+      "decision": "APPROVE",
+      "reasonCode": "INCOME_DROP_VERIFIED",
+      "evidenceViewedMs": 30000
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 403', () => pm.response.to.have.status(403));
+      pm.test('Problem type is sod-violation', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');
+        pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/sod-violation');
+      });
+examples: './.resources/HS21. Same person as checker is refused.resources/examples/'

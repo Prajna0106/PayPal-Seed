@@ -1,0 +1,23 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/internal/jobs/hardship/scan'
+  method: POST
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "businessDate": "2027-03-12",
+        "scanned": 1,
+        "opened": 1,
+        "failed": 0,
+        "nextAfter": null,
+        "done": true
+      }

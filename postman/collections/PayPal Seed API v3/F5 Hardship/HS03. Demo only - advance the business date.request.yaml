@@ -1,0 +1,26 @@
+$kind: http-request
+name: 'HS03. Demo only - advance the business date'
+method: POST
+url: '{{baseUrl}}/internal/demo-clock/advance?days={{hardshipAdvanceDays}}'
+order: 3000
+description: 'Moves the shared demo clock so the first instalment is 8 days away and the scan will see it. Skipped when the business date is already there. Demo profile only.'
+queryParams:
+  - key: 'days'
+    value: '{{hardshipAdvanceDays}}'
+    description: 'Days from the business date to 8 days before the first due date'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // days must be at least 1; when the clock is already in position there is nothing to move.
+      if (Number(pm.collectionVariables.get('hardshipAdvanceDays')) < 1) {
+        pm.execution.skipRequest();
+      }
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));

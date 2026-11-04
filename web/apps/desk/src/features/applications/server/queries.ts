@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unwrap, unwrapOrNull } from "@paypal-seed/api-client";
+import { unstable_rethrow } from "next/navigation";
 import { staffApi } from "@/server/api";
 import type { ApplicationStatus, FairCheckCard, LoanApplication } from "../model";
 
@@ -48,17 +49,18 @@ export async function staffDirectory(): Promise<Map<string, string>> {
 }
 
 /**
- * The fair check behind an application. The desk contract lists fair checks but cannot filter by application, so
- * the list is read and the newest check for this application is picked. Null when none exists or the list fails.
+ * The newest fair check linked to an application. `null` when none exists yet (the contract answers 404
+ * `assessment-not-found`) or the read fails: the page then says there is no fair check to show.
  */
 export async function fairCheckForApplication(applicationId: string): Promise<FairCheckCard | null> {
   try {
     const api = await staffApi();
-    const checks = await unwrap(api.GET("/api/v1/desk/underwriting/assessments"));
-    const matching = checks.filter((check) => check.applicationId === applicationId);
-    matching.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return matching[0] ?? null;
-  } catch {
+    return await unwrapOrNull(
+      api.GET("/api/v1/desk/underwriting/assessments/latest", { params: { query: { applicationId } } }),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("[applications] latest fair check unavailable", error);
     return null;
   }
 }

@@ -64,6 +64,22 @@ export const withdrawSchema = z.object({
   attemptKey: z.uuid(),
 });
 
+export const changeAmountSchema = z
+  .object({
+    goalId: z.uuid(),
+    monthly: money("Enter an amount in dollars, like 25."),
+    wallet,
+    // One per rendered form; see the action for how it becomes the Idempotency-Key.
+    attemptKey: z.uuid(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.monthly < MIN_MONTHLY_CENTS) {
+      ctx.addIssue({ code: "custom", path: ["monthly"], message: "The smallest monthly amount is $5." });
+    } else if (value.wallet === "PAYPAL" && value.monthly % 100 !== 0) {
+      ctx.addIssue({ code: "custom", path: ["monthly"], message: "PayPal saves whole dollars each month, like $25." });
+    }
+  });
+
 /** First message per field, for showing next to the input. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};

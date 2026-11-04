@@ -59,6 +59,8 @@ export function describeFact(item: HistoryItem): string {
       return "You finished repaying a loan";
     case "LOAN_DEFAULTED":
       return "A loan was closed unpaid";
+    case "INSTALMENT_FUND_COVERED":
+      return "The community fund helped with a loan payment";
     case "HARDSHIP_PLAN_APPLIED":
       return "A hardship plan was applied. This never lowers your record";
   }

@@ -1,0 +1,30 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/schedule'
+  method: GET
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "loanId": "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01",
+        "version": 1,
+        "reason": "ORIGINAL",
+        "businessDate": "2027-03-10",
+        "principalCents": 120000,
+        "outstandingCents": 120000,
+        "instalments": [
+          {
+            "seq": 1,
+            "dueDate": "2027-03-20",
+            "amountCents": 15000
+          }
+        ]
+      }

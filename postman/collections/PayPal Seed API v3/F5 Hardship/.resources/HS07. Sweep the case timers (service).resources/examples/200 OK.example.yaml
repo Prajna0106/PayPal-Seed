@@ -1,0 +1,18 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/internal/jobs/hardship/sweep?limit=200'
+  method: POST
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "fired": 1
+      }

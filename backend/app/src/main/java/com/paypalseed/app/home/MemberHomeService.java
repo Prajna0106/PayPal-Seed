@@ -79,7 +79,20 @@ public class MemberHomeService {
         var underwriting = read(Section.underwriting, errors, () -> sections.underwriting(context));
         var creditRecord = read(Section.creditRecord, errors, () -> sections.creditRecord(context));
         var hardship = read(Section.hardship, errors, () -> sections.hardship(context));
-        return new HomeView(context.today(), profile, savings, lending, underwriting, creditRecord, hardship, errors);
+        var recentActivity = read(Section.recentActivity, errors, () -> sections.recentActivity(context));
+        return new HomeView(context.today(), payoutRecipientReady(memberId), profile, savings, lending, underwriting, creditRecord,
+            hardship, recentActivity, errors);
+    }
+
+    /** Not a section: when identity cannot answer the flag is left out and the page shows no warning, rather than a wrong one. */
+    private Boolean payoutRecipientReady(UUID memberId) {
+        try {
+            return savepoint == null ? sections.payoutRecipientReady(memberId)
+                : savepoint.execute(status -> sections.payoutRecipientReady(memberId));
+        } catch (RuntimeException e) {
+            LOG.warn("Home payout recipient check failed: {}", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     private <T> T read(Section section, List<SectionError> errors, Supplier<Optional<T>> source) {

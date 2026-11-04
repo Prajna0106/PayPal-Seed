@@ -8,6 +8,7 @@ import com.paypalseed.lending.api.events.LendingEvents.InstalmentView;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentFailed;
 import com.paypalseed.lending.api.events.LendingEvents.ScheduleGenerated;
 import com.paypalseed.payments.api.events.PaymentEvents.PaymentCaptured;
+import com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested;
 import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.savings.api.events.DepositReceivedEvent;
 import com.paypalseed.savings.api.events.GoalCreatedEvent;
@@ -23,8 +24,9 @@ import org.springframework.stereotype.Component;
  * rules compare like with like even when the demo clock runs ahead of real time. Delivery is at least once: every
  * observation carries its event id as source key, so a repeat adds nothing.
  *
- * <p>Not fed by any event yet, and so only by {@code FraudFacade.observe}: account creation, loan applications and a change
- * of payout recipient.
+ * <p>Account creation and loan applications are fed by {@code FraudFeed} in the app module through {@code FraudFacade.observe}.
+ * A change of payout recipient is seen here, from the fingerprint payments publishes with every payout request (ADR 0027),
+ * and by {@code FraudFeed} for a change of wallet type.
  */
 @Component
 class FraudEventListener {
@@ -71,6 +73,15 @@ class FraudEventListener {
     void on(RepaymentFailed e) {
         observe(e.memberId(), FactKind.PAYMENT_FAILED, "failed:" + e.eventId(), e.amountCents(), null,
                 Map.of("loanId", e.loanId().toString()));
+    }
+
+    /**
+     * The fingerprint is the keyed hash payments made of the recipient: it says whether this payout went where the last one
+     * did, and nothing about who that is. The fact is stamped now, not with the event's time, like every other fact.
+     */
+    @ApplicationModuleListener
+    void on(PayoutRequested e) {
+        fraud.payoutRecipient(e.memberId(), e.recipientFingerprint(), clock.now(), "payout-recipient:" + e.referenceId());
     }
 
     /** Version 1 of a schedule exists once the loan was paid out. */

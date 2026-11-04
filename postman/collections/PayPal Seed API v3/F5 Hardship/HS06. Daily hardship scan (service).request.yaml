@@ -1,0 +1,34 @@
+$kind: http-request
+name: 'HS06. Daily hardship scan (service)'
+method: POST
+url: '{{baseUrl}}/internal/jobs/hardship/scan'
+order: 6000
+description: 'Scores the loans whose next instalment is due within 10 days and opens a case at LIKELY_MISS or above. Ana scores 7 points (INCOME_DROP_SEVERE 5 plus LOW_COVERAGE 2). The worker role runs the same job daily at 06:15 America/Los_Angeles.'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "businessDate": "{{hardshipScanDate}}",
+      "shardGroup": 0,
+      "shardCount": 1,
+      "limit": 500
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has businessDate, scanned, opened, failed, done', () => ['businessDate', 'scanned', 'opened', 'failed', 'done'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('The new loan was scanned and a case opened', () => {
+        pm.expect(body.scanned).to.be.at.least(1);
+        pm.expect(body.opened).to.be.at.least(1);
+        pm.expect(body.failed).to.eql(0);
+      });
+examples: './.resources/HS06. Daily hardship scan (service).resources/examples/'

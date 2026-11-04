@@ -77,7 +77,8 @@ public class WithdrawUseCase {
         }
         goals.save(goal);
 
-        Payout payout = payments.sendPayout(id.toString(), c.amount().cents(), recipient, wallet, "Seed savings withdrawal");
+        Payout payout = payments.sendPayout(id.toString(), RecordDepositUseCase.toMemberUuid(goal.getMemberId()), c.amount().cents(),
+            recipient, wallet, "Seed savings withdrawal");
         switch (payout.state()) {
             case SUCCEEDED -> outcomes.succeeded(id, payout.transactionId());
             case FAILED -> outcomes.failed(id, payout.reasonCode(), true);

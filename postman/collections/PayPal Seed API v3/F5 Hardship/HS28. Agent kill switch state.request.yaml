@@ -1,0 +1,23 @@
+$kind: http-request
+name: 'HS28. Agent kill switch state'
+method: GET
+url: '{{baseUrl}}/api/v1/desk/agents/kill-switch?agent=guardian'
+order: 28000
+queryParams:
+  - key: 'agent'
+    value: 'guardian'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has a valid mode', () => pm.expect(['LIVE', 'SHADOW', 'TEMPLATES_ONLY']).to.include(body.mode));
+      pm.collectionVariables.set('hardshipPriorMode', body.mode);
+examples: './.resources/HS28. Agent kill switch state.resources/examples/'

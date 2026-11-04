@@ -82,10 +82,11 @@ public class RepaymentService {
     private final LedgerFacade ledger;
     private final BusinessClock clock;
     private final ApplicationEventPublisher events;
+    private final HeldRefunds heldRefunds;
 
     public RepaymentService(LoanRepository loans, TransactionRepository transactions, AttemptRepository attempts,
                             LoanRecalculator recalculator, LedgerFacade ledger, BusinessClock clock,
-                            ApplicationEventPublisher events) {
+                            ApplicationEventPublisher events, HeldRefunds heldRefunds) {
         this.loans = loans;
         this.transactions = transactions;
         this.attempts = attempts;
@@ -93,6 +94,7 @@ public class RepaymentService {
         this.ledger = ledger;
         this.clock = clock;
         this.events = events;
+        this.heldRefunds = heldRefunds;
     }
 
     @Transactional
@@ -103,6 +105,9 @@ public class RepaymentService {
         LoanRow loan = loans.lock(r.loanId()).orElseThrow(() -> new IllegalStateException("unknown loan " + r.loanId()));
         if (transactions.byPaypalTxnId(r.paypalTxnId()).isPresent()) {
             return RecordResult.DUPLICATE; // a concurrent delivery won the race while we waited for the lock
+        }
+        if (loan.isUnwound()) {
+            return holdPaymentForVoidedLoan(r, loan);
         }
         LocalDate today = clock.today();
         LocalDate effective = effectiveDate(loan, r.occurredAt());
@@ -147,6 +152,9 @@ public class RepaymentService {
         if (original.type() != Type.RECEIPT || !original.loanId().equals(loan.id())) {
             throw new IllegalStateException("reversal " + r.paypalTxnId() + " does not target a receipt of loan " + loan.id());
         }
+        if (loan.isUnwound()) {
+            return reverseOnVoidedLoan(r, loan, original);
+        }
         LocalDate today = clock.today();
         UUID id = Ids.newId();
         MoneyEvent.Reversal reversal = new MoneyEvent.Reversal(id, original.id(), effectiveDate(loan, r.occurredAt()), r.amountCents());
@@ -177,6 +185,9 @@ public class RepaymentService {
         if (transactions.byPaypalTxnId(r.paypalRefundId()).isPresent()) {
             return RecordResult.DUPLICATE;
         }
+        if (loan.isUnwound()) {
+            return refundOnVoidedLoan(r, loan);
+        }
         LocalDate today = clock.today();
         UUID id = Ids.newId();
         MoneyEvent.OverpaymentRefund refund = new MoneyEvent.OverpaymentRefund(id, effectiveDate(loan, r.occurredAt()), r.amountCents());
@@ -191,6 +202,74 @@ public class RepaymentService {
         transactions.insert(new LoanTransaction(id, loan.id(), Type.OVERPAYMENT_REFUND, Source.SEED, r.paypalRefundId(), null,
                 r.amountCents(), 0, null, r.occurredAt(), refund.effectiveDate(), journalEntryId, "refund:" + r.paypalRefundId()));
         recalculator.recalculate(loan, today, Cause.PAYMENT);
+        events.publishEvent(new LendingEvents.OverpaymentRefunded(Ids.newId(), loan.id(), loan.memberId(), today, id,
+                r.amountCents()));
+        return RecordResult.RECORDED;
+    }
+
+    /**
+     * A payment for a loan that never stood (voided, or cancelled in the cooling-off window, ADR 0024) is not a repayment:
+     * nothing is owed. All of it is held for the member, in the ledger and on the loan, and recorded as a refund owed
+     * to them, so PayPal is asked after the commit and again until it has done it.
+     */
+    private RecordResult holdPaymentForVoidedLoan(Receipt r, LoanRow loan) {
+        LocalDate today = clock.today();
+        UUID id = Ids.newId();
+        UUID journalEntryId = ledger.post(PostingRequest.builder("paypal:" + r.paypalTxnId(), "Payment for a voided loan, held for the member", today)
+                .debit(AccountRef.program(AccountType.PROGRAM_CASH), r.grossCents() - r.feeCents())
+                .debit(AccountRef.program(AccountType.PAYPAL_FEES), r.feeCents())
+                .credit(AccountRef.of(AccountType.MEMBER_OVERPAYMENT, loan.memberId()), r.grossCents())
+                .build());
+        transactions.insert(new LoanTransaction(id, loan.id(), Type.RECEIPT, r.source(), r.paypalTxnId(), null,
+                r.grossCents(), r.feeCents(), r.payerRef(), r.occurredAt(), effectiveDate(loan, r.occurredAt()), journalEntryId,
+                r.causedBy()));
+        transactions.clearPending(r.paypalTxnId());
+        long held = loan.overpaidCents() + r.grossCents();
+        loans.updateDerived(loan.id(), loan.status(), 0, held, 0, loan.bucket(), loan.bucketSince(), loan.closedOn());
+        heldRefunds.owe(loan.id(), loan.memberId(), HeldRefunds.latePaymentReference(id), r.grossCents());
+        events.publishEvent(new LendingEvents.VoidedLoanPaymentHeld(Ids.newId(), loan.id(), loan.memberId(), today, id,
+                r.grossCents(), held));
+        log.warn("Payment {} of {} cents arrived for voided loan {}; held for the member", r.paypalTxnId(), r.grossCents(), loan.id());
+        return RecordResult.RECORDED;
+    }
+
+    /** A clawback of money the member had paid on a loan that never stood lowers what is held for them. */
+    private RecordResult reverseOnVoidedLoan(Reversal r, LoanRow loan, LoanTransaction original) {
+        if (r.amountCents() > loan.overpaidCents()) {
+            throw new IllegalStateException("reversal " + r.paypalTxnId() + " is more than the " + loan.overpaidCents()
+                    + " cents held for unwound loan " + loan.id());
+        }
+        LocalDate today = clock.today();
+        UUID id = Ids.newId();
+        UUID journalEntryId = ledger.post(PostingRequest.builder("paypal:" + r.paypalTxnId(), "Payment on a voided loan reversed", today)
+                .debit(AccountRef.of(AccountType.MEMBER_OVERPAYMENT, loan.memberId()), r.amountCents())
+                .credit(AccountRef.program(AccountType.PROGRAM_CASH), r.amountCents())
+                .build());
+        transactions.insert(new LoanTransaction(id, loan.id(), Type.REVERSAL, Source.PAYPAL, r.paypalTxnId(), original.id(),
+                r.amountCents(), 0, null, r.occurredAt(), effectiveDate(loan, r.occurredAt()), journalEntryId, r.causedBy()));
+        loans.updateDerived(loan.id(), loan.status(), 0, loan.overpaidCents() - r.amountCents(), 0, loan.bucket(),
+                loan.bucketSince(), loan.closedOn());
+        log.warn("Recorded reversal {} of {} on voided loan {}", r.paypalTxnId(), r.originalTxnId(), loan.id());
+        return RecordResult.RECORDED;
+    }
+
+    /** The refund of what is held for the member of a loan that never stood: it ends the hold. */
+    private RecordResult refundOnVoidedLoan(OverpaymentRefund r, LoanRow loan) {
+        if (r.amountCents() > loan.overpaidCents()) {
+            throw new IllegalStateException("refund " + r.paypalRefundId() + " is more than the " + loan.overpaidCents()
+                    + " cents held for unwound loan " + loan.id());
+        }
+        LocalDate today = clock.today();
+        UUID id = Ids.newId();
+        UUID journalEntryId = ledger.post(PostingRequest.builder("paypal:" + r.paypalRefundId(), "Overpayment refunded", today)
+                .debit(AccountRef.of(AccountType.MEMBER_OVERPAYMENT, loan.memberId()), r.amountCents())
+                .credit(AccountRef.program(AccountType.PROGRAM_CASH), r.amountCents())
+                .build());
+        transactions.insert(new LoanTransaction(id, loan.id(), Type.OVERPAYMENT_REFUND, Source.SEED, r.paypalRefundId(), null,
+                r.amountCents(), 0, null, r.occurredAt(), effectiveDate(loan, r.occurredAt()), journalEntryId,
+                "refund:" + r.paypalRefundId()));
+        loans.updateDerived(loan.id(), loan.status(), 0, loan.overpaidCents() - r.amountCents(), 0, loan.bucket(),
+                loan.bucketSince(), loan.closedOn());
         events.publishEvent(new LendingEvents.OverpaymentRefunded(Ids.newId(), loan.id(), loan.memberId(), today, id,
                 r.amountCents()));
         return RecordResult.RECORDED;

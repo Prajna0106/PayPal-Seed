@@ -1,0 +1,22 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/decision'
+  method: POST
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "requestId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10",
+        "requestStatus": "OPEN",
+        "role": "MAKER",
+        "next": "CHECKER",
+        "auditSeq": 18423
+      }

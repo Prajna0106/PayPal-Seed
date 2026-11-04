@@ -35,7 +35,12 @@ public record LoanRow(
         ACTIVE,
         REPAID,
         COVERED,
-        CANCELLED
+        CANCELLED,
+        /**
+         * The payout that funded the loan was taken back by PayPal after the loan was registered (ADR 0024). The
+         * member never kept the money: nothing is owed, nothing runs, and the loan counts for no one.
+         */
+        DISBURSEMENT_RETURNED
     }
 
     public enum CollectionMode {
@@ -49,6 +54,24 @@ public record LoanRow(
 
     public boolean isActive() {
         return status == LoanStatus.ACTIVE;
+    }
+
+    /** True for a loan whose disbursement came back: it is closed, owes nothing, and only holds money to return. */
+    public boolean isVoided() {
+        return status == LoanStatus.DISBURSEMENT_RETURNED;
+    }
+
+    /** True for a loan the member cancelled in the cooling-off window: closed, nothing owed, nothing planned. */
+    public boolean isCancelled() {
+        return status == LoanStatus.CANCELLED;
+    }
+
+    /**
+     * True for a loan that never stood (voided or cancelled in the cooling-off window). Whatever reaches it later, a
+     * payment or a refund, is money held for the member and given back, never a repayment (ADR 0024 closing pass).
+     */
+    public boolean isUnwound() {
+        return isVoided() || isCancelled();
     }
 
     /** One of 64 virtual shards; close of business maps them onto however many workers run. */

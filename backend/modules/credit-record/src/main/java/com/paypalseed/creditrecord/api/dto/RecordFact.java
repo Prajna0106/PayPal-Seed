@@ -24,7 +24,18 @@ public record RecordFact(String factKey, UUID memberId, Kind kind, LocalDate occ
         /** The only fact that lowers a level. */
         LOAN_DEFAULTED,
         /** An approved hardship plan is in force. Counts as on plan; never a miss (ADR 0011). */
-        HARDSHIP_PLAN_APPLIED
+        HARDSHIP_PLAN_APPLIED,
+        /**
+         * The safety fund paid this whole instalment (ADR 0025). The instalment is neither on time nor late for the
+         * member, and a loan the fund paid entirely is not one the member completed. An instalment the fund only part-paid
+         * and the member finished is the member's own and carries no such fact.
+         */
+        INSTALMENT_FUND_COVERED,
+        /**
+         * The payout that funded the loan came back, so the loan is void (ADR 0024, ADR 0025 follow-up). Every fact of
+         * the loan stops counting: no loan, no instalments, no level credit and no default. Not shown in the history.
+         */
+        LOAN_VOIDED
     }
 
     public RecordFact {
@@ -42,14 +53,14 @@ public record RecordFact(String factKey, UUID memberId, Kind kind, LocalDate occ
                     throw new IllegalArgumentException("daysLate cannot be negative; early payments are 0");
                 }
             }
-            case INSTALMENT_MISSED -> require(loanId, seq);
+            case INSTALMENT_MISSED, INSTALMENT_FUND_COVERED -> require(loanId, seq);
             case LOAN_REPAID -> {
                 require(loanId, missedCount);
                 if (missedCount < 0) {
                     throw new IllegalArgumentException("missedCount cannot be negative");
                 }
             }
-            case LOAN_DISBURSED, LOAN_DEFAULTED -> require(loanId);
+            case LOAN_DISBURSED, LOAN_DEFAULTED, LOAN_VOIDED -> require(loanId);
             case HARDSHIP_PLAN_APPLIED -> require(caseId);
             case SAVINGS_DEPOSIT, SAVING_MONTHS_CLOSED -> {
             }
@@ -84,6 +95,12 @@ public record RecordFact(String factKey, UUID memberId, Kind kind, LocalDate occ
                 daysLate, null, null);
     }
 
+    /** Keyed by loan and instalment: however many cover receipts touch an instalment, it is marked once. */
+    public static RecordFact instalmentFundCovered(UUID memberId, UUID loanId, int seq, LocalDate on) {
+        return new RecordFact("inst-fund:" + loanId + ":" + seq, memberId, Kind.INSTALMENT_FUND_COVERED, on, loanId, seq,
+                null, null, null);
+    }
+
     public static RecordFact instalmentMissed(String factKey, UUID memberId, UUID loanId, int seq, LocalDate on) {
         return new RecordFact(factKey, memberId, Kind.INSTALMENT_MISSED, on, loanId, seq, null, null, null);
     }
@@ -98,6 +115,11 @@ public record RecordFact(String factKey, UUID memberId, Kind kind, LocalDate occ
     public static RecordFact loanDefaulted(UUID memberId, UUID loanId, LocalDate on) {
         return new RecordFact("loan-default:" + loanId, memberId, Kind.LOAN_DEFAULTED, on, loanId, null, null, null,
                 null);
+    }
+
+    /** Keyed by loan: a loan is voided once, however many times the event is delivered. */
+    public static RecordFact loanVoided(UUID memberId, UUID loanId, LocalDate on) {
+        return new RecordFact("loan-void:" + loanId, memberId, Kind.LOAN_VOIDED, on, loanId, null, null, null, null);
     }
 
     public static RecordFact hardshipPlanApplied(String factKey, UUID memberId, UUID caseId, UUID loanId, LocalDate on) {

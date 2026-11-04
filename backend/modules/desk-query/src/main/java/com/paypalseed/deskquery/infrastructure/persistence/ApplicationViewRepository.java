@@ -1,6 +1,7 @@
 package com.paypalseed.deskquery.infrastructure.persistence;
 
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.APPLICATION_VIEW;
+import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.APPLICATION_VOID;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.ASSESSMENT_VIEW;
 import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.MEMBER_SAVINGS;
 
@@ -14,12 +15,14 @@ import com.paypalseed.deskquery.infrastructure.persistence.KeysetPager.Column;
 import com.paypalseed.platform.persistence.PgSql;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.Record;
 import org.jooq.SelectFieldOrAsterisk;
 import org.jooq.impl.DSL;
@@ -43,10 +46,18 @@ public class ApplicationViewRepository {
             "assessmentOutcome", new Column(DSL.coalesce(APPLICATION_VIEW.ASSESSMENT_OUTCOME, ""), ColumnType.STRING),
             "assignedOfficer", new Column(DSL.coalesce(APPLICATION_VIEW.ASSIGNED_OFFICER_REF, ""), ColumnType.STRING));
 
+    /** The issue lending reports on an approved application whose paid-out loan was voided; derived on read (see V3). */
+    static final String RETURNED_AFTER_DISBURSEMENT = "RETURNED_AFTER_DISBURSEMENT";
+
+    private static final Field<String> PAYOUT_ISSUE = DSL.case_()
+            .when(APPLICATION_VIEW.STATUS.eq("APPROVED").and(DSL.exists(DSL.selectOne().from(APPLICATION_VOID)
+                    .where(APPLICATION_VOID.APPLICATION_ID.eq(APPLICATION_VIEW.APPLICATION_ID)))), DSL.inline(RETURNED_AFTER_DISBURSEMENT))
+            .as("payout_issue");
+
     private static final List<SelectFieldOrAsterisk> PROJECTION = List.of(APPLICATION_VIEW.APPLICATION_ID, APPLICATION_VIEW.MEMBER_REF,
             APPLICATION_VIEW.STATUS, APPLICATION_VIEW.REQUESTED_AMOUNT_CENTS, APPLICATION_VIEW.TERM_MONTHS,
             APPLICATION_VIEW.SAVING_STREAK_MONTHS, APPLICATION_VIEW.ASSESSMENT_OUTCOME, APPLICATION_VIEW.SUBMITTED_AT,
-            APPLICATION_VIEW.SLA_DUE_AT, APPLICATION_VIEW.ASSIGNED_OFFICER_REF);
+            APPLICATION_VIEW.SLA_DUE_AT, APPLICATION_VIEW.ASSIGNED_OFFICER_REF, PAYOUT_ISSUE);
 
     private final DSLContext dsl;
 
@@ -84,6 +95,25 @@ public class ApplicationViewRepository {
                 .set(APPLICATION_VIEW.UPDATED_AT, PgSql.now())
                 .where(APPLICATION_VIEW.SOURCE_UPDATED_AT.le(f.sourceUpdatedAt()))
                 .execute() == 1;
+    }
+
+    /**
+     * Notes that the payout of an application came back and its loan was voided. Repeating it changes nothing; a newer
+     * return (another payout attempt came back) replaces the older one.
+     */
+    public void recordReturnedPayout(UUID applicationId, UUID loanId, String payoutReference, LocalDate voidedOn) {
+        dsl.insertInto(APPLICATION_VOID)
+                .set(APPLICATION_VOID.APPLICATION_ID, applicationId)
+                .set(APPLICATION_VOID.LOAN_ID, loanId)
+                .set(APPLICATION_VOID.PAYOUT_REFERENCE, payoutReference)
+                .set(APPLICATION_VOID.VOIDED_ON, voidedOn)
+                .onConflict(APPLICATION_VOID.APPLICATION_ID).doUpdate()
+                .set(APPLICATION_VOID.LOAN_ID, loanId)
+                .set(APPLICATION_VOID.PAYOUT_REFERENCE, payoutReference)
+                .set(APPLICATION_VOID.VOIDED_ON, voidedOn)
+                .set(APPLICATION_VOID.UPDATED_AT, PgSql.now())
+                .where(APPLICATION_VOID.VOIDED_ON.le(voidedOn))
+                .execute();
     }
 
     /**
@@ -150,6 +180,6 @@ public class ApplicationViewRepository {
                 r.get(APPLICATION_VIEW.REQUESTED_AMOUNT_CENTS), r.get(APPLICATION_VIEW.TERM_MONTHS),
                 r.get(APPLICATION_VIEW.SAVING_STREAK_MONTHS), r.get(APPLICATION_VIEW.ASSESSMENT_OUTCOME), submittedAt,
                 Math.max(0, Duration.between(submittedAt, now).toDays()), slaDueAt, sla.name(), sla == SlaBucket.OVERDUE,
-                r.get(APPLICATION_VIEW.ASSIGNED_OFFICER_REF));
+                r.get(APPLICATION_VIEW.ASSIGNED_OFFICER_REF), r.get(PAYOUT_ISSUE));
     }
 }

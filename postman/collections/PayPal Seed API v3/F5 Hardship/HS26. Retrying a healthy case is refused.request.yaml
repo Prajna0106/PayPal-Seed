@@ -1,0 +1,21 @@
+$kind: http-request
+name: 'HS26. Retrying a healthy case is refused'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/retry'
+order: 26000
+description: 'Retry is only for an approved case whose execution ran out of attempts (APPROVED_EXECUTION_FAILED). Any other state answers 409.'
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 409', () => pm.response.to.have.status(409));
+      pm.test('Problem type is hardship-case-closed', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');
+        pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/hardship-case-closed');
+      });

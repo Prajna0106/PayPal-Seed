@@ -1,0 +1,29 @@
+$kind: http-request
+name: 'HS33. Agent tool call is disabled in TEMPLATES_ONLY'
+method: GET
+url: '{{baseUrl}}/agent/v1/tools/loan-summary?loanId={{hardshipLoanId}}'
+order: 33000
+description: 'With the kill switch at TEMPLATES_ONLY every agent endpoint except GET /agent/v1/kill-switch answers 503 agent-disabled. Needs a valid run token in agentToken, which only the backend mints; skipped when the variable is empty.'
+queryParams:
+  - key: 'loanId'
+    value: '{{hardshipLoanId}}'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{agentToken}}'
+    description: 'A live run token (seedagt_...) for this loan. The Guardian gets one per run; copy one from a run, or leave empty to skip this request.'
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.variables.get('agentToken')) {
+        pm.execution.skipRequest();
+      }
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 503', () => pm.response.to.have.status(503));
+      pm.test('Problem type is agent-disabled', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');
+        pm.expect(pm.response.json().type).to.eql('https://problems.paypal-seed.dev/agent-disabled');
+      });
+examples: './.resources/HS33. Agent tool call is disabled in TEMPLATES_ONLY.resources/examples/'

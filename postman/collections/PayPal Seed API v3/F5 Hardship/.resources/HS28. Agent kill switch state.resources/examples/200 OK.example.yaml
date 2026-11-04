@@ -1,0 +1,24 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/desk/agents/kill-switch?agent=guardian'
+  method: GET
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "mode": "LIVE",
+        "since": "2027-01-10T08:00:00Z",
+        "reason": null,
+        "trippedBy": null,
+        "circuits": {
+          "primary": "CLOSED"
+        }
+      }

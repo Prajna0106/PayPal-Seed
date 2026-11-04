@@ -46,10 +46,16 @@ class MemberHomeServiceTest {
         Function<Context, Optional<HardshipSection>> hardship =
             c -> Optional.of(new HardshipSection(false, null, null, null));
         final List<Context> seen = new ArrayList<>();
+        Function<UUID, Boolean> payoutRecipientReady = id -> true;
 
         @Override
         public Optional<ProfileSection> profile(UUID memberId) {
             return profile.apply(memberId);
+        }
+
+        @Override
+        public boolean payoutRecipientReady(UUID memberId) {
+            return payoutRecipientReady.apply(memberId);
         }
 
         @Override
@@ -95,6 +101,44 @@ class MemberHomeServiceTest {
         assertThat(view.underwriting()).isNotNull();
         assertThat(view.creditRecord()).isNotNull();
         assertThat(view.hardship()).isNotNull();
+    }
+
+    @Test
+    void thePayoutRecipientFlagIsTrueWhenIdentityHoldsOneAndFalseWhenItDoesNot() {
+        Fake ready = new Fake();
+        Fake missing = new Fake();
+        missing.payoutRecipientReady = id -> false;
+
+        assertThat(service(ready).home(MEMBER).payoutRecipientReady()).isTrue();
+        assertThat(service(missing).home(MEMBER).payoutRecipientReady()).isFalse();
+    }
+
+    @Test
+    void theFlagDoesNotDependOnTheProfileSection() {
+        Fake sections = new Fake();
+        sections.profile = id -> Optional.empty();
+        sections.payoutRecipientReady = id -> false;
+
+        HomeView view = service(sections).home(MEMBER);
+
+        assertThat(view.profile()).isNull();
+        assertThat(view.payoutRecipientReady()).isFalse();
+    }
+
+    @Test
+    void whenIdentityCannotAnswerTheFlagIsLeftOutNotGuessed() throws Exception {
+        Fake sections = new Fake();
+        sections.payoutRecipientReady = id -> {
+            throw new IllegalStateException("connection refused: password=hunter2");
+        };
+
+        HomeView view = service(sections).home(MEMBER);
+        String json = new ObjectMapper().registerModule(new JavaTimeModule())
+            .setDefaultPropertyInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_ABSENT).writeValueAsString(view);
+
+        assertThat(view.payoutRecipientReady()).isNull();
+        assertThat(view.sectionErrors()).as("the flag is not a section").isEmpty();
+        assertThat(json).doesNotContain("payoutRecipientReady").doesNotContain("hunter2");
     }
 
     @Test

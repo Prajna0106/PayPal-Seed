@@ -17,6 +17,8 @@ const lowMemory = process.env.SEED_LOW_MEMORY === "1";
 const nextConfig: NextConfig = {
   // A request log would include PayPal's one-time login codes.
   logging: { incomingRequests: false },
+  // Sign-in returns to 127.0.0.1 (PayPal does not accept localhost), and dev resources are refused from any origin not listed here.
+  allowedDevOrigins: ["127.0.0.1"],
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,

@@ -4,7 +4,7 @@ import { formatDateTime, formatMoney } from "@paypal-seed/ui/lib/format";
 import { FileText } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { applicationStatus, PAYOUT_ISSUE } from "../copy";
+import { applicationStatus, PAYOUT_ISSUE, PAYOUT_RETURNED } from "../copy";
 import type { OpenApplication } from "../model";
 import { SectionCard } from "./section-card";
 
@@ -27,7 +27,7 @@ export function ApplicationCard({ application }: { application: OpenApplication 
         </p>
       ) : null}
       {application.payoutIssue ? (
-        <p className="rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning text-pretty">{PAYOUT_ISSUE}</p>
+        <p className="rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning text-pretty">{application.payoutIssue === "RETURNED_AFTER_DISBURSEMENT" ? PAYOUT_RETURNED : PAYOUT_ISSUE}</p>
       ) : null}
       <Button asChild variant="outline" className="mt-auto h-11 self-start">
         <Link href={`/app/applications/${application.applicationId}` as Route}>Follow your application</Link>

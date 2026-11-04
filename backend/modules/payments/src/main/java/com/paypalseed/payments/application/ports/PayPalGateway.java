@@ -15,8 +15,14 @@ import java.util.Optional;
  */
 public interface PayPalGateway {
 
+    /** {@code statusChangedAt} is PayPal's {@code status_update_time} (else {@code update_time}), when it says. */
     record Subscription(String id, String status, long quantity, Optional<Instant> nextBillingTime,
-                        Optional<String> approveUrl, Optional<String> customId) {
+                        Optional<String> approveUrl, Optional<String> customId, Optional<Instant> statusChangedAt) {
+
+        public Subscription(String id, String status, long quantity, Optional<Instant> nextBillingTime,
+                            Optional<String> approveUrl, Optional<String> customId) {
+            this(id, status, quantity, nextBillingTime, approveUrl, customId, Optional.empty());
+        }
     }
 
     /** {@code startTime} may be null: the subscription then starts when the payer approves it. */

@@ -1,0 +1,22 @@
+$kind: http-example
+name: '404 hardship-no-open-offer'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/hardship'
+  method: GET
+response:
+  statusCode: 404
+  statusText: 'Not Found'
+  headers:
+    - key: Content-Type
+      value: 'application/problem+json'
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://problems.paypal-seed.dev/hardship-no-open-offer",
+        "title": "Not found",
+        "status": 404,
+        "code": "hardship-no-open-offer",
+        "detail": "There is no open hardship offer for this loan"
+      }

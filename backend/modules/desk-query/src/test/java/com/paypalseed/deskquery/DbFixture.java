@@ -30,7 +30,8 @@ public final class DbFixture {
         dsl().execute("""
                 truncate deskquery.loan_view, deskquery.loan_instalment_view, deskquery.loan_missed_view,
                          deskquery.hardship_case_view, deskquery.member_savings, deskquery.member_savings_month,
-                         deskquery.approval_view, deskquery.application_view, deskquery.assessment_view
+                         deskquery.approval_view, deskquery.application_view, deskquery.application_void,
+                         deskquery.assessment_view, deskquery.member_activity, deskquery.rebuild_done
                 """);
     }
 }

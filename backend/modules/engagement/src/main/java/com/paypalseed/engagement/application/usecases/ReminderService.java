@@ -1,5 +1,6 @@
 package com.paypalseed.engagement.application.usecases;
 
+import com.paypalseed.engagement.domain.model.LoanMessages;
 import com.paypalseed.engagement.domain.model.QuietHours;
 import com.paypalseed.engagement.domain.model.ReminderTemplates;
 import com.paypalseed.engagement.domain.model.ReminderTemplates.Type;
@@ -56,6 +57,21 @@ public class ReminderService {
         deliver(memberId, loanId, null, type, key, bodyFor);
     }
 
+    /**
+     * A loan that never stood (ADR 0024): its payout came back, or the member cancelled in the cooling-off window. The
+     * messages still waiting for it are cancelled and the member gets one calm message, never another about this loan.
+     * Idempotent on the loan: a redelivery cancels nothing more and enqueues nothing.
+     */
+    @Transactional
+    public void loanVoided(UUID memberId, UUID loanId, long refundDueCents, boolean cancelledByMember) {
+        int cancelled = reminders.cancelQueuedForLoan(loanId);
+        if (cancelled > 0) {
+            log.info("Cancelled {} queued messages for loan {}: it never stood", cancelled, loanId);
+        }
+        notify(memberId, loanId, ReminderRepository.LOAN_VOIDED, "loan:" + loanId + ":voided",
+                locale -> cancelledByMember ? LoanMessages.cancelled(locale) : LoanMessages.payoutReturned(locale, refundDueCents));
+    }
+
     /** As {@link #notify}, for a message about a savings goal (a failed or returned withdrawal) rather than a loan. */
     @Transactional
     public void notifyAboutGoal(UUID memberId, UUID goalId, String type, String key, Function<String, String> bodyFor) {
@@ -63,6 +79,11 @@ public class ReminderService {
     }
 
     private void deliver(UUID memberId, UUID loanId, UUID goalId, String type, String key, Function<String, String> bodyFor) {
+        if (loanId != null && !ReminderRepository.LOAN_VOIDED.equals(type) && reminders.loanClosedAsVoid(loanId)) {
+            // A reminder or an offer that was decided before the loan was voided but only reached us after.
+            log.info("No {} message for loan {}: it never stood", type, loanId);
+            return;
+        }
         Optional<Contact> contact = reminders.contact(memberId);
         String locale = contact.map(Contact::locale).orElse("en");
         String body = bodyFor.apply(locale);

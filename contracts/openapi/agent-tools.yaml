@@ -565,7 +565,7 @@ components:
         memberRef: { type: string, description: "Pseudonymous reference. Not the member id." }
         principalCents: { $ref: "#/components/schemas/Cents" }
         outstandingCents: { $ref: "#/components/schemas/Cents" }
-        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED, DISBURSEMENT_RETURNED] }
         bucket: { $ref: "#/components/schemas/Bucket" }
         dpd: { type: integer, minimum: 0 }
         instalmentCount: { type: integer }

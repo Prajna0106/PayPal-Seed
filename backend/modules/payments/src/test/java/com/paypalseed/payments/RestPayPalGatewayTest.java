@@ -252,6 +252,7 @@ class RestPayPalGatewayTest {
         reply("GET /v1/payments/payouts/B-1", 200, "{\"batch_header\":{\"payout_batch_id\":\"B-1\",\"batch_status\":\"PENDING\"},"
                 + "\"items\":[{\"payout_item_id\":\"IT-1\",\"transaction_status\":\"PENDING\",\"payout_batch_id\":\"B-1\"}]}");
 
+        paypal.setVenmoPayouts(true);
         PayoutItem item = paypal.createPayout(new CreatePayout("seed:ref-1", "ref-1", RecipientType.PHONE, "+15551234567",
                 PayoutWallet.VENMO, 1234, "Your Seed loan"), "payout:ref-1");
 
@@ -272,6 +273,20 @@ class RestPayPalGatewayTest {
         assertThat(item.batchId()).isEqualTo("B-1");
         assertThat(item.itemId()).contains("IT-1");
         assertThat(item.transactionStatus()).contains("PENDING");
+    }
+
+    @Test
+    void aVenmoMemberIsPaidThroughPayPalUnlessVenmoPayoutsAreSwitchedOn() throws Exception {
+        reply("POST /v1/payments/payouts", 201,
+                "{\"batch_header\":{\"payout_batch_id\":\"B-2\",\"batch_status\":\"PENDING\"},\"links\":[]}");
+        reply("GET /v1/payments/payouts/B-2", 200, "{\"batch_header\":{\"payout_batch_id\":\"B-2\",\"batch_status\":\"PENDING\"},"
+                + "\"items\":[{\"payout_item_id\":\"IT-2\",\"transaction_status\":\"PENDING\",\"payout_batch_id\":\"B-2\"}]}");
+
+        paypal.createPayout(new CreatePayout("seed:ref-2", "ref-2", RecipientType.EMAIL, "member@example.com",
+                PayoutWallet.VENMO, 500, null), "payout:ref-2");
+
+        assertThat(only("POST", "/v1/payments/payouts").json().path("items").path(0).path("recipient_wallet").asText())
+                .isEqualTo("PAYPAL");
     }
 
     @Test

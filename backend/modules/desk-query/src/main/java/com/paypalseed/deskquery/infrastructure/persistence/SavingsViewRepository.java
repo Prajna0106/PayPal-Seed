@@ -5,6 +5,7 @@ import static com.paypalseed.deskquery.infrastructure.persistence.jooq.Tables.ME
 
 import com.paypalseed.platform.persistence.PgSql;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jooq.DSLContext;
@@ -45,5 +46,13 @@ public class SavingsViewRepository {
                 .set(MEMBER_SAVINGS.STREAK_MONTHS, streakMonths)
                 .set(MEMBER_SAVINGS.UPDATED_AT, PgSql.now())
                 .execute();
+    }
+
+    /** Swaps the member's stored months for exactly these, in the caller's transaction. */
+    public void replaceMonths(UUID memberRef, Collection<LocalDate> months) {
+        dsl.deleteFrom(MEMBER_SAVINGS_MONTH).where(MEMBER_SAVINGS_MONTH.MEMBER_REF.eq(memberRef)).execute();
+        for (LocalDate month : months) {
+            addMonth(memberRef, month);
+        }
     }
 }

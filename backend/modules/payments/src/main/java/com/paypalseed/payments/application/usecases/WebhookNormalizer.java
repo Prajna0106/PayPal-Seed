@@ -23,11 +23,17 @@ import com.paypalseed.payments.infrastructure.persistence.SavingsSubscriptionRep
 import com.paypalseed.payments.infrastructure.persistence.TopUpRepository;
 import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.platform.kernel.Money;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -53,6 +59,7 @@ public class WebhookNormalizer {
     public record Parked(String waitFor) implements Result {
     }
 
+    private static final Logger LOG = LoggerFactory.getLogger(WebhookNormalizer.class);
     private static final Pattern LOAN_CUSTOM_ID = Pattern.compile("^loan:([0-9a-f-]{36})(?::([A-Z_]+))?$");
     private static final Pattern PARENT_CAPTURE = Pattern.compile("/captures/([^/]+)$");
     /** A payout report with no sender id that no Seed payout claims after this many tries belongs to someone else. */
@@ -69,11 +76,30 @@ public class WebhookNormalizer {
     private final SavingsSubscriptionRepository savingsSubscriptions;
     private final TopUpRepository topUps;
     private final TopUpFacts topUpFacts;
+    private final Clock realTime;
+
+    @Autowired
+    public WebhookNormalizer(ObjectMapper json, MandateRepository mandates, MoneyRegistry registry, MoneyFacts facts,
+                             ApplicationEventPublisher events, PayPalGateway paypal, PayoutRepository payouts,
+                             PayoutFacts payoutFacts, SavingsSubscriptionRepository savingsSubscriptions,
+                             TopUpRepository topUps, TopUpFacts topUpFacts, ObjectProvider<Clock> realTime) {
+        this(json, mandates, registry, facts, events, paypal, payouts, payoutFacts, savingsSubscriptions, topUps, topUpFacts,
+                realTime.getIfAvailable(Clock::systemUTC));
+    }
 
     public WebhookNormalizer(ObjectMapper json, MandateRepository mandates, MoneyRegistry registry, MoneyFacts facts,
                              ApplicationEventPublisher events, PayPalGateway paypal, PayoutRepository payouts,
                              PayoutFacts payoutFacts, SavingsSubscriptionRepository savingsSubscriptions,
                              TopUpRepository topUps, TopUpFacts topUpFacts) {
+        this(json, mandates, registry, facts, events, paypal, payouts, payoutFacts, savingsSubscriptions, topUps, topUpFacts,
+                Clock.systemUTC());
+    }
+
+    public WebhookNormalizer(ObjectMapper json, MandateRepository mandates, MoneyRegistry registry, MoneyFacts facts,
+                             ApplicationEventPublisher events, PayPalGateway paypal, PayoutRepository payouts,
+                             PayoutFacts payoutFacts, SavingsSubscriptionRepository savingsSubscriptions,
+                             TopUpRepository topUps, TopUpFacts topUpFacts, Clock realTime) {
+        this.realTime = realTime;
         this.json = json;
         this.mandates = mandates;
         this.registry = registry;
@@ -95,7 +121,8 @@ public class WebhookNormalizer {
         return switch (event.eventType()) {
             case "BILLING.SUBSCRIPTION.CREATED", "BILLING.SUBSCRIPTION.ACTIVATED", "BILLING.SUBSCRIPTION.RE-ACTIVATED",
                  "BILLING.SUBSCRIPTION.SUSPENDED", "BILLING.SUBSCRIPTION.UPDATED", "BILLING.SUBSCRIPTION.CANCELLED",
-                 "BILLING.SUBSCRIPTION.EXPIRED" -> subscriptionChanged(event.eventType(), resource, root.path("create_time").asText(""), causedBy);
+                 "BILLING.SUBSCRIPTION.EXPIRED" -> subscriptionChanged(event.eventType(), resource, root.path("create_time").asText(""),
+                         event.receivedAt(), causedBy);
             case "BILLING.SUBSCRIPTION.PAYMENT.FAILED" -> withMandate(resource.path("id").asText(), m -> {
                 events.publishEvent(new PaymentEvents.PaymentFailed(Ids.newId(), m.loanId(), Source.AUTOPAY, null,
                         "PAYMENT_FAILED", Instant.now(), causedBy));
@@ -152,6 +179,7 @@ public class WebhookNormalizer {
             events.publishEvent(new PaymentEvents.SavingsDepositReceived(Ids.newId(), s.goalId(), s.memberId(), subscriptionId,
                     resource.path("id").asText(), cents(resource.path("amount").path("total")),
                     cents(resource.path("transaction_fee").path("value")), time(resource), causedBy));
+            refreshNextBilling(subscriptionId);
             return new Handled();
         }
         return withMandate(subscriptionId, m -> {
@@ -161,16 +189,20 @@ public class WebhookNormalizer {
         });
     }
 
-    private Result subscriptionChanged(String eventType, JsonNode r, String eventTime, String causedBy) {
+    private Result subscriptionChanged(String eventType, JsonNode r, String eventTime, Instant receivedAt, String causedBy) {
         String id = r.path("id").asText();
         Optional<SavingsSubscription> saving = savingsSubscriptions.bySubscription(id);
         if (saving.isPresent() || r.path("custom_id").asText("").startsWith("goal:")) {
             if (saving.isEmpty()) {
                 return new Parked("subscription:" + id); // PayPal was faster than our commit; the insert wakes it
             }
-            savingsSubscriptions.status(id, r.path("status").asText());
+            Instant happenedAt = subscriptionTime(r, eventTime, receivedAt);
+            String status = r.path("status").asText();
+            if (savingsSubscriptions.status(id, status, happenedAt)) {
+                storeNextBilling(id, status, r.path("billing_info").path("next_billing_time").asText(null));
+            }
             savingsState(eventType).ifPresent(state -> events.publishEvent(new PaymentEvents.SavingsSubscriptionStateChanged(
-                    Ids.newId(), saving.get().goalId(), saving.get().memberId(), id, state, subscriptionTime(r, eventTime), causedBy)));
+                    Ids.newId(), saving.get().goalId(), saving.get().memberId(), id, state, happenedAt, causedBy)));
             return new Handled(); // a savings deposit plan, not a loan mandate
         }
         return withMandate(id, m -> {
@@ -182,6 +214,35 @@ public class WebhookNormalizer {
             facts.observed(locked, observed);
             return new Handled();
         });
+    }
+
+    /** A subscription that is not active has no next charge; an active one with no time in the report keeps the one stored. */
+    private void storeNextBilling(String subscriptionId, String status, String reported) {
+        if (!"ACTIVE".equals(status)) {
+            savingsSubscriptions.nextBillingTime(subscriptionId, null);
+        } else if (reported != null && !reported.isBlank()) {
+            try {
+                savingsSubscriptions.nextBillingTime(subscriptionId, Instant.parse(reported));
+            } catch (DateTimeParseException e) {
+                LOG.debug("Subscription {} reported an unreadable next billing time", subscriptionId);
+            }
+        }
+    }
+
+    /**
+     * A sale moves PayPal's next charge a month on, and a sale report does not say where. Ask PayPal once, after the
+     * deposit is announced; if it cannot answer the stored time stays and the Home page shows no date rather than a
+     * wrong one (it ignores a time in the past).
+     */
+    private void refreshNextBilling(String subscriptionId) {
+        try {
+            Subscription current = paypal.getSubscription(subscriptionId);
+            if (current != null && "ACTIVE".equals(current.status())) {
+                savingsSubscriptions.nextBillingTime(subscriptionId, current.nextBillingTime().orElse(null));
+            }
+        } catch (RuntimeException e) {
+            LOG.info("Next billing time of subscription {} not refreshed: {}", subscriptionId, e.getClass().getSimpleName());
+        }
     }
 
     private static Optional<SavingsSubscriptionState> savingsState(String eventType) {
@@ -339,16 +400,35 @@ public class WebhookNormalizer {
     }
 
     /**
-     * When a subscription changed. A subscription resource carries its creation time in {@code create_time} and the
-     * time of the change in {@code update_time}; using the creation time would give every state change of one
-     * subscription the same instant and reports could not be ordered (ADR 0020). The event's own time is the fallback.
+     * When a subscription changed, so that reports of one subscription can be put in order (ADR 0020, ADR 0027). In
+     * order of preference:
+     * <ol>
+     *   <li>the resource's {@code update_time}, the time of the change itself (its {@code create_time} is the creation of
+     *       the subscription and would give every change the same instant);</li>
+     *   <li>the webhook's own {@code create_time}, when PayPal left {@code update_time} out (whether it sends it on every
+     *       event is unverified);</li>
+     *   <li>the moment the webhook reached Seed, which orders reports that have no time at all in the order they were
+     *       received, not in the order they happen to be processed (a parked report is processed late);</li>
+     *   <li>only for a report that was never stored (not the production path): the real clock.</li>
+     * </ol>
+     * A time that does not parse is the same as a missing one, so one malformed field cannot stop a report.
      */
-    private static Instant subscriptionTime(JsonNode resource, String eventTime) {
-        String t = resource.path("update_time").asText("");
-        if (t.isBlank()) {
-            t = eventTime;
+    private Instant subscriptionTime(JsonNode resource, String eventTime, Instant receivedAt) {
+        return instant(resource.path("update_time").asText(""))
+                .or(() -> instant(eventTime))
+                .or(() -> Optional.ofNullable(receivedAt))
+                .orElseGet(realTime::instant);
+    }
+
+    private static Optional<Instant> instant(String text) {
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
         }
-        return t == null || t.isBlank() ? Instant.now() : Instant.parse(t);
+        try {
+            return Optional.of(Instant.parse(text));
+        } catch (DateTimeParseException e) {
+            return Optional.empty();
+        }
     }
 
     private static Instant time(JsonNode resource) {

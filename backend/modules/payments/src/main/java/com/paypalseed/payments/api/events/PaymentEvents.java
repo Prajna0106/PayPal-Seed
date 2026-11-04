@@ -1,6 +1,7 @@
 package com.paypalseed.payments.api.events;
 
 import com.paypalseed.payments.api.dto.PaymentsDtos.FundingSource;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutPurpose;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutWallet;
 import java.time.Instant;
 import java.util.UUID;
@@ -66,6 +67,16 @@ public final class PaymentEvents {
     }
 
     public record MandateDriftDetected(UUID eventId, UUID loanId, UUID memberId, UUID mandateId, String detail, Instant occurredAt) {
+    }
+
+    /**
+     * A payout was requested for a member (published once per payout reference, in the transaction that records it, even
+     * if PayPal then refuses it). {@code recipientFingerprint} is a keyed hash (HMAC-SHA256, 64 hex characters) of the
+     * normalised recipient: it lets a consumer tell whether two payouts went to the same recipient and nothing else. The
+     * recipient itself (an email, a phone number, a payer id) never leaves the payments module (ADR 0027).
+     */
+    public record PayoutRequested(UUID eventId, UUID memberId, String referenceId, PayoutPurpose purpose, PayoutWallet wallet,
+                                  String recipientFingerprint, long amountCents, Instant occurredAt) {
     }
 
     /** The money reached the recipient. Published once per payout, whichever of API or webhook reports it first. */

@@ -1,0 +1,28 @@
+$kind: http-request
+name: 'HS14. Demo only - change the schedule under the offer (service)'
+method: POST
+url: '{{baseUrl}}/internal/loans/{{hardshipLoanId}}/reschedules'
+order: 14000
+description: 'Stands in for a payment landing between the offer and the choice (a real payment needs a signed PayPal webhook). Any change of the schedule makes the offer the member saw stale. approvalRef makes the call idempotent.'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "primitive": "MOVE_DATE",
+      "seq": 1,
+      "days": 1,
+      "approvalRef": "postman-stale-{{hardshipCaseId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('A new schedule version exists', () => pm.expect(body.version).to.be.at.least(2));

@@ -37,13 +37,14 @@ public final class PayoutStateMachine {
 
     /**
      * Maps PayPal's item {@code transaction_status} to ours. ONHOLD is still pending from the sender's view.
-     * REFUNDED and REVERSED mean the money came back, so they read as RETURNED. Unknown words stay empty.
+     * REFUNDED and REVERSED mean the money came back, so they read as RETURNED. DENIED and CANCELED count as FAILED,
+     * as their webhooks do. Unknown words stay empty.
      */
     public static Optional<PayoutStatus> fromPaypalItem(String transactionStatus) {
         return switch (transactionStatus) {
             case "SUCCESS" -> Optional.of(PayoutStatus.SUCCEEDED);
             case "PENDING", "ONHOLD" -> Optional.of(PayoutStatus.PENDING);
-            case "FAILED" -> Optional.of(PayoutStatus.FAILED);
+            case "FAILED", "DENIED", "CANCELED" -> Optional.of(PayoutStatus.FAILED);
             case "BLOCKED" -> Optional.of(PayoutStatus.BLOCKED);
             case "UNCLAIMED" -> Optional.of(PayoutStatus.UNCLAIMED);
             case "RETURNED", "REFUNDED", "REVERSED" -> Optional.of(PayoutStatus.RETURNED);
