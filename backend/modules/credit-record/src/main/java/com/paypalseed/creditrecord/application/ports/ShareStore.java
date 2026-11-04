@@ -12,7 +12,12 @@ public interface ShareStore {
 
     /** What a share shows, frozen at creation. Holds no personal data. */
     record Snapshot(UUID id, UUID memberId, int levelRank, LocalDate recordSince, int loansOnPlan, String onTimeBand,
-                    int defaultsAtCapture, LocalDate capturedOn) {
+                    int defaultsAtCapture, LocalDate capturedOn, int loansWithFundHelp) {
+        /** A snapshot of a record with no fund-paid loans. */
+        public Snapshot(UUID id, UUID memberId, int levelRank, LocalDate recordSince, int loansOnPlan, String onTimeBand,
+                        int defaultsAtCapture, LocalDate capturedOn) {
+            this(id, memberId, levelRank, recordSince, loansOnPlan, onTimeBand, defaultsAtCapture, capturedOn, 0);
+        }
     }
 
     record Share(UUID id, UUID memberId, UUID snapshotId, ShareDetail detail, String keyId, String idempotencyKey,
@@ -40,4 +45,7 @@ public interface ShareStore {
 
     /** True when the share exists and belongs to the member; revoking an already revoked share is fine. */
     boolean revoke(UUID memberId, UUID shareId, Instant at);
+
+    /** Revokes every share of the member that is still active at {@code at}; returns how many it closed. Idempotent. */
+    int revokeAllActive(UUID memberId, Instant at);
 }

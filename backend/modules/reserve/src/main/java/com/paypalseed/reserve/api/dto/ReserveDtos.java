@@ -23,6 +23,13 @@ public final class ReserveDtos {
     public record DonationReceipt(UUID donationId, String captureId, long amountCents, boolean replay) {
     }
 
+    /**
+     * Money that went back to the fund from an approved cover. {@code replay} is true when this approval reference had
+     * been returned before (nothing changed). {@code journalEntryId} is the entry reserve posted.
+     */
+    public record CoverReturn(String returnRef, UUID loanId, long amountCents, UUID journalEntryId, boolean replay) {
+    }
+
     /** What a donor asked for before PayPal: the custom id travels on the order and comes back on the capture. */
     public record DonationIntent(UUID intentId, String customId) {
     }

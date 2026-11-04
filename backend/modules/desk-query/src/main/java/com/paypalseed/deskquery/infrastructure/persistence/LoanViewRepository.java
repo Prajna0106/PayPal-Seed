@@ -39,6 +39,9 @@ public class LoanViewRepository {
 
     private static final LocalDate NO_DUE_DATE = LocalDate.of(9999, 12, 31);
 
+    /** A loan that never stood (cancelled in the cooling-off window, or its payout came back) takes no later money, bucket or mode fact. */
+    private static final List<String> VOID_STATUSES = List.of("CANCELLED", "DISBURSEMENT_RETURNED");
+
     /** A sentinel-free rank, so a grid sorts buckets by severity rather than by name. */
     private static final Field<Integer> BUCKET_RANK = DSL.field(rankSql(), Integer.class, LOAN_VIEW.AGING_BUCKET);
 
@@ -147,7 +150,8 @@ public class LoanViewRepository {
         set.put(LOAN_VIEW.MONEY_AS_OF, asOf);
         set.put(LOAN_VIEW.UPDATED_AT, PgSql.now());
         int changed = dsl.update(LOAN_VIEW).set(set)
-                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.MONEY_AS_OF.isNull().or(LOAN_VIEW.MONEY_AS_OF.le(asOf))))
+                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.STATUS.notIn(VOID_STATUSES))
+                        .and(LOAN_VIEW.MONEY_AS_OF.isNull().or(LOAN_VIEW.MONEY_AS_OF.le(asOf))))
                 .execute();
         if (changed == 1) {
             refreshNextDue(loanId);
@@ -161,7 +165,8 @@ public class LoanViewRepository {
                 .set(LOAN_VIEW.DAYS_LATE, daysLate)
                 .set(LOAN_VIEW.BUCKET_AS_OF, asOf)
                 .set(LOAN_VIEW.UPDATED_AT, PgSql.now())
-                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.BUCKET_AS_OF.isNull().or(LOAN_VIEW.BUCKET_AS_OF.le(asOf))))
+                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.STATUS.notIn(VOID_STATUSES))
+                        .and(LOAN_VIEW.BUCKET_AS_OF.isNull().or(LOAN_VIEW.BUCKET_AS_OF.le(asOf))))
                 .execute() == 1;
     }
 
@@ -170,8 +175,28 @@ public class LoanViewRepository {
                 .set(LOAN_VIEW.AUTOPAY, autopay)
                 .set(LOAN_VIEW.MODE_AS_OF, asOf)
                 .set(LOAN_VIEW.UPDATED_AT, PgSql.now())
-                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.MODE_AS_OF.isNull().or(LOAN_VIEW.MODE_AS_OF.le(asOf))))
+                .where(LOAN_VIEW.LOAN_ID.eq(loanId).and(LOAN_VIEW.STATUS.notIn(VOID_STATUSES))
+                        .and(LOAN_VIEW.MODE_AS_OF.isNull().or(LOAN_VIEW.MODE_AS_OF.le(asOf))))
                 .execute() == 1;
+    }
+
+    /**
+     * The loan never stood (ADR 0024): it owes nothing, has no next payment, no lateness and no autopay, and is final, so
+     * no money, bucket or mode fact applies after it. Setting the same values again changes nothing.
+     */
+    public void recordVoided(UUID loanId, LocalDate asOf, String status) {
+        dsl.update(LOAN_VIEW)
+                .set(LOAN_VIEW.STATUS, status)
+                .set(LOAN_VIEW.OUTSTANDING_CENTS, 0L)
+                .set(LOAN_VIEW.NEXT_DUE_DATE, (LocalDate) null)
+                .set(LOAN_VIEW.NEXT_DUE_CENTS, (Long) null)
+                .set(LOAN_VIEW.DAYS_LATE, 0)
+                .set(LOAN_VIEW.AGING_BUCKET, "CURRENT")
+                .set(LOAN_VIEW.AUTOPAY, false)
+                .set(LOAN_VIEW.MONEY_AS_OF, asOf)
+                .set(LOAN_VIEW.UPDATED_AT, PgSql.now())
+                .where(LOAN_VIEW.LOAN_ID.eq(loanId))
+                .execute();
     }
 
     /** Missed instalments are a set keyed by (schedule version, sequence), so a redelivery adds nothing. */

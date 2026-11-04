@@ -24,7 +24,13 @@ public interface RecordStore {
 
     void save(RecordState state);
 
-    /** Newest first; {@code before} is exclusive and null for the first page. */
+    /** Every fact of the member, oldest first (the order they were folded in), for the rebuild after a loan is voided. */
+    List<RecordFact> facts(UUID memberId);
+
+    /**
+     * Newest first; {@code before} is exclusive and null for the first page. Facts of a voided loan, and the voiding
+     * itself, are not part of the member's history.
+     */
     List<StoredFact> history(UUID memberId, Long before, int limit);
 
     /** Members who started saving and whose last counted month is before {@code throughMonth} (a first of month). */

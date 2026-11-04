@@ -17,7 +17,7 @@ const BY_CODE: Record<string, string> = {
   "subscription-unavailable": "This goal saves from Venmo with top-ups, so it has no monthly plan to change.",
 };
 
-export type SavingsAction = "create" | "pause" | "resume" | "withdraw" | "topup";
+export type SavingsAction = "create" | "pause" | "resume" | "withdraw" | "topup" | "amount";
 
 const CONFLICT: Record<SavingsAction, string> = {
   create: "You already have three goals open. Finish or close one before starting another.",
@@ -25,6 +25,7 @@ const CONFLICT: Record<SavingsAction, string> = {
   resume: "This goal cannot be resumed right now.",
   withdraw: "This goal cannot pay out right now. It may still be waiting for you at PayPal.",
   topup: "This goal cannot take a top-up right now.",
+  amount: "The amount cannot be changed right now. If the goal is waiting for you at PayPal, finish that first.",
 };
 
 export function savingsMessage(error: unknown, action: SavingsAction): string {

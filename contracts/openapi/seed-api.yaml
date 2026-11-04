@@ -630,7 +630,8 @@ paths:
         `consent-version-stale` so the member never agrees to text they did not see. Granting a newer version closes the
         older entry and appends a new one.
         `INCOME_READ` here is the member-facing record; the fair loan check keeps enforcing its own consent in
-        underwriting (ADR 0012).
+        underwriting (ADR 0012). `FAIR_CHECK` is recorded by the fair loan check itself when the member agrees to it
+        (ADR 0026); revoking it, or `INCOME_READ`, withdraws the consent underwriting enforces and closes both lines.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/ConsentGrant' } } }
@@ -806,6 +807,11 @@ paths:
         a partner sees: `LEVEL` (level only), `SUMMARY` (also since date and loans repaid on plan) or `FULL` (also
         the on-time band). The same `Idempotency-Key` with the same body returns the same share; with a different
         body, 409 `idempotency-key-reused`. A member can hold 25 active shares.
+
+        Needs the member's active `RECORD_SHARING` consent at the current text; without it, 409
+        `record-sharing-consent-required`. Withdrawing that consent (`DELETE /api/v1/members/me/consents/RECORD_SHARING`)
+        revokes every active share of the member, and the public verification then answers 404 `record-not-found`
+        exactly as for any other revoked link.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -821,7 +827,7 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
-        '409': { description: 'idempotency-key-reused | record-nothing-to-share | share-limit-reached', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 'idempotency-key-reused | record-nothing-to-share | share-limit-reached | record-sharing-consent-required', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '503': { description: dependency-unavailable (no signing key is configured), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     get:
       tags: [record]
@@ -1255,6 +1261,28 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { description: "The goal cannot be resumed in its state", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
+  /api/v1/savings/goals/{goalId}/sync:
+    post:
+      tags: [savings]
+      operationId: syncSavingsGoal
+      summary: Read the goal's PayPal subscription now and bring the goal up to date
+      description: |
+        A safe re-read, so it takes no `Idempotency-Key`. Seed normally learns that the member approved the subscription,
+        and about each monthly deposit, from PayPal webhooks; where a webhook cannot reach Seed (a local machine) or was
+        missed, this reads the subscription and its sales from PayPal and applies them through the same state and
+        crediting steps the webhooks use, so a webhook that arrives later or twice changes nothing. At most one read per
+        goal every 5 seconds (`seed.savings.sync-min-interval`); a call inside that time, or for a goal that has no live
+        subscription (expired, cancelled, completed), returns the stored goal untouched.
+        It also reads the goal's withdrawal payouts that PayPal has not reported yet and applies what PayPal says (ADR 0029),
+        whatever the state of the subscription.
+      parameters: [ { $ref: '#/components/parameters/GoalId' } ]
+      responses:
+        '200': { description: "The goal as it is after the read", content: { application/json: { schema: { $ref: '#/components/schemas/SavingsGoal' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: "paypal-rejected (PayPal refused to show the subscription; the goal is unchanged)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (PayPal could not be reached; the goal is unchanged, try again)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
   /api/v1/savings/goals/{goalId}/amount:
     post:
       tags: [savings]
@@ -1306,6 +1334,23 @@ paths:
       parameters: [ { $ref: '#/components/parameters/GoalId' } ]
       responses:
         '200': { description: "Withdrawals", content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Withdrawal' } } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/savings/goals/{goalId}/deposits:
+    get:
+      tags: [savings]
+      operationId: listSavingsDeposits
+      summary: The deposits that reached the goal, newest first
+      description: |
+        The member's own goal only; another member's goal is `404`. Each item is a payment PayPal confirmed and Seed
+        credited (the monthly subscription deposit or a one-off top-up), so the savings timeline can draw real deposits.
+        `limit` is 1 to 200 (default 50).
+      parameters:
+        - $ref: '#/components/parameters/GoalId'
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200': { description: "Deposits", content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GoalDeposit' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
 
   /api/v1/savings/goals/{goalId}/topup:
@@ -1364,6 +1409,29 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { description: "application-invalid-state (not approved by two officers), or payout-recipient-missing (the member has no PayPal account on file)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '503': { description: "dependency-unavailable (the application stays APPROVED; call again)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/desk/applications/{applicationId}/payout/sync:
+    post:
+      tags: [lending-desk]
+      operationId: syncApplicationPayout
+      summary: Check again with PayPal how the application's payout stands
+      description: |
+        For a payout whose webhook has not arrived (a machine PayPal cannot call, or a lost delivery). Reads the application's
+        current payout from PayPal and applies what it says through the same steps the payout webhooks use (ADR 0029): the
+        loan and Schedule Version 1 are created once when it succeeded, a refused or returned payout puts the application
+        back to `APPROVED` with a `payoutIssue`. A webhook that comes before, after or twice changes nothing. A safe re-read, so
+        no `Idempotency-Key`: a payout is read at most once every 5 seconds, and a call inside that time, a payout that is
+        already final, and one PayPal has not given an id yet return the application as it stands.
+      security:
+        - staffSession: []
+      parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+      responses:
+        '200': { description: "The application as it stands after the read", content: { application/json: { schema: { $ref: '#/components/schemas/LoanApplication' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { description: "application-not-found, or payout-not-found (no payout was ever asked for)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: "paypal-rejected (PayPal refused the read; nothing changed)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: "dependency-unavailable (PayPal could not be reached; nothing changed)", content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
 
   # ---------------------------------------------------------------- Lending, underwriting and the coach (ADR 0020)
@@ -1500,6 +1568,9 @@ paths:
       tags: [lending-desk]
       operationId: rejectLoanApplication
       summary: Reject an application (the officer is the actor; `officerId` in a body is ignored)
+      description: |
+        Allowed while the application is waiting for a decision, and on an `APPROVED` application whose payout failed
+        or came back (`payoutIssue` is set), so an officer can end it instead of sending the money again.
       security: [ { staffSession: [] } ]
       parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
       requestBody:
@@ -1648,6 +1719,21 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
 
+  /api/v1/desk/underwriting/assessments/latest:
+    get:
+      tags: [underwriting-desk]
+      operationId: getLatestFairCheckOfApplication
+      summary: The newest fair check linked to one loan application
+      description: Roles OFFICER, CHECKER or ADMIN. `404` (`assessment-not-found`) when no fair check is linked to the application.
+      security: [ { staffSession: [] } ]
+      parameters:
+        - { name: applicationId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: The fair check card, content: { application/json: { schema: { $ref: '#/components/schemas/FairCheckCard' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
   /api/v1/desk/underwriting/assessments/{assessmentId}/decision:
     post:
       tags: [underwriting-desk]
@@ -1787,7 +1873,7 @@ components:
         memberId: { type: string, format: uuid }
         principalCents: { type: integer }
         outstandingCents: { type: integer }
-        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+        status: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED, DISBURSEMENT_RETURNED] }
         collectionMode: { type: string, enum: [AUTOPAY, MANUAL] }
         bucket: { $ref: '#/components/schemas/Bucket' }
         dpd: { type: integer }
@@ -1803,6 +1889,7 @@ components:
         remainingCents: { type: integer }
         status: { type: string, enum: [SCHEDULED, DUE, PARTIALLY_PAID, IN_GRACE, LATE, PAID, PAID_LATE, PREPAID] }
         paidOn: { type: [string, 'null'], format: date }
+        reserveCoveredCents: { type: integer, minimum: 0, description: 'The part of paidCents the community safety fund paid (repayment source RESERVE, ADR 0019); the member paid the rest. Zero when the fund paid nothing on this instalment.' }
     ScheduleView:
       type: object
       properties:
@@ -2078,7 +2165,7 @@ components:
     # ---- module schemas (ADRs 0012 to 0021)
     Language: { type: string, enum: [en, es] }
     WalletPreference: { type: string, enum: [PAYPAL, VENMO] }
-    ConsentType: { type: string, enum: [TERMS, PRIVACY, INCOME_READ, RECORD_SHARING] }
+    ConsentType: { type: string, enum: [TERMS, PRIVACY, INCOME_READ, RECORD_SHARING, FAIR_CHECK] }
     StaffRole: { type: string, enum: [OFFICER, CHECKER, ADMIN] }
     MemberProfile:
       type: object
@@ -2134,7 +2221,7 @@ components:
     ShareDetail: { type: string, enum: [LEVEL, SUMMARY, FULL] }
     FactKind:
       type: string
-      enum: [SAVINGS_DEPOSIT, SAVING_MONTHS_CLOSED, LOAN_DISBURSED, INSTALMENT_PAID, INSTALMENT_MISSED, LOAN_REPAID, LOAN_DEFAULTED, HARDSHIP_PLAN_APPLIED]
+      enum: [SAVINGS_DEPOSIT, SAVING_MONTHS_CLOSED, LOAN_DISBURSED, INSTALMENT_PAID, INSTALMENT_MISSED, LOAN_REPAID, LOAN_DEFAULTED, HARDSHIP_PLAN_APPLIED, INSTALMENT_FUND_COVERED]
     RecordView:
       type: object
       required: [level, levelRank, loanLimitCents, ladderTier, savings, loans, instalments, hardshipPlansOnPlan, defaults, onTimeBps, policyVersion]
@@ -2155,11 +2242,12 @@ components:
             missedMonths: { type: integer, minimum: 0 }
         loans:
           type: object
-          required: [disbursed, repaidOnPlan, repaidOffPlan]
+          required: [disbursed, repaidOnPlan, repaidOffPlan, completedWithFundHelp]
           properties:
             disbursed: { type: integer, minimum: 0 }
             repaidOnPlan: { type: integer, minimum: 0 }
             repaidOffPlan: { type: integer, minimum: 0 }
+            completedWithFundHelp: { type: integer, minimum: 0, description: 'Loans the community safety fund paid in full. Repaid and never held against the member, but not counted as completed by them (ADR 0025). Not in repaidOnPlan or repaidOffPlan.' }
         instalments:
           type: object
           required: [onTime, late, openLate]
@@ -2229,6 +2317,7 @@ components:
         level: { $ref: '#/components/schemas/RecordLevel' }
         since: { type: string, format: date, description: 'First day of the month the record began (SUMMARY and FULL)' }
         loansRepaidOnPlan: { type: integer, minimum: 0, description: 'SUMMARY and FULL' }
+        loansCompletedWithFundHelp: { type: integer, minimum: 0, description: 'SUMMARY and FULL. Loans the community safety fund paid in full; they are not in loansRepaidOnPlan. A count only: it says nothing about why help was needed.' }
         onTimeBand: { $ref: '#/components/schemas/OnTimeBand' }
         issuedAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
@@ -2247,7 +2336,7 @@ components:
         currency: { type: string, examples: [USD] }
     HomeSectionName:
       type: string
-      enum: [profile, savings, lending, underwriting, creditRecord, hardship]
+      enum: [profile, savings, lending, underwriting, creditRecord, hardship, recentActivity]
     HomeSectionErrorCode:
       type: string
       enum: [no-data, unavailable]
@@ -2263,6 +2352,13 @@ components:
       required: [generatedOn, sectionErrors]
       properties:
         generatedOn: { type: string, format: date, description: The business date the page was built for }
+        payoutRecipientReady:
+          type: boolean
+          description: |
+            True when Seed holds a payout recipient for the member (they signed in with PayPal), false when it does not. When
+            false, a withdrawal or a loan payout is refused with `409 payout-recipient-missing`, so the app can ask the member
+            to sign in with PayPal before they try. Present even when `profile` is `null`; omitted only when identity could not
+            answer, in which case the app shows no warning.
         profile:
           oneOf: [{ $ref: '#/components/schemas/ProfileSection' }, { type: 'null' }]
         savings:
@@ -2275,6 +2371,16 @@ components:
           oneOf: [{ $ref: '#/components/schemas/CreditRecordSection' }, { type: 'null' }]
         hardship:
           oneOf: [{ $ref: '#/components/schemas/HardshipSection' }, { type: 'null' }]
+        recentActivity:
+          description: |
+            The latest things that happened in the member's Seed account, newest first (at most `seed.home.activity-limit`,
+            default 10): deposits, withdrawals, loan payments, the loan payout and a payment the safety fund made. An empty
+            array means none yet. `null` (with a `sectionErrors` entry, `unavailable`) means it could not be read; the rest of
+            the page is unaffected. It holds no hardship detail.
+          oneOf:
+            - type: array
+              items: { $ref: '#/components/schemas/HomeActivityItem' }
+            - type: 'null'
         sectionErrors:
           type: array
           items: { $ref: '#/components/schemas/SectionError' }
@@ -2309,6 +2415,31 @@ components:
         saved: { $ref: '#/components/schemas/Money' }
         monthly: { $ref: '#/components/schemas/Money' }
         targetDate: { type: [string, 'null'], format: date }
+        nextDepositDate:
+          type: [string, 'null']
+          format: date
+          description: |
+            The business date PayPal bills the monthly deposit next, as PayPal last reported it. `null` when the goal is not
+            saving by subscription now (paused, waiting for approval, ended, a Venmo goal), when PayPal has not said, and when
+            the reported date is already past.
+    HomeActivityItem:
+      type: object
+      required: [kind, amount, occurredAt]
+      description: One thing that happened in the member's account. Whole cents, no PayPal reference, no hardship detail.
+      properties:
+        kind:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, WITHDRAWAL_RETURNED, LOAN_DISBURSED, LOAN_PAYMENT, LOAN_PAYMENT_REVERSED, COVER_APPLIED, LOAN_VOIDED]
+          description: |
+            COVER_APPLIED is a payment the community safety fund made on the loan. LOAN_VOIDED is a loan whose payout came
+            back. WITHDRAWAL_RETURNED is a withdrawal PayPal took back (the money is in the goal again).
+        amount: { $ref: '#/components/schemas/Money' }
+        occurredAt:
+          type: string
+          format: date-time
+          description: When it happened; for a loan event, the start of that business day (the source gives only a date)
+        goalId: { type: [string, 'null'], format: uuid, description: Set for savings kinds }
+        loanId: { type: [string, 'null'], format: uuid, description: Set for loan kinds }
     LendingSection:
       type: object
       required: [eligibility]
@@ -2362,7 +2493,7 @@ components:
         requested: { $ref: '#/components/schemas/Money' }
         termMonths: { type: integer }
         coolingOffExpiresAt: { type: [string, 'null'], format: date-time }
-        payoutIssue: { type: [string, 'null'], description: A PayPal reason name when the last payout did not complete; the web maps it to plain words }
+        payoutIssue: { type: [string, 'null'], description: "A PayPal reason name when the last payout did not complete; the web maps it to plain words. RETURNED_AFTER_DISBURSEMENT means PayPal took the payout back after the loan was registered: the loan was voided (status DISBURSEMENT_RETURNED), the application is APPROVED again, and an officer sends it again with a new payout reference or rejects it" }
     UnderwritingSection:
       type: object
       required: [incomeConsent]
@@ -2393,8 +2524,9 @@ components:
       description: What is missing for the next level, in the member's language. Absent at the top level.
       properties:
         nextLevel: { type: string }
-        onTimeSavingMonthsToGo: { type: integer }
+        onTimeSavingMonthsToGo: { type: integer, description: "Months of on-time saving the next level still needs, computed by the level rules (0 once the saving part is met)" }
         loansRepaidOnPlanToGo: { type: integer }
+        requiredOnTimeSavingMonths: { type: [integer, 'null'], description: "What the next level asks in all, so the page can draw progress (required minus months to go is how far the member is)" }
         hint: { type: string, description: One short, pressure-free sentence built by code from the counts above }
     HardshipSection:
       type: object
@@ -2410,7 +2542,7 @@ components:
     ApplicationStatus: { type: string, enum: [SUBMITTED, PENDING_SECOND_APPROVAL, APPROVED, DISBURSING, DISBURSED, REJECTED, CANCELLED_COOLING_OFF] }
     AssessmentOutcome: { type: string, enum: [RECOMMENDED, NOT_RECOMMENDED, APPROVED, ADJUSTED, DECLINED] }
     AssessmentStatus: { type: string, enum: [PENDING, APPROVED, ADJUSTED, DECLINED] }
-    LoanStatus: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED] }
+    LoanStatus: { type: string, enum: [ACTIVE, REPAID, COVERED, CANCELLED, DISBURSEMENT_RETURNED] }
     AgingBucket: { type: string, enum: [CURRENT, DPD_1_7, DPD_8_30, DPD_31_60, DPD_60_PLUS] }
     SlaState: { type: string, enum: [OVERDUE, DUE_SOON, ON_TRACK, NO_SLA] }
     Total:
@@ -2461,6 +2593,7 @@ components:
         slaState: { $ref: '#/components/schemas/SlaState' }
         slaBreached: { type: boolean }
         assignedOfficerRef: { type: string, description: Pseudonymous reference of the officer who acted last }
+        payoutIssue: { type: [string, 'null'], description: "RETURNED_AFTER_DISBURSEMENT on an APPROVED application whose paid-out loan was voided because PayPal took the payout back (the loan shows DISBURSEMENT_RETURNED): it needs another payout once the recipient is fixed, or a rejection. Absent or null otherwise" }
     DeskAssessmentRow:
       type: object
       required: [assessmentId, memberRef, recommended, recommendedAmountCents, status, disputed, createdAt, ageDays]
@@ -2785,6 +2918,15 @@ components:
         failureReason: { type: [string, 'null'], description: "PayPal's reason name" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    GoalDeposit:
+      type: object
+      required: [source, amount, amountCents, currency, creditedAt]
+      properties:
+        source: { type: string, enum: [SUBSCRIPTION, TOPUP], description: "SUBSCRIPTION is the monthly deposit; TOPUP is a one-off from PayPal or Venmo" }
+        amount: { type: number, description: "Decimal dollars, like the rest of the savings routes" }
+        amountCents: { type: integer, format: int64 }
+        currency: { type: string }
+        creditedAt: { type: string, format: date-time }
     TopUpRequest:
       type: object
       required: [amount]
@@ -2861,6 +3003,7 @@ components:
         suggestedTermMonths: { type: [integer, 'null'], description: 'A safe term to try instead, when there is one' }
         limitCents: { type: integer, format: int64, description: The loan ceiling that applies to the member }
         maxMonthlyInstalmentCents: { type: integer, format: int64, description: The most the member can safely repay each month }
+        incomeStale: { type: boolean, description: 'True when PayPal could not be read to refresh the member''s income for this preview, so the answer rests on the income stored earlier. Submitting the application refuses (retryable) in that case; a preview is an estimate' }
     RejectApplicationRequest:
       type: object
       properties:
@@ -2890,7 +3033,7 @@ components:
         sizingReasons: { type: array, items: { type: string } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-        payoutIssue: { type: [string, 'null'], description: 'Why the last payout did not complete the disbursement (a PayPal reason name such as RECEIVER_UNREGISTERED); an officer reads it on an APPROVED application' }
+        payoutIssue: { type: [string, 'null'], description: 'Why the last payout did not complete the disbursement (a PayPal reason name such as RECEIVER_UNREGISTERED); an officer reads it on an APPROVED application, where it can also be rejected. RETURNED_AFTER_DISBURSEMENT: the payout came back after the loan was registered and the loan was voided' }
     Eligibility:
       type: object
       required: [memberId, eligible, tier, tierLevel, tierLimitCents, maxLoanCents, maxMonthlyInstalmentCents, minTermMonths, maxTermMonths, hasActiveLoan, completedLoansOnTime, reasons, recordLevel, limitReason]

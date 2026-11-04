@@ -9,6 +9,7 @@ import com.paypalseed.savings.application.ports.SavingsPayments.Subscription;
 import com.paypalseed.savings.domain.model.GoalStatus;
 import com.paypalseed.savings.domain.model.SavingsErrors;
 import com.paypalseed.savings.domain.model.SavingsGoal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -20,18 +21,30 @@ import org.springframework.transaction.annotation.Transactional;
  * amount revises its quantity. A goal that has no subscription at PayPal (Venmo, or one created with a client
  * supplied id in development) changes locally only. Every PayPal call carries a request id built from the goal's
  * change counter, so a retried request is the same call and a later one is a new call.
+ *
+ * <p>A pause or resume is stamped with real time, not the business clock, on purpose (ADR 0027): the stamp is compared
+ * with the {@code update_time} PayPal puts on its own reports of the subscription, and PayPal never sees the demo
+ * clock, which can run months ahead. A business-clock stamp would make every PayPal report look older than the member's
+ * last action. The real time source is a plain {@link Clock} so tests can set it.
  */
 public class ManageGoalUseCase {
 
     private final GoalStore goals;
     private final SavingsPayments payments;
     private final BusinessClock clock;
+    private final Clock realTime;
     private final SavingsFlowSettings settings;
 
     public ManageGoalUseCase(GoalStore goals, SavingsPayments payments, BusinessClock clock, SavingsFlowSettings settings) {
+        this(goals, payments, clock, Clock.systemUTC(), settings);
+    }
+
+    public ManageGoalUseCase(GoalStore goals, SavingsPayments payments, BusinessClock clock, Clock realTime,
+                             SavingsFlowSettings settings) {
         this.goals = Objects.requireNonNull(goals);
         this.payments = Objects.requireNonNull(payments);
         this.clock = Objects.requireNonNull(clock);
+        this.realTime = Objects.requireNonNull(realTime);
         this.settings = Objects.requireNonNull(settings);
     }
 
@@ -40,7 +53,7 @@ public class ManageGoalUseCase {
         SavingsGoal goal = lock(goalId);
         boolean wasPaused = goal.getStatus() == GoalStatus.PAUSED;
         goal.pause();
-        goal.noteSubscriptionState(Instant.now()); // PayPal stamps real time, so does this; the business clock may run ahead
+        goal.noteSubscriptionState(realTime.instant()); // real time on purpose, see the class comment
         if (!wasPaused && hasSubscription(goal)) {
             payments.suspend(goalId, requestId(goal), "Paused by the member");
         }
@@ -51,7 +64,7 @@ public class ManageGoalUseCase {
     public SavingsGoal resume(UUID goalId) {
         SavingsGoal goal = lock(goalId);
         Subscription current = goal.getStatus() == GoalStatus.PAUSED ? subscriptionOf(goal) : null;
-        goal.noteSubscriptionState(Instant.now()); // a SUSPENDED report from before this resume must not pause the goal again
+        goal.noteSubscriptionState(realTime.instant()); // a SUSPENDED report from before this resume must not pause the goal again
         if (current == null) {
             goal.resume();
         } else if (hasEnded(current)) {

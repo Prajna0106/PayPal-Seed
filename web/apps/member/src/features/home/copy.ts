@@ -1,4 +1,5 @@
 /** Member-facing words for backend codes. Plain, short, and never a risk level or a score. */
+import type { ActivityKind } from "./model";
 
 export const SECTION_LABEL = {
   profile: "your profile",
@@ -7,6 +8,7 @@ export const SECTION_LABEL = {
   underwriting: "your fair loan check",
   creditRecord: "your Seed record",
   hardship: "your payment help",
+  recentActivity: "your recent activity",
 } as const;
 
 /** The mandate state payments reports, as a short label. */
@@ -44,6 +46,9 @@ export function applicationStatus(status: string): { label: string; detail: stri
   return APPLICATION_STATUS[status] ?? { label: "In progress", detail: "We are working on your application.", tone: "neutral" };
 }
 
+export const PAYOUT_RETURNED =
+  "The money did not reach your PayPal account, you owe nothing, we will try again once your account is ready.";
+
 export const PAYOUT_ISSUE = "Your payout did not reach your PayPal account yet. We will try again, and you can check your account details.";
 
 export const LEVELS = ["NEW", "BUILDING", "STEADY", "TRUSTED", "EXEMPLARY"] as const;
@@ -66,3 +71,18 @@ export const HELP_REVIEWING: ReadonlySet<string> = new Set(["OPTION_CHOSEN", "PE
 export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
+
+/**
+ * Plain words for each kind of thing that happened. The community fund line never says why it helped: the backend sends
+ * no hardship detail and the member needs none.
+ */
+export const ACTIVITY_WORDS: Record<ActivityKind, { title: string; detail: string | null }> = {
+  DEPOSIT: { title: "You saved", detail: null },
+  WITHDRAWAL: { title: "You took money out", detail: null },
+  WITHDRAWAL_RETURNED: { title: "A withdrawal came back", detail: "The money is in your goal again." },
+  LOAN_DISBURSED: { title: "Your loan was sent", detail: null },
+  LOAN_PAYMENT: { title: "You made a loan payment", detail: null },
+  LOAN_PAYMENT_REVERSED: { title: "A loan payment was taken back", detail: "PayPal reversed it, so it counts as not paid yet." },
+  COVER_APPLIED: { title: "The community fund helped with a payment", detail: null },
+  LOAN_VOIDED: { title: "Your loan payout came back", detail: "You owe nothing for it." },
+};

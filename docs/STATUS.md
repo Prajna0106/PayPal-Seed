@@ -1,6 +1,6 @@
 # PayPal Seed — What Is Built and What Is Pending
 
-Status as of **2 Nov 2026**. The plan and roadmap are in [plan.md](../plan.md).
+Status as of **3 Nov 2026**. The plan and roadmap are in [plan.md](../plan.md).
 
 Priorities: **P0** is needed for the demo, **P1** wins sponsor prizes or adds clear value, **P2** only if time is left.
 
@@ -10,12 +10,12 @@ Submissions close **12 Nov 2026, 12:00 PT**, ten days from this status.
 
 ## Last verified
 
-`./gradlew build` with every task re-run passes: **1,126 tests, 0 failures, 0 errors, 0 skipped** across the engines, platform, modules, architecture tests and the `app` integration tests. Every module compiles with `-Xlint:all -Werror`. `pnpm gen:api` and the typecheck of both web apps and all packages pass against the merged contract. Nothing has run against the real PayPal sandbox, and the web screens for the new backend features are not built.
+`./gradlew build` with every task re-run passes: **1,448 tests, 0 failures, 0 errors, 0 skipped** across the engines, platform, modules, architecture tests and the `app` integration tests. Every module compiles with `-Xlint:all -Werror`. `pnpm gen:api` and the typecheck of both web apps and all packages pass against the merged contract. The US sandbox app answers for Orders, Subscriptions (catalog), Payouts and Transaction Search (checked with direct calls on 3 Nov 2026), but the full journey has not run on it yet (see PayPal sandbox), and the web screens have not been clicked through in a browser.
 
 Two test-suite notes from the final run:
 
 - `settle()` in the integration test base now re-submits stale incomplete event publications while it waits. Production does the same from `BackgroundJobs` every minute; tests switch that job off. This closed a race where a refund listener could run before its payment was recorded.
-- A payment for a savings goal that does not exist is now logged and dropped instead of retried forever (found by `PaypalCatalogIT`).
+- A savings report for a goal that does not exist yet is retried for `seed.savings.goal-visibility-window` (an hour in production, one second in the test profile so that tests naming goals which never exist still finish), then dropped.
 
 ---
 
@@ -23,7 +23,7 @@ Two test-suite notes from the final run:
 
 | Area | Built | Main gaps |
 | --- | --- | --- |
-| Backend | F1 to F6, identity, PayPal Payouts, savings subscriptions, Transaction Search, Venmo wallet, credit record, desk read models, reserve, fraud flags, member home call, signed actor tokens, ledger, governance, engagement, agent gateway. Full build passes: 1,126 tests | Nothing run against the real PayPal sandbox yet; the checks are listed under PayPal sandbox |
+| Backend | F1 to F6, identity, PayPal Payouts, savings subscriptions, Transaction Search, Venmo wallet, credit record, desk read models, reserve, fraud flags, member home call, signed actor tokens, ledger, governance, engagement, agent gateway. Full build passes: 1,448 tests | Webhook, catalog bootstrap and the full sandbox journey still to run; see PayPal sandbox |
 | Contracts | Every route is in `contracts/openapi`, events in `contracts/events`; a test fails when a route and the contract disagree; the web client is generated from it | `agent-tools.yaml` uses the tool names as operation ids on purpose |
 | Frontend | Landing page; member Log in with PayPal, Home, savings, borrow, record, fund, shop, settings; desk queues, portfolio, workload, reserve, fraud, operations. Builds pass | Not clicked through in a browser yet; Spanish copy; a few fields the backend does not return yet |
 | Agents | Guardian, Savings Coach, Fair Check, all through OpenRouter with kill switch and grounding checks | Astropods hosting and evals; Trust and Desk Analyst agents |
@@ -50,23 +50,36 @@ Built:
 - **Platform**: double-entry ledger, governance audit chain, engagement (reminders, SMS through Zapier, withdrawal messages), webhook ingress with dedupe, idempotency keys, RFC 9457 errors.
 - **Contract test**: `ContractCoverageIT` compares every route with the OpenAPI files. `DevDemoProfileBootIT` boots the application with the `dev` and `demo` profiles and no extra environment variables.
 
+Closed in the last backend pass (ADRs 0024 to 0027):
+
+- **A payout returned after the loan was registered** now voids the loan in code: one reversing ledger entry, nothing owed, the application goes back to `APPROVED` with `payoutIssue=RETURNED_AFTER_DISBURSEMENT` so an officer can send it again with a new payout reference, what the member already paid is refunded through PayPal, and the record, desk, reserve, engagement and hardship all drop the loan (`LoanVoided`). The cooling-off cancel uses the same path and now closes its loan as `CANCELLED`.
+- **Reserve cover that the schedule did not take** (a member paid at the same moment) goes back to the fund by an idempotent ledger entry (`CoverReturned`).
+- **Fair-check consent** is in the identity ledger and the member's consent list (`FAIR_CHECK`); withdrawing it from the list withdraws the underwriting consent.
+- **Record sharing consent** is checked when a share link is created (`409 record-sharing-consent-required`); withdrawing it revokes the member's links.
+- **Policy, loan paid by the safety fund:** the loan is `REPAID` and the member is not penalised, but an instalment the fund paid in full counts as neither on time nor late, and a loan the fund paid entirely shows as `completedWithFundHelp` instead of a member-completed loan.
+- **Transaction Search** is read before the submission transaction opens; a PayPal outage returns `503` before anything is written, and fresh stored income needs no PayPal call.
+- **Fraud rule for payout recipients** compares a keyed hash of the recipient (withdrawals and disbursements), never the raw account.
+- **A savings webhook that beats the goal's commit** is retried for up to an hour (`seed.savings.goal-visibility-window`), then dropped. PayPal reports are ordered by `update_time`, then the webhook time, then receipt time.
+- **Pause and resume stamps** use an injected real-time clock on purpose (ADR 0027).
+- **Desk cursors** need `SEED_DESK_QUERY_CURSOR_KEY`; start-up now fails without it outside dev, test and demo. The saving streak counts months in the business time zone. The application SLA (`PT24H`) is a setting.
+- **`payoutRecipientReady`** on the member home call tells the web to ask for a PayPal login before a withdrawal.
+- **Postman:** the F5 hardship folder (34 requests) is in a new v3 collection, `postman/collections/PayPal Seed API v3/`. It has not been run against a backend.
+
+- **Held refunds are durable:** a refund PayPal cannot make (void, cooling-off cancel, a late payment on an unwound loan) is kept as a row, retried with a doubling delay (`seed.lending.held-refund.max-attempts` 6, `retry-delay` PT15M), and ends as `FAILED` with an audit entry that the desk can see.
+- **Cooling-off cancel** settles to exactly zero and refunds what the member paid; a refused application revokes only a consent that the request itself created; `MicroloanApplicationService` uses the injected clock; the preview says `incomeStale` when PayPal could not be read.
+- **Home call:** `recentActivity` (newest first, `seed.home.activity-limit`), `savings.goals[].nextDepositDate`, and `creditRecord.nextStep.requiredOnTimeSavingMonths` beside `onTimeSavingMonthsToGo`. New `GET /api/v1/savings/goals/{goalId}/deposits` and `GET /api/v1/desk/underwriting/assessments/latest?applicationId=`.
+- **Desk deposit months** are rebuilt once at the first start after this ships (business time zone).
+- **Savings pull sync (ADR 0028):** `POST /api/v1/savings/goals/{goalId}/sync` and a 15-minute job (`POST /internal/jobs/savings/reconcile`) read the subscription and its completed payments from PayPal and apply them through the webhook's own use cases, so a goal activates and is credited even when no webhook reaches the backend (local runs, or a missed webhook). The return page and a "Check with PayPal" button on the goal call it. Checked on the sandbox on 3 Nov 2026: a goal went `ACTIVE` with its first sale credited.
+- **Venmo payouts are off** (`SEED_PAYPAL_VENMO_PAYOUTS_ENABLED=false`, the sandbox refuses them): every member is paid through PayPal. Venmo-funded top-ups still work.
+
 Pending:
 
-- [ ] **P0 Run the new PayPal calls on the sandbox** (checks below).
-- [ ] **P1 A payout returned after the loan was registered** is flagged `RETURNED_AFTER_DISBURSEMENT` but not unwound by code; an officer decides.
-- [ ] **P1 Fair-check consent in the identity ledger**: the fair check keeps its own consent record; the member-facing consent list does not show it yet.
-- [ ] **P1 Record sharing consent** (identity `RECORD_SHARING`) is not checked when a share link is created.
-- [ ] **P1 A member without a PayPal login** gets `409 payout-recipient-missing` on withdrawal or disbursement. Correct, but the web has to explain it.
-- [ ] **P1 Reserve cover when the member pays at the same moment**: the ledger can be credited more than the schedule takes if a member pays between the reserve's posting and the listener. The unused amount is logged (`unusedCents`); an officer or a job has to reverse it.
-- [ ] **P1 Policy: a loan fully paid by the safety fund** becomes `REPAID` and the credit record counts it as repaid. Decide whether it should.
-- [ ] **P1 Transaction Search inside loan submission**: with `TRANSACTION_SEARCH` on, the PayPal read runs in the loan-submission transaction (30 s timeout), so a PayPal outage makes submission return `503`. Move it before the transaction if it matters for the demo.
-- [ ] **P1 Fraud rule for payout recipient changes** compares the wallet type only, because no event carries the recipient. An email changed at a later PayPal login is not seen. Feed `FraudFacade.observe` from the payout request when this matters.
-- [ ] **P2 Out-of-order PayPal reports**: a `SUSPENDED` made in PayPal after a resume in Seed is ordered by the resource's `update_time`; confirm PayPal sends it (see the unverified list below).
-- [ ] **P2 A savings webhook that beats the goal's commit** is dropped, not retried. Unlikely, because deposits follow the member's approval.
-- [ ] **P2 Pause and resume stamps** use the real clock (`Instant.now()`), not the business clock, because PayPal times are real while the demo clock can run ahead. This departs from the usual rule on purpose.
-- [ ] **P2 Application SLA** in the desk queue is `submittedAt + 24 h`, and the saving streak counts UTC calendar months. Both are assumptions to confirm.
-- [ ] **P2 Desk-query cursors** need `SEED_DESK_QUERY_CURSOR_KEY` set the same on every `api` instance (Render generates it; local runs make their own).
-- [ ] **P2 Hardship in the Postman collection** (F5 requests are not in it yet).
+- [ ] **P0 Sandbox: webhook, catalog and the journey.** The US sandbox app (Subscriptions, Payouts, Transaction Search, Log in with PayPal) answers on 3 Nov 2026. Still to do: run `scripts/paypal-bootstrap.sh` against a running backend, register the webhook once there is a public `ingress` URL, and run the full journey with two US sandbox personal accounts.
+- [ ] **P1 A refund that PayPal cannot make for an overpaid `REPAID` loan** only logs when PayPal has too little left to refund; the held-refund job covers voided and cancelled loans only.
+- [ ] **P2 The cooling-off cancel confirmation** (engagement) does not say a refund is coming.
+- [ ] **P2 With a frozen test clock** desk snapshots can tie on the same instant (a flake risk in tests, ADR 0024; production clocks move).
+- [ ] **P2 Loan activity in Home history** is dated at the start of the business day (loan events carry a date only), and history before this release is mostly absent except deposits.
+- [ ] **P2 New settings outside dev:** `SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY` and `SEED_DESK_QUERY_CURSOR_KEY` on every backend role (`render.yaml` generates both).
 
 ---
 
@@ -175,16 +188,16 @@ Facts the code assumes and nobody has checked against PayPal yet (the ADRs say h
 
 | Id | ADR | What to check |
 | --- | --- | --- |
-| P1 | 0013 | Payouts permission is on for the sandbox app, and the create response carries the items |
-| P2 | 0013 | Length limits of `sender_item_id` and `sender_batch_id` (56-character references) |
-| P3 | 0013 | A Venmo payout works in the sandbox, and with which recipient type |
+| P1 | 0013 | **Checked 3 Nov:** Payouts work on the US app; the create response has the batch header only and the gateway reads the batch for the item (as built) |
+| P2 | 0013 | **Checked 3 Nov:** 56-character references accepted (a 57-character batch id too) |
+| P3 | 0013 | **Checked 3 Nov:** the sandbox refuses Venmo payouts ("Recipient wallet not supported in sandbox"); Venmo payouts are off, members are paid through PayPal |
 | P4 | 0013 | Webhook payload shape of `PAYMENT.PAYOUTS-ITEM.*` (are `sender_batch_id` and `sender_item_id` both there) |
-| P5 | 0013 | The product category `SOFTWARE` is accepted |
+| P5 | 0013 | **Checked 3 Nov:** `SOFTWARE` is accepted |
 | P6 | 0013 | `PayPal-Auth-Assertion` is honoured for a sandbox pair, and which `transaction_event_code` sandbox payouts show |
-| S1 | 0017 | A `PAYPAL_ID` payout accepts the payer id from the login; a Venmo payout accepts an email |
+| S1 | 0017 | **Partly checked 3 Nov:** a `PAYPAL_ID` payout is accepted at create (a made-up id); confirm with a real login payer id in the journey |
 | S2 | 0017 | Revising the quantity of a subscription asks the payer to agree again |
 | S3 | 0017 | `SUSPENDED`, `CANCELLED` and `EXPIRED` webhooks arrive when the payer acts in PayPal, with `custom_id` |
-| S4 | 0017 | A `-a<n>` suffix is accepted in `sender_item_id` |
+| S4 | 0017 | **Checked 3 Nov:** a `-a1` suffix is accepted |
 
 Also unverified: that `update_time` is present on every subscription webhook resource (the code falls back to the event time, ADR 0020).
 

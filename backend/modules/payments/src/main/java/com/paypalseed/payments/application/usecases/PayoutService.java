@@ -3,6 +3,7 @@ package com.paypalseed.payments.application.usecases;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutStatus;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
+import com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested;
 import com.paypalseed.payments.application.ports.PayPalGateway;
 import com.paypalseed.payments.application.ports.PayPalGateway.CreatePayout;
 import com.paypalseed.payments.application.ports.PayPalGateway.PayoutItem;
@@ -11,10 +12,13 @@ import com.paypalseed.payments.domain.model.PaymentsErrors;
 import com.paypalseed.payments.infrastructure.persistence.InboxRepository;
 import com.paypalseed.payments.infrastructure.persistence.PayoutRepository;
 import com.paypalseed.payments.infrastructure.persistence.PayoutRepository.Payout;
+import com.paypalseed.platform.kernel.BusinessClock;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.Ids;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,9 +38,15 @@ class PayoutService {
     private final PayoutRepository payouts;
     private final PayoutFacts facts;
     private final InboxRepository inbox;
+    private final ApplicationEventPublisher events;
+    private final BusinessClock clock;
+    private final RecipientFingerprints fingerprints;
 
     PayoutService(PayPalGateway paypal, PayPalCommandExecutor executor, PayoutRepository payouts, PayoutFacts facts,
-                  InboxRepository inbox) {
+                  InboxRepository inbox, ApplicationEventPublisher events, BusinessClock clock, RecipientFingerprints fingerprints) {
+        this.events = events;
+        this.clock = clock;
+        this.fingerprints = fingerprints;
         this.paypal = paypal;
         this.executor = executor;
         this.payouts = payouts;
@@ -59,6 +69,7 @@ class PayoutService {
         }
         payouts.addTransition(id, null, PayoutStatus.REQUESTED, null, "API", null);
         inbox.wake("payout:" + fresh.senderBatchId());
+        announce(c);
 
         CreatePayout request = new CreatePayout(fresh.senderBatchId(), c.referenceId(), c.recipientType(), c.recipient(),
                 c.wallet(), c.amountCents(), c.note());
@@ -76,6 +87,15 @@ class PayoutService {
                     String.valueOf(issue), "API", null)));
         }
         return view(facts.apply(fresh, Report.of(result, "API", null)));
+    }
+
+    /** Once per payout row, in the sending transaction: a replay or a rolled-back attempt announces nothing twice. */
+    private void announce(SendPayout c) {
+        if (c.memberId() == null) {
+            return;
+        }
+        events.publishEvent(new PayoutRequested(Ids.newId(), c.memberId(), c.referenceId(), c.purpose(), c.wallet(),
+                fingerprints.of(c.recipientType(), c.recipient()), c.amountCents(), clock.now()));
     }
 
     @Transactional(readOnly = true)

@@ -1,0 +1,33 @@
+$kind: http-example
+name: '200 OK'
+order: 1000
+request:
+  url: '{{baseUrl}}/api/v1/desk/hardship/cases?origin=PROACTIVE_SCAN&level=LIKELY_MISS&level=IMMINENT&limit=50'
+  method: GET
+response:
+  statusCode: 200
+  statusText: 'OK'
+  headers:
+    - key: Content-Type
+      value: 'application/json'
+  body:
+    type: json
+    content: |-
+      {
+        "rows": [
+          {
+            "caseId": "0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e01",
+            "loanId": "0197f3a2-5c1e-7b3a-9d10-3c4f1a2b9e01",
+            "status": "OUTREACH_SENT",
+            "level": "LIKELY_MISS",
+            "points": 7,
+            "origin": "PROACTIVE_SCAN",
+            "targetSeq": 1,
+            "targetDueDate": "2027-03-20",
+            "targetAmountCents": 15000,
+            "chosenOption": null,
+            "openedOn": "2027-03-12"
+          }
+        ],
+        "nextBefore": null
+      }

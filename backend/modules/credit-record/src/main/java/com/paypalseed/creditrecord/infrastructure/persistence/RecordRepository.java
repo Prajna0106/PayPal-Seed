@@ -90,8 +90,18 @@ public class RecordRepository implements RecordStore {
     }
 
     @Override
+    public List<RecordFact> facts(UUID memberId) {
+        return dsl.selectFrom(RECORD_FACT).where(RECORD_FACT.MEMBER_ID.eq(memberId)).orderBy(RECORD_FACT.SEQ.asc())
+                .fetch(f -> new RecordFact(f.getFactKey(), f.getMemberId(), RecordFact.Kind.valueOf(f.getKind()), f.getOccurredOn(),
+                        f.getLoanId(), f.getInstSeq(), f.getDaysLate(), f.getMissedCount(), f.getCaseId()));
+    }
+
+    @Override
     public List<StoredFact> history(UUID memberId, Long before, int limit) {
-        var where = RECORD_FACT.MEMBER_ID.eq(memberId);
+        com.paypalseed.creditrecord.infrastructure.persistence.jooq.tables.RecordFact voiding = RECORD_FACT.as("voiding");
+        var where = RECORD_FACT.MEMBER_ID.eq(memberId).and(RECORD_FACT.KIND.ne(RecordFact.Kind.LOAN_VOIDED.name()))
+                .and(DSL.notExists(dsl.selectOne().from(voiding).where(voiding.KIND.eq(RecordFact.Kind.LOAN_VOIDED.name()))
+                        .and(voiding.LOAN_ID.eq(RECORD_FACT.LOAN_ID))));
         if (before != null) {
             where = where.and(RECORD_FACT.SEQ.lt(before));
         }

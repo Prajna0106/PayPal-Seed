@@ -1,0 +1,27 @@
+$kind: http-request
+name: 'HS34. Admin restores the previous mode'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/agents/kill-switch'
+order: 34000
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{adminId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'ADMIN'
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "scope": "GLOBAL",
+      "mode": "{{hardshipPriorMode}}",
+      "reason": "Postman run: restore the mode found in HS28"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      pm.test('Mode is back to what HS28 found', () => pm.expect(pm.response.json().mode).to.eql(pm.collectionVariables.get('hardshipPriorMode')));

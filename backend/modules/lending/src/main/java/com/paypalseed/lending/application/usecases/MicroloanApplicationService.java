@@ -42,12 +42,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Application service orchestrating Feature 2: Savings-linked microloans (Blueprint §5).
@@ -103,6 +106,11 @@ public class MicroloanApplicationService {
     private final PayoutRecipients recipients;
     private final ApplicationEventPublisher events;
     private final CreditRecordFacade creditRecord;
+    /** Set by Spring; without it a returned payout of a disbursed loan can only be flagged for an officer. */
+    private DisbursementReturn disbursementReturn;
+    /** Set by Spring; without a database (unit tests) the submit and preview work runs directly. */
+    private TransactionTemplate transaction;
+    private TransactionTemplate readOnlyTransaction;
 
     public MicroloanApplicationService(
         LoanApplicationRepository applications,
@@ -170,6 +178,32 @@ public class MicroloanApplicationService {
         this.creditRecord = creditRecord;
     }
 
+    /**
+     * Submitting and previewing open their own transaction (after the slow PayPal income read, never during it), so
+     * they need the transaction manager rather than an annotation.
+     */
+    @Autowired(required = false)
+    void useTransactions(PlatformTransactionManager transactions) {
+        this.transaction = new TransactionTemplate(transactions);
+        this.readOnlyTransaction = new TransactionTemplate(transactions);
+        this.readOnlyTransaction.setReadOnly(true);
+    }
+
+    /** A setter, like {@link #useTransactions}, so the constructors keep their shape; the unwind needs the ledger and the database. */
+    @Autowired(required = false)
+    void unwindReturnedLoansWith(DisbursementReturn disbursementReturn) {
+        this.disbursementReturn = disbursementReturn;
+    }
+
+    /** Instants come from the injected business clock, like the dates, so a stored timestamp never disagrees with the unwind's. */
+    private Instant now() {
+        return clock != null ? clock.now() : Instant.now();
+    }
+
+    private <T> T inTransaction(TransactionTemplate template, Supplier<T> work) {
+        return template == null ? work.get() : template.execute(status -> work.get());
+    }
+
     public EligibilityView checkEligibility(UUID memberId, OptionalLong verifiedMonthlyIncomeCents) {
         Objects.requireNonNull(memberId, "memberId is required");
         EligibilityInput input = buildEligibilityInput(memberId, verifiedMonthlyIncomeCents);
@@ -198,13 +232,28 @@ public class MicroloanApplicationService {
     /**
      * What the loan would look like if the member applied now: the same eligibility, sizing and schedule code that
      * {@link #submitApplication} and disbursement run, so the preview cannot disagree with the loan the member gets.
-     * Stores nothing and calls no one but the readers eligibility already uses.
+     * Stores nothing. With the real income source it first brings a stale income snapshot up to date, before the
+     * read-only transaction opens; if PayPal cannot be reached the preview still answers, from the stored snapshot,
+     * and says so with {@code incomeStale = true}, because it is an estimate and {@link #submitApplication} is the call
+     * that refuses.
      */
-    @Transactional(readOnly = true)
     public ApplicationPreviewView previewApplication(UUID memberId, PreviewApplicationCommand command) {
         Objects.requireNonNull(memberId, "memberId is required");
         Objects.requireNonNull(command, "command is required");
+        boolean incomeStale = false;
+        if (underwritingFacade != null) {
+            try {
+                underwritingFacade.refreshIncomeIfConsented(memberId);
+            } catch (DomainException e) {
+                incomeStale = true;
+                log.warn("Income refresh skipped for a preview: {}", e.errorCode().code());
+            }
+        }
+        boolean stale = incomeStale;
+        return inTransaction(readOnlyTransaction, () -> preview(memberId, command, stale));
+    }
 
+    private ApplicationPreviewView preview(UUID memberId, PreviewApplicationCommand command, boolean incomeStale) {
         EligibilityInput input = buildEligibilityInput(memberId, command.verifiedMonthlyIncomeCents());
         EligibilityEvaluation eval = EligibilityEngine.evaluate(input);
         SizingDecision decision = EligibilityEngine.checkApplication(input, command.requestedAmountCents(), command.termMonths());
@@ -234,15 +283,52 @@ public class MicroloanApplicationService {
             hasSuggestion ? decision.suggestedPrincipalCents() : null,
             hasSuggestion ? decision.suggestedTermMonths() : null,
             eval.tierLimitCents(),
-            eval.maxMonthlyInstalmentCents()
+            eval.maxMonthlyInstalmentCents(),
+            incomeStale
         );
     }
 
-    @Transactional
+    /**
+     * Reads the member's PayPal income first (when the fair check is ticked and the real source is on), then opens
+     * the transaction that checks eligibility, stores the application and records the fair check from that stored
+     * income. A PayPal outage therefore holds no database transaction: with no usable stored income it refuses with
+     * {@code income-source-unavailable} before anything is written, and with fresh stored income it never calls PayPal.
+     */
     public LoanApplicationView submitApplication(UUID memberId, SubmitApplicationCommand command) {
         Objects.requireNonNull(memberId, "memberId is required");
         Objects.requireNonNull(command, "command is required");
+        boolean consentFromThisRequest = false;
+        if (command.fairCheckConsented() && underwritingFacade != null) {
+            consentFromThisRequest = !underwritingFacade.getConsentStatus(memberId).consented();
+            underwritingFacade.prepareIncomeForApplication(memberId);
+        }
+        try {
+            return inTransaction(transaction, () -> submitPrepared(memberId, command));
+        } catch (RuntimeException refused) {
+            if (consentFromThisRequest) {
+                withdrawConsentOfRefusedApplication(memberId);
+            }
+            throw refused;
+        }
+    }
 
+    /**
+     * The income had to be read, and so the consent recorded, before the application could be checked. An application
+     * that is refused used nothing of what the member agreed to, so a consent that this request alone created is taken
+     * back (the list shows it ended, and the income read for it is forgotten). A consent the member gave earlier is
+     * never touched. A failure here must not hide the refusal, so it is logged and the refusal stands.
+     */
+    private void withdrawConsentOfRefusedApplication(UUID memberId) {
+        try {
+            if (underwritingFacade.getConsentStatus(memberId).consented()) {
+                underwritingFacade.revokeConsent(memberId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Could not take back the consent given with a refused application: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    private LoanApplicationView submitPrepared(UUID memberId, SubmitApplicationCommand command) {
         EligibilityInput input = buildEligibilityInput(memberId, command.verifiedMonthlyIncomeCents());
         EligibilityEvaluation eval = EligibilityEngine.evaluate(input);
 
@@ -294,7 +380,7 @@ public class MicroloanApplicationService {
             eval.maxMonthlyInstalmentCents(),
             decision.requiredMonthlyInstalmentCents(),
             decision.reasons(),
-            Instant.now()
+            now()
         );
 
         applications.save(app);
@@ -321,7 +407,7 @@ public class MicroloanApplicationService {
     @Transactional
     public LoanApplicationView approveApplication(UUID applicationId, UUID officerId) {
         LoanApplication app = findForUpdate(applicationId);
-        app.approve(officerId, Instant.now());
+        app.approve(officerId, now());
         applications.save(app);
         publishChanged(app);
         return toView(app);
@@ -330,7 +416,7 @@ public class MicroloanApplicationService {
     @Transactional
     public LoanApplicationView rejectApplication(UUID applicationId, UUID officerId, String reason) {
         LoanApplication app = findForUpdate(applicationId);
-        app.reject(officerId, reason, Instant.now());
+        app.reject(officerId, reason, now());
         applications.save(app);
         publishChanged(app);
         return toView(app);
@@ -368,13 +454,13 @@ public class MicroloanApplicationService {
             .orElseThrow(() -> new DomainException(LendingErrors.PAYOUT_RECIPIENT_MISSING,
                 "The member has no PayPal account on file to receive the loan"));
         boolean firstAsk = app.getStatus() == ApplicationStatus.APPROVED;
-        app.startDisbursement(officerId, Instant.now());
+        app.startDisbursement(officerId, now());
         applications.save(app);
         if (firstAsk) {
             publishChanged(app);
         }
-        DisbursementPayouts.Result result = payouts.send(app.payoutReference(), app.getRequestedAmountCents(), recipient,
-            app.getPayoutWallet(), "Seed microloan");
+        DisbursementPayouts.Result result = payouts.send(app.payoutReference(), app.getMemberId(),
+            app.getRequestedAmountCents(), recipient, app.getPayoutWallet(), "Seed microloan");
         switch (result.state()) {
             case SUCCEEDED -> complete(app);
             case FAILED -> fail(app, result.reasonCode());
@@ -409,24 +495,35 @@ public class MicroloanApplicationService {
             if (terminal) {
                 fail(app, reasonCode);
             } else {
-                app.notePayoutIssue(reasonCode, Instant.now());
+                app.notePayoutIssue(reasonCode, now());
                 applications.save(app);
             }
         });
     }
 
-    /** PayPal took the payout back (unclaimed money expired, or a delivered payout was reversed). */
+    /**
+     * PayPal took the payout back (unclaimed money expired, or a delivered payout was reversed). Before the loan was
+     * registered the application simply goes back to {@code APPROVED}. After it, the member never kept the money, so
+     * the loan is voided in full by {@link DisbursementReturn} (ledger reversed, loan closed, application approved
+     * again with {@code payoutIssue = RETURNED_AFTER_DISBURSEMENT}, audit entry, {@code LoanVoided}). A replay finds
+     * the application no longer disbursed and changes nothing; a report about an earlier payout attempt is dropped by
+     * {@link #currentPayout}, and a withdrawal payout is not an application at all.
+     */
     @Transactional
     public void onPayoutReturned(String payoutReference, String reasonCode) {
         currentPayout(payoutReference).ifPresent(app -> {
             if (app.getStatus() == ApplicationStatus.DISBURSING) {
                 fail(app, reasonCode == null ? "RETURNED" : reasonCode);
             } else if (app.getStatus() == ApplicationStatus.DISBURSED) {
-                // The loan is registered and the member has the schedule, but the money is back in the program account.
-                // Unwinding a registered loan is a decision for people; say so loudly and show the desk.
+                if (disbursementReturn != null && disbursementReturn.unwind(app, payoutReference, reasonCode)) {
+                    applications.save(app);
+                    publishChanged(app);
+                    return;
+                }
+                // No ledger wiring (a unit test) or no loan row to void: flag it so the desk sees it.
                 log.error("Payout {} of disbursed application {} was returned ({}); the loan needs an officer", payoutReference,
                     app.getId(), reasonCode);
-                app.notePayoutIssue("RETURNED_AFTER_DISBURSEMENT", Instant.now());
+                app.notePayoutIssue(LoanApplication.RETURNED_AFTER_DISBURSEMENT, now());
                 applications.save(app);
                 publishChanged(app);
             }
@@ -451,13 +548,13 @@ public class MicroloanApplicationService {
         } else {
             registeredLoanId = Ids.newId();
         }
-        app.markDisbursed(registeredLoanId, batchId, Instant.now());
+        app.markDisbursed(registeredLoanId, batchId, now());
         applications.save(app);
         publishChanged(app);
     }
 
     private void fail(LoanApplication app, String reasonCode) {
-        app.payoutFailed(reasonCode, Instant.now());
+        app.payoutFailed(reasonCode, now());
         applications.save(app);
         publishChanged(app);
     }
@@ -493,11 +590,16 @@ public class MicroloanApplicationService {
         if (!app.getMemberId().equals(memberId)) {
             throw new DomainException(LendingErrors.APPLICATION_NOT_FOUND, "Loan application not found");
         }
-        app.cancelWithinCoolingOff(Instant.now());
+        app.cancelWithinCoolingOff(now());
         applications.save(app);
         publishChanged(app);
 
-        if (ledgerFacade != null && app.getLoanId() != null) {
+        if (disbursementReturn != null && app.getLoanId() != null) {
+            // Books and loan row settle together: the receivable ends at zero whoever paid what, and what the member
+            // had paid is held and refunded (ADR 0024, closing pass).
+            disbursementReturn.closeCancelled(app);
+        } else if (ledgerFacade != null && app.getLoanId() != null) {
+            // Without the unwind collaborator (a unit test with no database) only the principal can come back.
             LocalDate businessDate = clock != null ? clock.today() : LocalDate.now();
             ledgerFacade.post(PostingRequest.builder(
                     "loan-cooling-off:" + app.getId(),
@@ -509,6 +611,12 @@ public class MicroloanApplicationService {
         }
 
         return toView(app);
+    }
+
+    /** The reference of the application's current payout; empty while no payout was ever asked for. */
+    public java.util.Optional<String> currentPayoutReference(UUID applicationId) {
+        LoanApplication app = findOrThrow(applicationId);
+        return app.getPayoutAttempts() == 0 ? java.util.Optional.empty() : java.util.Optional.of(app.payoutReference());
     }
 
     public LoanApplicationView getApplication(UUID applicationId) {

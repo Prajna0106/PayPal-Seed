@@ -1,7 +1,7 @@
 import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { Button } from "@paypal-seed/ui/components/button";
 import { formatBusinessDate } from "@paypal-seed/ui/lib/format";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LifeBuoy } from "lucide-react";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -11,6 +11,8 @@ import { PlanSummary } from "@/features/loans/components/plan-summary";
 import { PlanTimeline } from "@/features/loans/components/plan-timeline";
 import { TransactionsList } from "@/features/loans/components/transactions-list";
 import { getLoanDetail } from "@/features/loans/server/queries";
+import { loanEnded } from "@/features/loans/status";
+import { RETURNED_NOTE } from "@/features/lending/status";
 import { PayNowSection } from "@/features/payments/components/pay-now-section";
 
 export const metadata: Metadata = { title: "Your plan" };
@@ -26,6 +28,7 @@ export default async function LoanPage({ params }: PageProps<"/app/loans/[loanId
   const { loanId } = await params;
   const { plan, timeline, transactions, payoffCents, help } = await getLoanDetail(loanId);
   const active = plan.loanStatus === "ACTIVE";
+  const returned = plan.loanStatus === "DISBURSEMENT_RETURNED";
   const changed = REASON[plan.reason];
 
   return (
@@ -39,27 +42,41 @@ export default async function LoanPage({ params }: PageProps<"/app/loans/[loanId
 
       <PageHeader
         eyebrow={plan.version > 1 ? `Plan · version ${plan.version}` : "Your plan"}
-        title={active ? "Your repayment plan" : "This loan is paid off"}
+        title={active ? "Your repayment plan" : loanEnded(plan.loanStatus).title}
         description={
-          changed
-            ? `${changed}. Everything is shown as of ${formatBusinessDate(plan.businessDate, "long")}.`
-            : `Equal payments at 0% interest. Shown as of ${formatBusinessDate(plan.businessDate, "long")}.`
+          returned
+            ? `Shown as of ${formatBusinessDate(plan.businessDate, "long")}.`
+            : changed
+              ? `${changed}. Everything is shown as of ${formatBusinessDate(plan.businessDate, "long")}.`
+              : `Equal payments at 0% interest. Shown as of ${formatBusinessDate(plan.businessDate, "long")}.`
         }
       />
 
+      {returned ? (
+        <aside className="flex gap-4 rounded-2xl border border-hairline bg-canvas-soft p-6">
+          <LifeBuoy aria-hidden="true" className="mt-0.5 size-5 text-muted-ink" />
+          <div className="flex flex-col gap-1.5">
+            <h2 className="text-title-sm font-medium text-ink">Nothing is owed</h2>
+            <p className="text-body text-pretty">{RETURNED_NOTE}</p>
+          </div>
+        </aside>
+      ) : null}
+
       {help ? <HelpBanner loanId={loanId} state={help} /> : null}
 
-      <PlanSummary plan={plan} />
+      {returned ? null : <PlanSummary plan={plan} />}
 
-      {timeline ? (
+      {timeline && !returned ? (
         <Section title="Timeline" description={plan.version > 1 ? "Dashed payments show your plan before the change." : undefined}>
           <PlanTimeline payload={timeline} today={plan.businessDate} />
         </Section>
       ) : null}
 
-      <Section title="Payments">
-        <InstalmentTable instalments={plan.instalments} version={plan.version} />
-      </Section>
+      {returned ? null : (
+        <Section title="Payments">
+          <InstalmentTable instalments={plan.instalments} version={plan.version} />
+        </Section>
+      )}
 
       {active ? (
         <Section title="Pay now" description="Pay your next payment early, or the whole balance. Paying early never costs anything.">

@@ -1,10 +1,11 @@
 import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { formatBusinessDate } from "@paypal-seed/ui/lib/format";
-import { PiggyBank, ScrollText, Wallet } from "lucide-react";
+import { History, PiggyBank, ScrollText, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { HelpBanner } from "@/features/loans/components/help-banner";
 import { HELP_REVIEWING } from "../copy";
 import { type Home, sectionState } from "../model";
+import { ActivityCard } from "./activity-card";
 import { ApplicationCard } from "./application-card";
 import { BorrowCard } from "./borrow-card";
 import { RecordEmpty, SavingsEmpty } from "./empty-cards";
@@ -13,6 +14,7 @@ import { LoanSnapshot } from "./loan-snapshot";
 import { RecordCard } from "./record-card";
 import { SavingsCard } from "./savings-card";
 import { isUnavailable, SectionNote, SectionUnavailable } from "./section-card";
+import { PayoutRecipientBanner } from "./payout-recipient-banner";
 import { StartSaving } from "./start-saving";
 
 /**
@@ -30,6 +32,8 @@ export function HomeView({ home, fallbackName }: { home: Home; fallbackName: str
   const lendingState = sectionState(home, "lending");
   const recordState = sectionState(home, "creditRecord");
   const hardshipState = sectionState(home, "hardship");
+  const activityState = sectionState(home, "recentActivity");
+  const activity = home.recentActivity ?? null;
 
   const activeLoan = lending?.activeLoan ?? null;
   const application = lending?.openApplication ?? null;
@@ -87,6 +91,12 @@ export function HomeView({ home, fallbackName }: { home: Home; fallbackName: str
           />
         </FadeUp>
 
+        {home.payoutRecipientReady === false ? (
+          <FadeUp delay={0.04}>
+            <PayoutRecipientBanner />
+          </FadeUp>
+        ) : null}
+
         {helpState && helpLoanId ? (
           <FadeUp delay={0.05}>
             <HelpBanner loanId={helpLoanId} state={helpState} />
@@ -107,6 +117,16 @@ export function HomeView({ home, fallbackName }: { home: Home; fallbackName: str
             </FadeUp>
           ))}
         </div>
+
+        {isUnavailable(activityState) ? (
+          <FadeUp delay={0.2}>
+            <SectionUnavailable section="recentActivity" title="Recent activity" icon={<History aria-hidden="true" />} />
+          </FadeUp>
+        ) : activity ? (
+          <FadeUp delay={0.2}>
+            <ActivityCard items={activity} />
+          </FadeUp>
+        ) : null}
       </div>
     </HomeMotion>
   );

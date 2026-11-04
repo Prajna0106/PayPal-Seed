@@ -34,6 +34,25 @@ public record FundState(long balanceCents, long totalDonatedCents, long totalPai
         }
     }
 
+    /**
+     * {@code cents} of an earlier cover come back to the fund: the loan did not need them (the member paid in the same
+     * moment) or the loan was voided. The reverse of {@link #payOut}; it cannot return more than was ever paid out.
+     */
+    public FundState returnCover(long cents) {
+        if (cents <= 0) {
+            throw new IllegalArgumentException("a returned cover must be positive");
+        }
+        if (cents > totalPaidOutCents) {
+            throw new IllegalArgumentException("the fund cannot take back more than it paid out");
+        }
+        try {
+            return new FundState(Math.addExact(balanceCents, cents), totalDonatedCents, totalPaidOutCents - cents,
+                    donationCount, membersCovered);
+        } catch (ArithmeticException e) {
+            throw new DomainException(ReserveErrors.FUND_LIMIT_REACHED, "The fund counters would overflow");
+        }
+    }
+
     public boolean canCover(long cents) {
         return cents > 0 && cents <= balanceCents;
     }

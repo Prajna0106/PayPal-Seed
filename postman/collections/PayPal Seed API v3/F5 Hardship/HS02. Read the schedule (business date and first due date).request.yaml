@@ -1,0 +1,33 @@
+$kind: http-request
+name: 'HS02. Read the schedule (business date and first due date)'
+method: GET
+url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/schedule'
+order: 2000
+description: 'Reads the business date and the first due date from the backend (the shared demo clock may differ from the wall clock). The script derives the scan date (8 days before the first due date), how many days the demo clock must advance, and the 13 weeks of income to seed: 9 weeks of $200 then 4 weeks of $96, a persistent 52% drop.'
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Version 1 with 8 instalments', () => {
+        pm.expect(body.version).to.eql(1);
+        pm.expect(body.instalments).to.have.lengthOf(8);
+      });
+      const toDay = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 86400000;
+      const fromDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
+      const business = toDay(body.businessDate);
+      const scan = Math.max(toDay(body.instalments[0].dueDate) - 8, business);
+      const weeks = [];
+      for (let i = 0; i < 13; i++) {
+        weeks.push({ weekStart: fromDay(scan - 91 + 7 * i), inflowCents: i < 9 ? 20000 : 9600 });
+      }
+      pm.collectionVariables.set('hardshipScanDate', fromDay(scan));
+      pm.collectionVariables.set('hardshipAdvanceDays', String(scan - business));
+      pm.collectionVariables.set('hardshipIncomeBody', JSON.stringify({ consent: true, usualPaydayDow: 5, weeks }));
+      pm.test('Scan date is not before the business date', () => pm.expect(scan).to.be.at.least(business));
+examples: './.resources/HS02. Read the schedule (business date and first due date).resources/examples/'

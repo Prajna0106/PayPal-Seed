@@ -37,10 +37,19 @@ public interface CreditRecordFacade {
      */
     int closeSavingMonths(LocalDate asOf, int limit);
 
-    /** Makes a share link for the member's current record. Idempotent on the key; a different body is a 409. */
+    /**
+     * Makes a share link for the member's current record. Idempotent on the key; a different body is a 409. Without the
+     * member's consent to share, at the text in force now, it is the 409 {@code record-sharing-consent-required}.
+     */
     ShareCreated createShare(UUID memberId, CreateShare request, String idempotencyKey);
 
     List<ShareView> shares(UUID memberId);
+
+    /**
+     * Revokes all of the member's active share links, for when they withdraw their consent to share (ADR 0025).
+     * Idempotent; returns how many links it closed.
+     */
+    int revokeAllShares(UUID memberId);
 
     /** Revokes the member's own share (idempotent). Another member's share, or none, is a 404. */
     void revokeShare(UUID memberId, UUID shareId);

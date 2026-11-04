@@ -27,7 +27,13 @@ import com.paypalseed.lending.api.dto.LendingDtos.LoanSummary;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.SubmitApplicationCommand;
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
+import com.paypalseed.payments.api.PaymentsFacade;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutPurpose;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutWallet;
+import com.paypalseed.payments.api.dto.PaymentsDtos.RecipientType;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
 import com.paypalseed.payments.api.events.PaymentEvents.PaymentCaptured;
+import com.paypalseed.payments.api.events.PaymentEvents.PayoutRequested;
 import com.paypalseed.payments.api.events.PaymentEvents.Source;
 import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.platform.kernel.Money;
@@ -93,6 +99,8 @@ class FraudIT extends IntegrationTest {
     FairLoanCheckService fairCheck;
     @Autowired
     MicroloanApplicationService microloans;
+    @Autowired
+    PaymentsFacade payments;
 
     // ---- the rules, one scenario each ------------------------------------------------------------------------
 
@@ -291,6 +299,110 @@ class FraudIT extends IntegrationTest {
         settle();
         assertThat(signals(steady)).doesNotContain("PAYOUT_RECIPIENT_CHANGE");
         assertThat(fraud.flagOf(steady)).isEmpty();
+    }
+
+    // ---- the recipient of a payout, seen through the fingerprint payments publishes (ADR 0027) --------------------------
+
+    private void payOut(UUID member, RecipientType type, String recipient, PayoutPurpose purpose) {
+        payments.sendPayout(new SendPayout("fraud-" + UUID.randomUUID(), 5_000, type, recipient, PayoutWallet.PAYPAL, "Seed payout",
+                member, purpose));
+        settle();
+    }
+
+    private static long changes(List<String> kinds) {
+        return kinds.stream().filter("PAYOUT_RECIPIENT_CHANGED"::equals).count();
+    }
+
+    @Test
+    void aFirstPayoutIsABaselineAndTheSameRecipientAgainIsNotAChange() {
+        clock.set(DAY);
+        UUID member = member();
+        String email = "first-" + member + "@example.test";
+
+        payOut(member, RecipientType.EMAIL, email, PayoutPurpose.WITHDRAWAL);
+        assertThat(changes(kinds(member))).as("the first recipient is only the baseline").isZero();
+
+        payOut(member, RecipientType.EMAIL, email, PayoutPurpose.WITHDRAWAL);
+        payOut(member, RecipientType.EMAIL, "  " + email.toUpperCase() + " ", PayoutPurpose.DISBURSEMENT);
+        assertThat(changes(kinds(member))).as("the same recipient, however it is spelled, is not a change").isZero();
+
+        disburse(member, 300, 6, 15, DAY);
+        settle();
+        assertThat(signals(member)).doesNotContain("PAYOUT_RECIPIENT_CHANGE");
+        assertThat(fraud.flagOf(member)).isEmpty();
+    }
+
+    @Test
+    void aPayoutToAnotherRecipientBeforeADisbursementFlagsAndTheEvidenceNeverNamesTheRecipient() throws Exception {
+        clock.set(DAY);
+        UUID member = member();
+        String before = "before-" + member + "@example.test";
+        String after = "after-" + member + "@example.test";
+
+        payOut(member, RecipientType.EMAIL, before, PayoutPurpose.WITHDRAWAL);
+        payOut(member, RecipientType.EMAIL, after, PayoutPurpose.DISBURSEMENT);
+        assertThat(changes(kinds(member))).isEqualTo(1);
+
+        disburse(member, 300, 6, 15, DAY);
+        settle();
+
+        assertThat(signals(member)).contains("PAYOUT_RECIPIENT_CHANGE");
+        FlagView flag = fraud.flagOf(member).orElseThrow();
+        assertThat(flag.status()).isEqualTo(FlagStatus.OPEN);
+        String evidence = json.writeValueAsString(fraud.evidence(flag.flagId()).orElseThrow());
+        assertThat(evidence).contains("PAYOUT_RECIPIENT_CHANGE")
+                .doesNotContain(before).doesNotContain(after).doesNotContain("example.test").doesNotContainIgnoringCase("@");
+
+        List<String> stored = new ArrayList<>(jdbc.sql("SELECT ref_hash FROM fraud.fact WHERE member_id = :m AND ref_hash IS NOT NULL")
+                .param("m", member).query(String.class).list());
+        stored.addAll(jdbc.sql("SELECT ref_hash FROM fraud.payout_recipient WHERE member_id = :m").param("m", member).query(String.class).list());
+        assertThat(stored).isNotEmpty().allMatch(h -> h.matches("[0-9a-f]{64}"));
+    }
+
+    @Test
+    void theSameAccountBehindAChangedEmailIsNotAChangeButAnotherPayerIs() {
+        clock.set(DAY);
+        UUID member = member();
+        String payer = "PAYER" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+
+        payOut(member, RecipientType.PAYPAL_ID, payer, PayoutPurpose.WITHDRAWAL);
+        payOut(member, RecipientType.PAYPAL_ID, payer.toLowerCase(), PayoutPurpose.WITHDRAWAL);
+        assertThat(changes(kinds(member))).isZero();
+
+        payOut(member, RecipientType.PAYPAL_ID, "OTHER" + payer, PayoutPurpose.WITHDRAWAL);
+        assertThat(changes(kinds(member))).isEqualTo(1);
+    }
+
+    @Test
+    void thePayoutRequestIsAnnouncedOncePerReferenceWithAFingerprintAndNeverTheRecipient() {
+        clock.set(DAY);
+        UUID member = member();
+        String email = "announce-" + member + "@example.test";
+        String reference = "announce-" + UUID.randomUUID();
+        SendPayout request = new SendPayout(reference, 5_000, RecipientType.EMAIL, email, PayoutWallet.PAYPAL, "Seed payout", member,
+                PayoutPurpose.DISBURSEMENT);
+
+        payments.sendPayout(request);
+        payments.sendPayout(request);
+        settle();
+
+        assertThat(published.stream(PayoutRequested.class).filter(e -> e.referenceId().equals(reference))).singleElement().satisfies(e -> {
+            assertThat(e.memberId()).isEqualTo(member);
+            assertThat(e.purpose()).isEqualTo(PayoutPurpose.DISBURSEMENT);
+            assertThat(e.recipientFingerprint()).matches("[0-9a-f]{64}");
+            assertThat(e.toString()).doesNotContain(email).doesNotContain("example.test");
+        });
+    }
+
+    @Test
+    void aPayoutWithoutAMemberAnnouncesNothing() {
+        clock.set(DAY);
+        String reference = "no-member-" + UUID.randomUUID();
+
+        payments.sendPayout(new SendPayout(reference, 5_000, RecipientType.EMAIL, "nobody@example.test", PayoutWallet.PAYPAL, "Seed payout"));
+        settle();
+
+        assertThat(published.stream(PayoutRequested.class).filter(e -> e.referenceId().equals(reference))).isEmpty();
     }
 
     // ---- the facts only the wiring in app can feed: registration, applications, payout destination ----------------

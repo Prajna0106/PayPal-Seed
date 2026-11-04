@@ -2,6 +2,7 @@ package com.paypalseed.savings.infrastructure.clients;
 
 import com.paypalseed.payments.api.PaymentsFacade;
 import com.paypalseed.payments.api.dto.PaymentsDtos.FundingSource;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutPurpose;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutStatus;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutWallet;
@@ -15,6 +16,7 @@ import com.paypalseed.savings.application.ports.PayoutRecipients;
 import com.paypalseed.savings.application.ports.SavingsPayments;
 import com.paypalseed.savings.domain.model.SavingsErrors;
 import com.paypalseed.savings.domain.model.SavingsWallet;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -40,6 +42,18 @@ class PaymentsAdapter implements SavingsPayments {
     @Override
     public Optional<Subscription> subscriptionOf(UUID goalId) {
         return payments.savingsSubscriptionOf(goalId).map(v -> new Subscription(v.subscriptionId(), v.status(), v.approveUrl()));
+    }
+
+    @Override
+    public Optional<SubscriptionReport> readSubscription(UUID goalId) {
+        return payments.syncSavingsSubscription(goalId).map(sync -> new SubscriptionReport(sync.subscriptionId(),
+            sync.state().map(s -> new StateReport(SubscriptionState.valueOf(s.state().name()), s.occurredAt())),
+            sync.deposits().stream().map(d -> new SaleReport(d.paypalTxnId(), d.amountCents(), d.occurredAt())).toList()));
+    }
+
+    @Override
+    public Optional<Instant> nextBillingTime(UUID goalId) {
+        return payments.savingsSubscriptionOf(goalId).flatMap(SavingsSubscriptionView::nextBillingTime);
     }
 
     @Override
@@ -76,8 +90,23 @@ class PaymentsAdapter implements SavingsPayments {
     }
 
     @Override
-    public Payout sendPayout(String referenceId, long amountCents, PayoutRecipients.Recipient recipient, SavingsWallet wallet,
-                             String note) {
+    public Optional<PayoutReport> syncPayout(String referenceId) {
+        return payments.payoutOf(referenceId).map(known -> {
+            PayoutView view = payments.syncPayout(known.payoutId());
+            PayoutEnd end = switch (view.status()) {
+                case SUCCEEDED -> PayoutEnd.SUCCEEDED;
+                case FAILED, BLOCKED -> PayoutEnd.FAILED;
+                case RETURNED -> PayoutEnd.RETURNED;
+                case UNCLAIMED -> PayoutEnd.UNCLAIMED;
+                case REQUESTED, PENDING -> PayoutEnd.PENDING;
+            };
+            return new PayoutReport(end, view.failureReason().orElse(null), view.paypalTransactionId().orElse(null));
+        });
+    }
+
+    @Override
+    public Payout sendPayout(String referenceId, UUID memberId, long amountCents, PayoutRecipients.Recipient recipient,
+                             SavingsWallet wallet, String note) {
         // A PayPal wallet is paid by payer id, which survives an email change; Venmo has no payer id and takes the email.
         boolean byPayerId = wallet != SavingsWallet.VENMO && recipient.payerId() != null;
         String receiver = byPayerId ? recipient.payerId() : recipient.email();
@@ -86,7 +115,7 @@ class PaymentsAdapter implements SavingsPayments {
         }
         PayoutView view = payments.sendPayout(new SendPayout(referenceId, amountCents,
             byPayerId ? RecipientType.PAYPAL_ID : RecipientType.EMAIL, receiver,
-            wallet == SavingsWallet.VENMO ? PayoutWallet.VENMO : PayoutWallet.PAYPAL, note));
+            wallet == SavingsWallet.VENMO ? PayoutWallet.VENMO : PayoutWallet.PAYPAL, note, memberId, PayoutPurpose.WITHDRAWAL));
         PayoutState state = switch (view.status()) {
             case SUCCEEDED -> PayoutState.SUCCEEDED;
             case FAILED, BLOCKED, RETURNED -> PayoutState.FAILED;

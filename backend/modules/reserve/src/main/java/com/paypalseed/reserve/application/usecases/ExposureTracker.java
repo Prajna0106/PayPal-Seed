@@ -3,6 +3,7 @@ package com.paypalseed.reserve.application.usecases;
 import com.paypalseed.lending.api.events.LendingEvents.InstalmentView;
 import com.paypalseed.lending.api.events.LendingEvents.LoanReopened;
 import com.paypalseed.lending.api.events.LendingEvents.LoanRepaid;
+import com.paypalseed.lending.api.events.LendingEvents.LoanVoided;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReceived;
 import com.paypalseed.lending.api.events.LendingEvents.RepaymentReversed;
 import com.paypalseed.lending.api.events.LendingEvents.ScheduleGenerated;
@@ -46,6 +47,12 @@ public class ExposureTracker {
 
     @Transactional
     public void on(LoanRepaid e) {
+        exposure.set(e.loanId(), 0, e.eventId());
+    }
+
+    /** A voided loan (ADR 0024) was never owed: the fund stands behind nothing on it. */
+    @Transactional
+    public void on(LoanVoided e) {
         exposure.set(e.loanId(), 0, e.eventId());
     }
 }

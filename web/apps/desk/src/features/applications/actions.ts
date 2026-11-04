@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { staffApi } from "@/server/api";
 import { requireSession } from "@/server/session";
 import { explainPayoutIssue } from "./model";
-import { approveForm, disburseForm, rejectForm } from "./schema";
+import { approveForm, disburseForm, rejectForm, syncPayoutInput } from "./schema";
 import { describeProblem, isStale } from "./server/problems";
 
 export type ActionResult =
@@ -114,6 +114,40 @@ export async function disburseApplication(_previous: ActionResult, formData: For
       return { status: "error", message: explainPayoutIssue(application.payoutIssue), code: "payout-refused" };
     }
     return { status: "ok", message: "Payout requested." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * "Check again": asks the backend to read the application's payout from PayPal, for a webhook that never came (a local
+ * machine PayPal cannot call, or a lost delivery). It is a safe re-read, so it carries no idempotency key, and the page
+ * refreshes with whatever the backend then holds. Called by the payout panel's own timer and by its button.
+ */
+export async function syncApplicationPayout(applicationId: string): Promise<ActionResult> {
+  await requireSession();
+  const parsed = syncPayoutInput.safeParse(applicationId);
+  if (!parsed.success) {
+    return { status: "error", message: "Reload the page and try again." };
+  }
+  try {
+    const api = await staffApi();
+    const application = await unwrap(
+      api.POST("/api/v1/desk/applications/{applicationId}/payout/sync", {
+        params: { path: { applicationId: parsed.data } },
+      }),
+    );
+    refresh();
+    if (application.status === "DISBURSED") {
+      return { status: "ok", message: "PayPal confirmed the payout. The loan and its schedule now exist." };
+    }
+    if (application.status === "DISBURSING") {
+      return { status: "ok", message: "PayPal has not finished the payout yet." };
+    }
+    if (application.payoutIssue) {
+      return { status: "error", message: explainPayoutIssue(application.payoutIssue), code: "payout-refused" };
+    }
+    return { status: "ok", message: "Checked with PayPal." };
   } catch (error) {
     return failure(error);
   }

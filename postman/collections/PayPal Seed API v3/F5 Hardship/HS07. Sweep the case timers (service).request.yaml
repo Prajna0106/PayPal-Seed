@@ -1,0 +1,20 @@
+$kind: http-request
+name: 'HS07. Sweep the case timers (service)'
+method: POST
+url: '{{baseUrl}}/internal/jobs/hardship/sweep?limit=200'
+order: 7000
+description: 'Fires due timers (agent deadline, reminders, SLA). Without a model key the outreach is released when the agent deadline (90 s by default) passes, so the count can be 0 right after the scan; the member can read the offer either way.'
+queryParams:
+  - key: 'limit'
+    value: '200'
+headers:
+  - key: 'Authorization'
+    value: 'Bearer {{internalToken}}'
+    description: 'SEED_INTERNAL_TOKEN (service role)'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      pm.test('fired is a number', () => pm.expect(pm.response.json().fired).to.be.a('number'));
+examples: './.resources/HS07. Sweep the case timers (service).resources/examples/'

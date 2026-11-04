@@ -81,6 +81,7 @@ seed:
       privacy-version: ${SEED_CONSENT_PRIVACY_VERSION:2026-11}
       income-read-version: ${SEED_CONSENT_INCOME_READ_VERSION:2026-11}
       record-sharing-version: ${SEED_CONSENT_RECORD_SHARING_VERSION:2026-11}
+      fair-check-version: ${SEED_CONSENT_FAIR_CHECK_VERSION:2026-11}
   paypal:
     base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
     client-id: ${PAYPAL_CLIENT_ID:}
@@ -88,6 +89,8 @@ seed:
     webhook-id: ${PAYPAL_WEBHOOK_ID:}
     read-timeout-ms: ${SEED_PAYPAL_READ_TIMEOUT_MS:20000}
     brand-name: ${SEED_PAYPAL_BRAND_NAME:PayPal Seed}                  # shown on the PayPal approval page
+    payouts:
+      venmo-enabled: ${SEED_PAYPAL_VENMO_PAYOUTS_ENABLED:false}        # the sandbox refuses Venmo payouts; off pays every member through PayPal
     # Catalog objects: run POST /internal/paypal/catalog/bootstrap (or scripts/paypal-bootstrap.sh) once and set the ids.
     product-id: ${SEED_PAYPAL_PRODUCT_ID:}
     product-name: ${SEED_PAYPAL_PRODUCT_NAME:PayPal Seed}
@@ -96,10 +99,21 @@ seed:
     transaction-search:                      # reading a member's own history needs PayPal's Transaction Search access
       enabled: ${SEED_PAYPAL_TRANSACTION_SEARCH_ENABLED:false}
       on-behalf: ${SEED_PAYPAL_TRANSACTION_SEARCH_ON_BEHALF:false}      # call on behalf of the member (third-party permission)
+  payments:
+    # Keys the fingerprint of a payout recipient that fraud compares (ADR 0027): 32+ characters, identical on every instance.
+    # Required outside dev, test and demo (start-up refuses an empty value there).
+    recipient-fingerprint-key: ${SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY:}
+    payout-sync-min-interval: ${SEED_PAYMENTS_PAYOUT_SYNC_MIN_INTERVAL:PT5S}   # a payout is read from PayPal at most this often (desk Check again, reconcile) (ADR 0029)
+    payout-reconcile-min-age: ${SEED_PAYMENTS_PAYOUT_RECONCILE_MIN_AGE:PT20S}  # the reconcile reads a payout only once it is this old; the create answer comes first
+    payout-reconcile-batch: ${SEED_PAYMENTS_PAYOUT_RECONCILE_BATCH:50}         # payouts per run of the reconcile job
   savings:
-    return-url: ${SEED_SAVINGS_RETURN_URL:http://localhost:3000/app/savings/return}       # where PayPal sends the member after agreeing
-    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://localhost:3000/app/savings/cancelled}
+    return-url: ${SEED_SAVINGS_RETURN_URL:http://127.0.0.1:3000/app/savings/return}       # where PayPal sends the member after agreeing
+    cancel-url: ${SEED_SAVINGS_CANCEL_URL:http://127.0.0.1:3000/app/savings/cancelled}
     approval-window: ${SEED_SAVINGS_APPROVAL_WINDOW:PT24H}               # a goal not agreed at PayPal by then becomes EXPIRED
+    goal-visibility-window: ${SEED_SAVINGS_GOAL_VISIBILITY_WINDOW:PT1H}  # a PayPal report for a goal not committed yet is retried this long, then dropped (ADR 0027)
+    sync-min-interval: ${SEED_SAVINGS_SYNC_MIN_INTERVAL:PT5S}            # a goal's PayPal subscription is read at most this often (member refresh, reconcile) (ADR 0028)
+    reconcile-gap: ${SEED_SAVINGS_RECONCILE_GAP:PT1H}                    # the reconcile reads an active or paused goal again after this long
+    reconcile-batch: ${SEED_SAVINGS_RECONCILE_BATCH:50}                  # goals per run of the reconcile job
   underwriting:
     income:
       source: ${SEED_UNDERWRITING_INCOME_SOURCE:SEEDED}                   # SEEDED (demo endpoint) or TRANSACTION_SEARCH
@@ -113,12 +127,14 @@ seed:
     signing-key-id: ${SEED_RECORD_SIGNING_KEY_ID:k1}
     previous-keys: ${SEED_RECORD_PREVIOUS_KEYS:}                          # "kid:secret" entries, comma separated, still accepted when verifying
   desk-query:                                # desk grids (ADR 0015)
-    cursor-key: ${SEED_DESK_QUERY_CURSOR_KEY:}                            # set in production: empty means a random key per process, so cursors break across instances
+    cursor-key: ${SEED_DESK_QUERY_CURSOR_KEY:}                            # required, identical on every api instance, outside dev, test and demo (start-up refuses an empty key there; ADR 0027)
     application-sla: ${SEED_DESK_APPLICATION_SLA:PT24H}
     sla-due-soon: ${SEED_DESK_SLA_DUE_SOON:PT4H}
     default-page-size: ${SEED_DESK_DEFAULT_PAGE_SIZE:50}
     max-page-size: ${SEED_DESK_MAX_PAGE_SIZE:200}
     count-cap: ${SEED_DESK_COUNT_CAP:10000}
+  home:                                      # member Home page (ADR 0018)
+    activity-limit: ${SEED_HOME_ACTIVITY_LIMIT:10}   # how many recent activity items the page returns (1 to 50)
   reserve:                                   # community safety fund (ADR 0019)
     cover:
       max-per-request-cents: ${SEED_RESERVE_COVER_MAX_PER_REQUEST_CENTS:50000}
@@ -129,6 +145,10 @@ seed:
   fraud:                                     # advisory flags (ADR 0019)
     flag-threshold: ${SEED_FRAUD_FLAG_THRESHOLD:40}                       # a flag is raised when the score reaches this
     lookback: ${SEED_FRAUD_LOOKBACK:P90D}
+  lending:
+    held-refund:                             # refunds owed to members for money held on a loan that never stood (ADR 0024)
+      max-attempts: ${SEED_LENDING_HELD_REFUND_MAX_ATTEMPTS:6}   # then the refund is given up on and the desk is told
+      retry-delay: ${SEED_LENDING_HELD_REFUND_RETRY_DELAY:PT15M} # doubles after every failed attempt, at most a day
   jobs:                                      # pollers; seed.jobs.enabled is set per role in application-<role>.yml
     inbox-poll-ms: ${SEED_JOBS_INBOX_POLL_MS:1000}
     reminder-poll-ms: ${SEED_JOBS_REMINDER_POLL_MS:30000}
@@ -136,6 +156,9 @@ seed:
     hardship-scan-cron: ${SEED_JOBS_HARDSHIP_SCAN_CRON:0 15 6 * * *}      # America/Los_Angeles
     hardship-sweep-ms: ${SEED_JOBS_HARDSHIP_SWEEP_MS:30000}
     savings-approval-sweep-ms: ${SEED_JOBS_SAVINGS_APPROVAL_SWEEP_MS:60000}
+    savings-reconcile-ms: ${SEED_JOBS_SAVINGS_RECONCILE_MS:900000}        # read PayPal for goals that may have missed a webhook, every 15 minutes (ADR 0028)
+    payout-reconcile-ms: ${SEED_JOBS_PAYOUT_RECONCILE_MS:60000}           # read PayPal for payouts that may have missed a webhook, every minute (ADR 0029)
+    held-refund-retry-ms: ${SEED_JOBS_HELD_REFUND_RETRY_MS:60000}
     record-close-ms: ${SEED_JOBS_RECORD_CLOSE_MS:21600000}                # month-end close of credit records, every 6 hours
     record-close-initial-ms: ${SEED_JOBS_RECORD_CLOSE_INITIAL_MS:60000}
   zapier:

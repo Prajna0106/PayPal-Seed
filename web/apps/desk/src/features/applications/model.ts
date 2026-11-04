@@ -48,12 +48,18 @@ export function shortRef(id: string): string {
   return id.slice(0, 8);
 }
 
+/** The `payoutIssue` the backend sets when PayPal takes a delivered payout back and the loan is voided (ADR 0024). */
+export const RETURNED_AFTER_DISBURSEMENT = "RETURNED_AFTER_DISBURSEMENT";
+
 /**
  * Why PayPal did not complete a payout, in words an officer can act on. The backend sends a PayPal reason name
  * (for example `RECEIVER_UNREGISTERED`); it is matched here and never shown.
  */
 export function explainPayoutIssue(issue: string): string {
   const reason = issue.toUpperCase();
+  if (reason === RETURNED_AFTER_DISBURSEMENT) {
+    return "The payout came back after the loan was registered. The loan was cancelled (status Payout returned, nothing outstanding) and the application is Approved again. Fix the recipient and send again, or reject.";
+  }
   if (reason.includes("UNREGISTERED") || reason.includes("UNCONFIRMED") || reason.includes("RECEIVER")) {
     return "PayPal could not find a PayPal account for the member's email or phone. Ask the member to check the PayPal account linked to Seed.";
   }
@@ -64,6 +70,24 @@ export function explainPayoutIssue(issue: string): string {
     return "PayPal held this payout for its own review. Nothing was paid. You can try again, or contact PayPal support if it keeps happening.";
   }
   return "PayPal could not complete this payout. Nothing was paid and the application is still approved.";
+}
+
+/**
+ * A short officer label for the queue column: what went wrong with the payout, in two or three words. The longer
+ * explanation (`explainPayoutIssue`) stays on the application page.
+ */
+export function payoutIssueLabel(issue: string): { label: string; tone: StatusTone } {
+  const reason = issue.toUpperCase();
+  if (reason === RETURNED_AFTER_DISBURSEMENT) {
+    return { label: "Payout returned", tone: "danger" };
+  }
+  if (reason.includes("UNREGISTERED") || reason.includes("UNCONFIRMED") || reason.includes("RECEIVER")) {
+    return { label: "Recipient not found", tone: "warning" };
+  }
+  if (reason.includes("FUNDS") || reason.includes("BALANCE") || reason.includes("INSUFFICIENT")) {
+    return { label: "Payout funds low", tone: "warning" };
+  }
+  return { label: "Payout failed", tone: "warning" };
 }
 
 export type TimelineState = "done" | "current" | "todo" | "stopped";
@@ -118,7 +142,14 @@ export function buildTimeline(application: LoanApplication, staffName: (id: stri
   steps.push({
     key: "payout",
     label: paid ? "Paid out through PayPal" : status === "DISBURSING" ? "Payout in progress" : "Pay out through PayPal",
-    ...(application.payoutIssue && status === "APPROVED" ? { detail: "The last payout did not complete." } : {}),
+    ...(application.payoutIssue && status === "APPROVED"
+      ? {
+          detail:
+            application.payoutIssue.toUpperCase() === RETURNED_AFTER_DISBURSEMENT
+              ? "The payout came back and the loan was cancelled."
+              : "The last payout did not complete.",
+        }
+      : {}),
     state: paid ? "done" : status === "DISBURSING" || status === "APPROVED" ? "current" : "todo",
   });
   steps.push({

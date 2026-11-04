@@ -3,6 +3,7 @@ package com.paypalseed.deskquery.application.usecases;
 import com.paypalseed.deskquery.infrastructure.persistence.ApplicationViewRepository;
 import com.paypalseed.deskquery.infrastructure.persistence.ApplicationViewRepository.Fact;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,12 @@ public class ApplicationProjector {
     ApplicationProjector(ApplicationViewRepository applications, DeskQuerySettings settings) {
         this.applications = applications;
         this.settings = settings;
+    }
+
+    /** The payout of the application came back and its loan was voided (ADR 0024): it shows as needing another payout. */
+    @Transactional
+    public void onPayoutReturned(UUID applicationId, UUID loanId, String payoutReference, LocalDate voidedOn) {
+        applications.recordReturnedPayout(applicationId, loanId, payoutReference, voidedOn);
     }
 
     /** Returns whether the snapshot became the row's state (false for a stale one). */

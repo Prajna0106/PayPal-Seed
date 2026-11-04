@@ -7,9 +7,11 @@ import com.paypalseed.payments.api.dto.PaymentsDtos.CreateOrder;
 import com.paypalseed.payments.api.dto.PaymentsDtos.IncomeCredit;
 import com.paypalseed.payments.api.dto.PaymentsDtos.MandateView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PaypalCatalog;
+import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutSyncSummary;
 import com.paypalseed.payments.api.dto.PaymentsDtos.PayoutView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundOverpayment;
 import com.paypalseed.payments.api.dto.PaymentsDtos.RefundResult;
+import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionSync;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsSubscriptionView;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SavingsTopUp;
 import com.paypalseed.payments.api.dto.PaymentsDtos.SendPayout;
@@ -94,6 +96,15 @@ public interface PaymentsFacade {
     /** Cancels the goal's subscription; an ended one is left alone. */
     void cancelSavingsSubscription(UUID goalId, String requestId, String reason);
 
+    /**
+     * Reads the goal's PayPal subscription and its sales of the last 35 days and returns them as the facts the webhooks
+     * announce, for a webhook that never came (a machine PayPal cannot call, or a missed delivery). Records the status
+     * and next charge the way a webhook does, ordered by PayPal's own time (ADR 0027). Publishes nothing: the caller
+     * applies the facts through the same steps the webhook listeners use. Empty when the goal has no subscription.
+     * A PayPal failure is thrown and nothing is changed.
+     */
+    Optional<SavingsSubscriptionSync> syncSavingsSubscription(UUID goalId);
+
     /** One-off top-up order into a goal; the only way to save with Venmo. Idempotent on the key. */
     CheckoutOrder createSavingsTopUp(SavingsTopUp command);
 
@@ -110,6 +121,19 @@ public interface PaymentsFacade {
     PayoutView sendPayout(SendPayout command);
 
     Optional<PayoutView> payoutOf(String referenceId);
+
+    /**
+     * Reads a payout that is not final from PayPal and applies what it says exactly as a webhook report is applied (ADR 0029):
+     * the outcome moves the payout forward at most once and is announced once as {@code PayoutSucceeded}, {@code PayoutFailed}
+     * or {@code PayoutReturned}, whichever of this call or the webhook gets there first. Returns the payout as stored
+     * afterwards. A final payout (failed, blocked, returned), one PayPal has not given an id yet, and one read within
+     * {@code seed.payments.payout-sync-min-interval} are returned as stored without a call to PayPal. A PayPal failure is thrown
+     * and nothing changes; an unknown payout is {@code 404 payout-not-found}. Opens no transaction of its own.
+     */
+    PayoutView syncPayout(UUID payoutId);
+
+    /** The reconcile job's batch: payouts that may have missed a webhook, least recently read first, at most {@code limit}. */
+    PayoutSyncSummary syncOpenPayouts(int limit);
 
     // ---- Transaction Search ----------------------------------------------------------------------
 

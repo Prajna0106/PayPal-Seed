@@ -1,0 +1,24 @@
+$kind: http-request
+name: 'HS16. Member re-reads the rebuilt offer'
+method: GET
+url: '{{baseUrl}}/api/v1/loans/{{hardshipLoanId}}/hardship'
+order: 16000
+headers:
+  - key: 'X-Seed-Member-Id'
+    value: '{{hardshipMemberId}}'
+    description: 'Dev, test and demo profiles. Use actorToken for a signed token.'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      const offer = body.offer;
+      pm.test('A newer revision with a new offer id', () => {
+        pm.expect(offer.revision).to.be.above(Number(pm.collectionVariables.get('hardshipOfferRevision')));
+        pm.expect(offer.offerId).to.not.eql(pm.collectionVariables.get('hardshipOfferId'));
+      });
+      pm.test('Still four options', () => pm.expect(offer.options.map(o => o.label).sort()).to.eql(['A', 'B', 'C', 'D']));
+      pm.collectionVariables.set('hardshipOfferId', offer.offerId);
+      pm.collectionVariables.set('hardshipOfferRevision', String(offer.revision));
+      pm.collectionVariables.set('hardshipOptionBId', offer.options.find(o => o.label === 'B').optionId);

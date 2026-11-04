@@ -165,6 +165,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/jobs/savings/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the PayPal subscription of savings goals that may have missed a webhook
+         * @description For each goal that is waiting for approval (inside its approval window) or is active or paused and has not been
+         *     read in the last hour (`seed.savings.reconcile-gap`), reads its subscription and sales from PayPal and applies
+         *     them through the same steps the webhooks use. Idempotent: a deposit is credited once however often it is read.
+         *     A batch of at most `limit` goals; a goal that fails is logged and skipped and never stops the batch. The worker
+         *     role runs it every 15 minutes (`seed.jobs.savings-reconcile-ms`).
+         */
+        post: operations["reconcileSavingsGoals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/jobs/payouts/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read payouts from PayPal that may have missed a webhook
+         * @description For each payout that is not final (requested, pending or unclaimed), has an id PayPal gave it, and was sent at least
+         *     20 seconds ago (`seed.payments.payout-reconcile-min-age`), reads the item (or the batch, before the item id is known)
+         *     from PayPal and applies it through the same step the payout webhooks use (ADR 0029). The outcome is announced once
+         *     as `PayoutSucceeded`, `PayoutFailed` or `PayoutReturned`, however often it is read and whether or not a webhook also
+         *     arrives; a payout already final is never moved backwards. A payout is read at most once every
+         *     `seed.payments.payout-sync-min-interval` (5 seconds). A batch of at most `limit` payouts, least recently read first;
+         *     a payout that fails is logged and skipped and never stops the batch. The worker role runs it every minute
+         *     (`seed.jobs.payout-reconcile-ms`).
+         */
+        post: operations["reconcilePayouts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/jobs/governance/verify-audit-chain": {
         parameters: {
             query?: never;
@@ -727,6 +778,68 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    reconcileSavingsGoals: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the batch did */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Goals picked for this batch */
+                        examined: number;
+                        /** @description Goals read from PayPal */
+                        synced: number;
+                        /** @description Goals whose read failed and were skipped */
+                        failed: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    reconcilePayouts: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the batch did */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Payouts picked for this batch */
+                        examined: number;
+                        /** @description Payouts read from PayPal */
+                        synced: number;
+                        /** @description Payouts whose read failed and were skipped */
+                        failed: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     verifyAuditChain: {

@@ -1,0 +1,42 @@
+$kind: http-request
+name: 'HS20. Maker approves (officer)'
+method: POST
+url: '{{baseUrl}}/api/v1/desk/hardship/cases/{{hardshipCaseId}}/decision'
+order: 20000
+headers:
+  - key: 'X-Seed-Staff-Id'
+    value: '{{makerId}}'
+    description: 'Dev, test and demo profiles. Use staffToken for a signed token.'
+  - key: 'X-Seed-Staff-Roles'
+    value: 'OFFICER'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Idempotency-Key'
+    value: '{{hardshipMakerKey}}'
+    description: 'One key per user action; reuse it only to replay the same request.'
+body:
+  type: json
+  content: |-
+    {
+      "decision": "APPROVE",
+      "reasonCode": "INCOME_DROP_VERIFIED",
+      "note": "Ana chose B; the signals match the income drop.",
+      "evidenceViewedMs": 30000
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('hardshipMakerKey', 'postman-maker-' + pm.variables.replaceIn('{{$guid}}'));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('Has requestId, requestStatus, role, next, auditSeq', () => ['requestId', 'requestStatus', 'role', 'next', 'auditSeq'].forEach(k => pm.expect(body).to.have.property(k)));
+      pm.test('First decision is the maker\'s and a checker is next', () => {
+        pm.expect(body.role).to.eql('MAKER');
+        pm.expect(body.requestStatus).to.eql('OPEN');
+        pm.expect(body.next).to.eql('CHECKER');
+      });
+examples: './.resources/HS20. Maker approves (officer).resources/examples/'

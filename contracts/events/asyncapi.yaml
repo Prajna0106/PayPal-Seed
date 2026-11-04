@@ -67,6 +67,15 @@ channels:
       InstalmentMissed:
         payload:
           $ref: 'domain-events.json#/definitions/InstalmentMissed'
+      LoanRepaid:
+        payload:
+          $ref: 'domain-events.json#/definitions/LoanRepaid'
+      LoanVoided:
+        payload:
+          $ref: 'domain-events.json#/definitions/LoanVoided'
+      VoidedLoanPaymentHeld:
+        payload:
+          $ref: 'domain-events.json#/definitions/VoidedLoanPaymentHeld'
   underwritingEvents:
     address: seed.underwriting.events
     messages:
@@ -94,6 +103,9 @@ channels:
       CoverRejected:
         payload:
           $ref: 'domain-events.json#/definitions/CoverRejected'
+      CoverReturned:
+        payload:
+          $ref: 'domain-events.json#/definitions/CoverReturned'
   fraudEvents:
     address: seed.fraud.events
     messages:

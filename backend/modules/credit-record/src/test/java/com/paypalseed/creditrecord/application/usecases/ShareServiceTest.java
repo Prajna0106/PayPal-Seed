@@ -15,11 +15,14 @@ import com.paypalseed.creditrecord.domain.token.ShareTokenCodec;
 import com.paypalseed.creditrecord.support.InMemoryStores;
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.ErrorCode;
 import com.paypalseed.platform.testing.FakeBusinessClock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,12 +39,14 @@ class ShareServiceTest {
     private final InMemoryStores.Shares shares = new InMemoryStores.Shares();
     private final FakeBusinessClock clock = new FakeBusinessClock(LocalDate.of(2026, 11, 10));
     private final ShareTokenCodec codec = ShareTokenCodec.of("k1", Map.of("k1", SECRET));
+    /** Members who agreed to share; the real answer comes from identity's consent ledger (ADR 0025). */
+    private final Set<UUID> consenting = new HashSet<>(Set.of(ANA, BEN));
     private ShareService service;
     private RecordIngest ingest;
 
     @BeforeEach
     void setUp() {
-        service = new ShareService(records, shares, codec, clock);
+        service = new ShareService(records, shares, codec, clock, consenting::contains);
         ingest = new RecordIngest(records, event -> {
         });
         for (int month = 1; month <= 3; month++) {
@@ -77,7 +82,8 @@ class ShareServiceTest {
     @Test
     void theVerifiedAnswerHasNoFieldThatCouldNameThePerson() {
         assertThat(VerifiedRecord.class.getRecordComponents()).extracting(c -> c.getName())
-                .containsExactly("valid", "level", "since", "loansRepaidOnPlan", "onTimeBand", "issuedAt", "expiresAt");
+                .containsExactly("valid", "level", "since", "loansRepaidOnPlan", "loansCompletedWithFundHelp", "onTimeBand", "issuedAt",
+                        "expiresAt");
     }
 
     @Test
@@ -221,7 +227,7 @@ class ShareServiceTest {
 
     @Test
     void withoutASigningKeySharingReportsTheDependencyUnavailable() {
-        ShareService off = new ShareService(records, shares, ShareTokenCodec.unconfigured(), clock);
+        ShareService off = new ShareService(records, shares, ShareTokenCodec.unconfigured(), clock, consenting::contains);
         assertThatThrownBy(() -> off.create(ANA, new CreateShare(7, ShareDetail.LEVEL), "k-1"))
                 .isInstanceOfSatisfying(DomainException.class, e -> assertThat(e.errorCode()).isEqualTo(CommonErrors.DEPENDENCY_UNAVAILABLE));
         assertThat(shares.shares).isEmpty();
@@ -235,6 +241,104 @@ class ShareServiceTest {
         shares.shares.put(row.id(), new Share(row.id(), row.memberId(), row.snapshotId(), row.detail(), row.keyId(),
                 row.idempotencyKey(), row.fingerprint(), row.issuedAt(), row.expiresAt().minusSeconds(3600), null));
         assertNotFound(created.token());
+    }
+
+    // ---- consent to share (ADR 0025) -------------------------------------------------------------------------------
+
+    @Test
+    void aLinkNeedsTheMembersConsentToShare() {
+        consenting.remove(ANA);
+
+        assertThatThrownBy(() -> create(ShareDetail.SUMMARY, 7, "k-1"))
+                .isInstanceOfSatisfying(DomainException.class, e -> {
+                    assertThat(e.errorCode()).isEqualTo(RecordErrors.SHARING_CONSENT_REQUIRED);
+                    assertThat(e.errorCode().kind()).isEqualTo(ErrorCode.Kind.CONFLICT);
+                    assertThat(e.errorCode().code()).isEqualTo("record-sharing-consent-required");
+                });
+        assertThat(shares.shares).isEmpty();
+        assertThat(shares.snapshots).isEmpty();
+
+        consenting.add(ANA);
+        assertThat(create(ShareDetail.SUMMARY, 7, "k-1").token()).isNotBlank();
+    }
+
+    @Test
+    void consentIsCheckedBeforeAReplayAndBeforeTheLackOfARecord() {
+        ShareCreated made = create(ShareDetail.SUMMARY, 7, "k-1");
+        consenting.remove(ANA);
+        consenting.remove(BEN);
+
+        // The same key does not hand the token out again once the member said no.
+        assertThatThrownBy(() -> create(ShareDetail.SUMMARY, 7, "k-1"))
+                .isInstanceOfSatisfying(DomainException.class, e -> assertThat(e.errorCode()).isEqualTo(RecordErrors.SHARING_CONSENT_REQUIRED));
+        // A member with neither consent nor record is told about the consent, which they can act on.
+        assertThatThrownBy(() -> service.create(BEN, new CreateShare(7, ShareDetail.LEVEL), "k-2"))
+                .isInstanceOfSatisfying(DomainException.class, e -> assertThat(e.errorCode()).isEqualTo(RecordErrors.SHARING_CONSENT_REQUIRED));
+        assertThat(made.token()).isNotBlank();
+    }
+
+    @Test
+    void withdrawingConsentRevokesEveryActiveLinkOfThatMemberOnly() {
+        ShareCreated one = create(ShareDetail.LEVEL, 7, "k-1");
+        ShareCreated two = create(ShareDetail.FULL, 14, "k-2");
+        ShareCreated alreadyRevoked = create(ShareDetail.SUMMARY, 7, "k-3");
+        service.revoke(ANA, alreadyRevoked.shareId());
+        ShareCreated expired = create(ShareDetail.LEVEL, 1, "k-4");
+        clock.set(LocalDate.of(2026, 11, 12));
+        ingest.ingest(RecordFact.savingsDeposit("dep-ben-1", BEN, LocalDate.of(2026, 11, 1)));
+        ShareCreated bens = service.create(BEN, new CreateShare(7, ShareDetail.LEVEL), "k-ben");
+
+        assertThat(service.revokeAll(ANA)).isEqualTo(2);
+
+        assertNotFound(one.token());
+        assertNotFound(two.token());
+        assertThat(service.list(ANA)).extracting(s -> s.status()).containsOnly("REVOKED", "EXPIRED");
+        assertThat(service.list(ANA)).filteredOn(s -> s.shareId().equals(expired.shareId()))
+                .singleElement().satisfies(s -> assertThat(s.status()).isEqualTo("EXPIRED"));
+        assertThat(service.verify(bens.token()).valid()).isTrue();
+    }
+
+    @Test
+    void revokingAllLinksTwiceChangesNothingTheSecondTime() {
+        ShareCreated created = create(ShareDetail.SUMMARY, 7, "k-1");
+
+        assertThat(service.revokeAll(ANA)).isEqualTo(1);
+        Instant revokedAt = service.list(ANA).get(0).revokedAt();
+        clock.set(LocalDate.of(2026, 11, 11));
+        assertThat(service.revokeAll(ANA)).isZero();
+
+        assertThat(service.list(ANA).get(0).revokedAt()).isEqualTo(revokedAt);
+        assertThat(service.revokeAll(UUID.randomUUID())).isZero();
+        assertNotFound(created.token());
+    }
+
+    @Test
+    void aLinkRevokedByWithdrawnConsentAnswersLikeAnyUnknownLink() {
+        ShareCreated created = create(ShareDetail.FULL, 7, "k-1");
+        service.revokeAll(ANA);
+
+        assertThatThrownBy(() -> service.verify(created.token())).isInstanceOfSatisfying(DomainException.class, e -> {
+            assertThat(e.errorCode()).isEqualTo(RecordErrors.NOT_FOUND);
+            assertThat(e.getMessage()).isEqualTo("No such record");
+            assertThat(e.details()).isEmpty();
+        });
+        assertThatThrownBy(() -> service.verify("v1.k1.AAAA.AAAA")).isInstanceOfSatisfying(DomainException.class,
+                e -> assertThat(e.getMessage()).isEqualTo("No such record"));
+    }
+
+    @Test
+    void loansTheFundPaidInFullAreCountedApartFromTheMembersOwn() {
+        UUID fundLoan = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        ingest.ingest(RecordFact.instalmentFundCovered(ANA, fundLoan, 1, LocalDate.of(2026, 10, 1)));
+        ingest.ingest(RecordFact.instalmentPaid(ANA, fundLoan, 1, 0, LocalDate.of(2026, 10, 1)));
+        ingest.ingest(RecordFact.loanRepaid(ANA, fundLoan, 0, LocalDate.of(2026, 10, 1)));
+
+        VerifiedRecord summary = service.verify(create(ShareDetail.SUMMARY, 7, "k-1").token());
+        assertThat(summary.loansRepaidOnPlan()).isEqualTo(1);
+        assertThat(summary.loansCompletedWithFundHelp()).isEqualTo(1);
+
+        VerifiedRecord level = service.verify(create(ShareDetail.LEVEL, 7, "k-2").token());
+        assertThat(level.loansCompletedWithFundHelp()).isNull();
     }
 
     private void assertNotFound(String token) {

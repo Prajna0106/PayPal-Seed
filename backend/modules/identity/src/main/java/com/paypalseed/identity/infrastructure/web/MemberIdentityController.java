@@ -101,7 +101,7 @@ class MemberIdentityController {
 
     private static ConsentType type(String raw) {
         return ConsentType.parse(raw).orElseThrow(() -> new DomainException(IdentityErrors.UNKNOWN_CONSENT_TYPE,
-                "Use TERMS, PRIVACY, INCOME_READ or RECORD_SHARING"));
+                "Use TERMS, PRIVACY, INCOME_READ, RECORD_SHARING or FAIR_CHECK"));
     }
 
     static ProfileView profile(MemberView m) {
