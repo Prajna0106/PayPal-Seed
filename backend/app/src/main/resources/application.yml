@@ -64,6 +64,11 @@ seed:
   security:
     internal-token: ${SEED_INTERNAL_TOKEN:}  # bearer token for /internal/** (Render Workflows, web servers); 16+ chars
     staff-service-token: ${SEED_STAFF_SERVICE_TOKEN:}  # staff logins and accounts only; the desk and the first-admin script hold it
+    public-rate-limit:                       # the three public routes, per client address, in memory per instance (ADR 0030)
+      enabled: ${SEED_PUBLIC_RATE_LIMIT_ENABLED:true}
+      requests-per-minute: ${SEED_PUBLIC_RATE_LIMIT_PER_MINUTE:60}
+      trusted-proxy-hops: ${SEED_PUBLIC_RATE_LIMIT_PROXY_HOPS:1}        # proxies that append to X-Forwarded-For; 0 uses the socket address
+      max-tracked-clients: ${SEED_PUBLIC_RATE_LIMIT_MAX_CLIENTS:10000}  # at the bound new addresses are refused, not stored
     dev-header-auth: false                   # true only in the dev, test and demo profiles; startup refuses it elsewhere
     actor-token:
       # Signed actor tokens for /api/** (ADR 0016): "kid:secret" entries, comma separated, each secret 32+ characters.
