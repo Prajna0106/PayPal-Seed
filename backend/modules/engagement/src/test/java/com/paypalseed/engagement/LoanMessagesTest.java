@@ -30,6 +30,14 @@ class LoanMessagesTest {
     }
 
     @Test
+    void aCancellationAfterPayingSaysTheRefundIsComingAndOneBeforeNeverPromisesOne() {
+        String en = LoanMessages.cancelled("en", 15_050);
+        assertThat(en).contains("cancelled").contains("$150.50").contains("coming back to you");
+        assertThat(LoanMessages.cancelled("es", 15_000)).contains("$150").contains("devolvemos");
+        assertThat(LoanMessages.cancelled("en", 0)).isEqualTo(LoanMessages.cancelled("en")).doesNotContain("coming back");
+    }
+
+    @Test
     void spanishForSpanishSpeakersEnglishForAnythingElseAndNoReasonCodeOrPressure() {
         assertThat(LoanMessages.payoutReturned("fr", 0)).isEqualTo(LoanMessages.payoutReturned("en", 0));
         assertThat(LoanMessages.payoutReturned("es", 0)).contains("No debes nada").contains("cuenta de PayPal esté arreglada");

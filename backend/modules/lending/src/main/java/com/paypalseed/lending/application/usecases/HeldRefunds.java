@@ -102,6 +102,11 @@ public class HeldRefunds {
         return "void-refund:" + transactionId;
     }
 
+    /** The refund of what a payment left over on a repaid loan; the same key the direct refund uses. */
+    public static String autoRefundReference(UUID transactionId) {
+        return "auto-refund:" + transactionId;
+    }
+
     /** The refund of what a member had paid when they cancelled in the cooling-off window. */
     public static String cancelReference(UUID loanId) {
         return "cancel-refund:" + loanId;
