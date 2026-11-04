@@ -2,6 +2,7 @@ package com.paypalseed.underwriting.infrastructure.web;
 
 import com.paypalseed.platform.kernel.CommonErrors;
 import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.ErrorCode;
 import com.paypalseed.platform.security.Actor;
 import com.paypalseed.platform.security.Actor.Role;
 import com.paypalseed.underwriting.api.dto.UnderwritingDtos.ConsentStatusView;
@@ -181,6 +182,9 @@ public class UnderwritingController {
         @Valid @RequestBody OfficerDecisionRequest request
     ) {
         UUID officerId = staff(actor).id();
+        if (actor.isMember(fairLoanCheckService.getAssessment(assessmentId).memberId())) {
+            throw new DomainException(OWN_CASE, OWN_CASE.title());
+        }
         return ResponseEntity.ok(fairLoanCheckService.recordOfficerDecision(
             assessmentId,
             officerId,
@@ -190,6 +194,9 @@ public class UnderwritingController {
             request.reason()
         ));
     }
+
+    private static final ErrorCode OWN_CASE = new ErrorCode("sod-violation", ErrorCode.Kind.FORBIDDEN,
+        "Staff can't decide their own fair check");
 
     private static Actor staff(Actor actor) {
         return actor.requireAnyRole(Role.OFFICER, Role.CHECKER, Role.ADMIN);

@@ -1,6 +1,8 @@
 package com.paypalseed.reserve.infrastructure.web;
 
 import com.paypalseed.governance.api.dto.GovernanceDtos.Decision;
+import com.paypalseed.platform.kernel.DomainException;
+import com.paypalseed.platform.kernel.ErrorCode;
 import com.paypalseed.platform.security.Actor;
 import com.paypalseed.platform.security.Actor.Role;
 import com.paypalseed.reserve.api.ReserveFacade;
@@ -46,6 +48,8 @@ import org.springframework.web.bind.annotation.RestController;
 class ReserveController {
 
     private static final String CODE = "^[A-Z][A-Z0-9_]{1,63}$";
+    private static final ErrorCode OWN_COVER = new ErrorCode("sod-violation", ErrorCode.Kind.FORBIDDEN,
+            "Staff can't ask the safety fund to cover their own loan");
 
     record IntentRequest(Boolean anonymous, @Size(max = 40) String displayName) {
     }
@@ -83,6 +87,9 @@ class ReserveController {
     CoverRequestView create(Actor actor, @Valid @RequestBody CoverBody body,
                             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String key) {
         actor.requireAnyRole(Role.OFFICER, Role.ADMIN);
+        if (actor.isMember(body.memberId())) {
+            throw new DomainException(OWN_COVER, OWN_COVER.title());
+        }
         return covers.create(actor.id(), new CreateCover(body.memberId(), body.loanId(), body.amountCents(), body.reasonCode(),
                 body.hardshipCaseId(), body.note()), key);
     }
@@ -99,7 +106,7 @@ class ReserveController {
     CoverDecisionResult decide(Actor actor, @PathVariable UUID coverRequestId, @Valid @RequestBody DecisionBody body,
                                @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String key) {
         actor.requireAnyRole(Role.OFFICER, Role.CHECKER);
-        return covers.decide(coverRequestId, actor.id(), rolesOf(actor), body.decision(), body.reasonCode(), body.note(),
+        return covers.decide(coverRequestId, actor.id(), actor.linkedMemberId(), rolesOf(actor), body.decision(), body.reasonCode(), body.note(),
                 body.evidenceViewedMs(), key);
     }
 

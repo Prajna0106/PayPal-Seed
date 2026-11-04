@@ -200,7 +200,9 @@ class ActorTokenIT extends IntegrationTest {
     @Test
     void productionStartsWithASecretAndNoDevHeaders() {
         production.withPropertyValues("seed.security.actor-token.secrets=k1:" + SECRET,
-                        "seed.security.internal-token=prod-internal-token-0123456789")
+                        "seed.security.staff-actor-token.secrets=d1:desk-" + SECRET,
+                        "seed.security.internal-token=prod-internal-token-0123456789",
+                        "seed.security.staff-service-token=prod-staff-service-token-0123456789")
                 .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ActorAuthentication.class));
     }
 

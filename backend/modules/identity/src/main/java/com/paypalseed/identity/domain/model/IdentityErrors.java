@@ -20,6 +20,22 @@ public final class IdentityErrors {
             ErrorCode.validation("invalid-payer-id", "A PayPal payer id is required");
     public static final ErrorCode INVALID_STAFF_ROLES =
             ErrorCode.validation("invalid-staff-roles", "Staff roles must be some of OFFICER, CHECKER and ADMIN");
+    public static final ErrorCode STAFF_LOGIN_REFUSED = new ErrorCode("staff-login-refused",
+            ErrorCode.Kind.UNAUTHENTICATED, "That login didn't work");
+    public static final ErrorCode STAFF_ACCOUNT_REQUIRED = new ErrorCode("staff-account-required",
+            ErrorCode.Kind.FORBIDDEN, "This needs a real staff account");
+    public static final ErrorCode STAFF_EMAIL_TAKEN = ErrorCode.conflict("staff-email-taken", "Someone already has this email");
+    public static final ErrorCode CURRENT_PASSWORD_WRONG =
+            ErrorCode.validation("current-password-wrong", "That isn't your current password");
+    public static final ErrorCode PASSWORD_UNCHANGED =
+            ErrorCode.validation("password-unchanged", "Choose a password different from your current one");
+    public static final ErrorCode STAFF_NOT_FOUND = ErrorCode.notFound("staff-not-found", "No such staff member");
+    public static final ErrorCode STAFF_SELF_LOCKOUT =
+            ErrorCode.validation("staff-self-lockout", "You can't remove your own admin role or suspend yourself");
+    public static final ErrorCode STAFF_LAST_ADMIN =
+            ErrorCode.conflict("staff-last-admin", "The desk needs at least one active admin");
+    public static final ErrorCode STAFF_MEMBER_LINKED =
+            ErrorCode.conflict("member-already-linked", "Another staff login is already linked to this member account");
 
     private IdentityErrors() {
     }

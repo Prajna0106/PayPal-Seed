@@ -26,6 +26,7 @@ import {
   Scale,
   ServerCog,
   ShieldAlert,
+  Users,
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -76,6 +77,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/agents", label: "Agents", icon: <Bot /> },
       { href: "/operations", label: "Operations", icon: <ServerCog />, requires: "ADMIN" },
+      { href: "/staff", label: "Staff", icon: <Users />, requires: "ADMIN" },
     ],
   },
 ];

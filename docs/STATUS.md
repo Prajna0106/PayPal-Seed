@@ -165,7 +165,8 @@ Built: signed `seed_session` cookie in both apps; route protection in `proxy.ts`
 Pending:
 
 - [x] **P0 Log in with PayPal** on the web side: authorization code flow with PKCE on the server, then `POST /internal/members/login`. Set `PAYPAL_LOGIN_CLIENT_ID`, `PAYPAL_LOGIN_CLIENT_SECRET`, `APP_ORIGIN` and the app's return URL.
-- [ ] **P0 Web servers sign actor tokens** instead of sending `X-Seed-*` headers. Done for the member app; the desk still sends dev headers.
+- [x] **P0 Staff log in** with email and password (ADR 0023). Admins add, change, suspend and reset staff on the desk's Staff page; every change is audited; logout ends sessions on the server; the desk has its own signing key and service token. `scripts/create-staff.sh` creates the first admin or resets a lost password.
+- [x] **P0 Web servers sign actor tokens** instead of sending `X-Seed-*` headers. Without a secret, local development still sends dev headers.
 - [ ] **P2 Staff SSO** (an OIDC provider with roles from groups) instead of demo personas; the desk server then calls `PUT /internal/staff/{id}` after sign-in.
 
 ---

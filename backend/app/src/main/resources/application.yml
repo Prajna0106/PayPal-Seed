@@ -37,7 +37,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
   endpoint:
     health:
       probes:
@@ -63,6 +63,7 @@ seed:
     shard-count: ${SEED_COB_SHARDS:8}
   security:
     internal-token: ${SEED_INTERNAL_TOKEN:}  # bearer token for /internal/** (Render Workflows, web servers); 16+ chars
+    staff-service-token: ${SEED_STAFF_SERVICE_TOKEN:}  # staff logins and accounts only; the desk and the first-admin script hold it
     dev-header-auth: false                   # true only in the dev, test and demo profiles; startup refuses it elsewhere
     actor-token:
       # Signed actor tokens for /api/** (ADR 0016): "kid:secret" entries, comma separated, each secret 32+ characters.
@@ -70,6 +71,10 @@ seed:
       # Required outside the dev, test and demo profiles; the web servers hold the same value.
       secrets: ${SEED_ACTOR_TOKEN_SECRETS:}
       clock-skew-seconds: ${SEED_ACTOR_TOKEN_CLOCK_SKEW_SECONDS:30}   # 0 to 30
+    staff-actor-token:
+      # The desk's own keys for staff tokens (ADR 0023), so the member app can't sign one. Same format; required outside
+      # the dev, test and demo profiles, where staff tokens otherwise share the keys above. Never reuse a member key.
+      secrets: ${SEED_STAFF_ACTOR_TOKEN_SECRETS:}
   identity:
     consent:                                 # current text versions; a grant of any other version is refused (ADR 0012)
       terms-version: ${SEED_CONSENT_TERMS_VERSION:2026-11}
