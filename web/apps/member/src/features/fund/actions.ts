@@ -9,6 +9,8 @@ import { publicApi } from "@/features/record/server/public-api";
 export type IntentResult = { ok: true; customId: string } | { ok: false; message: string };
 
 const intentSchema = z.object({
+  // Same range the form allows; the backend caps it too, but a bad amount should not even create an intent.
+  amountCents: z.number().int().min(100).max(100_000),
   anonymous: z.boolean(),
   displayName: z.string().trim().max(40).optional(),
 });
@@ -18,10 +20,10 @@ const intentSchema = z.object({
  * name and returns the `custom_id` PayPal will carry back in the capture webhook (ADR 0019). Called only on that
  * click, so page views never create rows.
  */
-export async function createDonationIntent(input: { anonymous: boolean; displayName?: string }): Promise<IntentResult> {
+export async function createDonationIntent(input: { amountCents: number; anonymous: boolean; displayName?: string }): Promise<IntentResult> {
   const parsed = intentSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Please check the name you entered. It can be up to 40 characters." };
+    return { ok: false, message: "Please check the amount ($1 to $1,000) and the name (up to 40 characters)." };
   }
   if (await tooManyAttempts()) {
     return { ok: false, message: "Too many tries in a short time. Please wait a minute and try again." };

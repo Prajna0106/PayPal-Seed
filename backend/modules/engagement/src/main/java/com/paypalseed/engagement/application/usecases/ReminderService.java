@@ -69,7 +69,7 @@ public class ReminderService {
             log.info("Cancelled {} queued messages for loan {}: it never stood", cancelled, loanId);
         }
         notify(memberId, loanId, ReminderRepository.LOAN_VOIDED, "loan:" + loanId + ":voided",
-                locale -> cancelledByMember ? LoanMessages.cancelled(locale) : LoanMessages.payoutReturned(locale, refundDueCents));
+                locale -> cancelledByMember ? LoanMessages.cancelled(locale, refundDueCents) : LoanMessages.payoutReturned(locale, refundDueCents));
     }
 
     /** As {@link #notify}, for a message about a savings goal (a failed or returned withdrawal) rather than a loan. */
