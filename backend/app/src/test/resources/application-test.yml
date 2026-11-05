@@ -12,6 +12,8 @@ seed:
     enabled: false              # tests drive the inbox, reminders and COB explicitly
   security:
     dev-header-auth: true
+    public-rate-limit:
+      enabled: false            # many ITs call the public routes from one address; PublicRateLimitIT turns it on
     internal-token: test-internal-token-0123456789
     staff-service-token: test-staff-service-token-0123456789
   zapier:

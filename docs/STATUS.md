@@ -75,11 +75,11 @@ Closed in the last backend pass (ADRs 0024 to 0027):
 Pending:
 
 - [ ] **P0 Sandbox: webhook, catalog and the journey.** The US sandbox app (Subscriptions, Payouts, Transaction Search, Log in with PayPal) answers on 3 Nov 2026. Still to do: run `scripts/paypal-bootstrap.sh` against a running backend, register the webhook once there is a public `ingress` URL, and run the full journey with two US sandbox personal accounts.
-- [ ] **P1 A refund that PayPal cannot make for an overpaid `REPAID` loan** only logs when PayPal has too little left to refund; the held-refund job covers voided and cancelled loans only.
-- [ ] **P2 The cooling-off cancel confirmation** (engagement) does not say a refund is coming.
+- [x] **P1 A refund that PayPal cannot make for an overpaid `REPAID` loan** now becomes a held refund (retry with backoff, `FAILED` plus audit entry), like voided and cancelled loans.
+- [x] **P2 The cooling-off cancel confirmation** (engagement) says a refund is coming when one is due (English and Spanish).
 - [ ] **P2 With a frozen test clock** desk snapshots can tie on the same instant (a flake risk in tests, ADR 0024; production clocks move).
 - [ ] **P2 Loan activity in Home history** is dated at the start of the business day (loan events carry a date only), and history before this release is mostly absent except deposits.
-- [ ] **P2 New settings outside dev:** `SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY` and `SEED_DESK_QUERY_CURSOR_KEY` on every backend role (`render.yaml` generates both).
+- [x] **P2 New settings outside dev:** `SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY` and `SEED_DESK_QUERY_CURSOR_KEY` on every backend role (`render.yaml` generates both).
 
 ---
 
@@ -106,19 +106,19 @@ Built (typecheck, lint and the low-memory production build pass for both apps; t
 Pending, member app:
 
 - [ ] **P0 Click through every screen against the real backend and the PayPal sandbox** (login, create a goal and approve it, top up, withdraw, apply, repay). Nothing new has been seen in a browser; the PayPal redirects and buttons, the clipboard copy and the Venmo button are the places to look first.
-- [ ] **P1 Home extras the backend does not return yet**: recent Seed activity, a months-to-go number for the next unlock, a next deposit date on a goal, and deposit history (the savings timeline starts at the goal's creation date for lack of it).
-- [ ] **P1 Savings details**: an amount change on a goal is not built; the withdrawal status updates on reload only.
+- [x] **P1 Home extras**: recent Seed activity, months to go for the next unlock, next deposit date on a goal and deposit history are shown from the new backend fields.
+- [x] **P1 Savings details**: amount change on a goal is built; a pending withdrawal refreshes itself every 8 seconds for about five minutes.
 - [ ] **P1 Channel3**: set `CHANNEL3_API_KEY` and check the real response shape; the adapter parses defensively and drops anything that does not fit. The buy action opens the merchant's checkout, not PayPal.
 - [ ] **P2 Spanish** copy for the new pages (they are English only), and a review of the Spanish that exists, by a native speaker.
-- [ ] **P2 Public donate amount** is limited to $1 to $1,000 in the browser only; the backend caps it too.
+- [x] **P2 Public donate amount** is limited to $1 to $1,000 in the browser and in the server action; the backend caps it too.
 
 Pending, desk:
 
 - [ ] **P0 Click through the desk screens** with two different officers (maker and checker) on the real backend.
-- [ ] **P1 Fair check beside an application**: the contract has no lookup by application, so the page reads the whole list and picks the newest check; add a lookup before the list gets long.
-- [ ] **P1 Cover form**: needs member and loan ids typed in. A link from the hardship case page to `/reserve?memberId=&loanId=&hardshipCaseId=` would fill them.
-- [ ] **P2 SLA badges** compare with the real clock, so they can be wrong when the demo clock has been moved.
-- [ ] **P2 Workload bars** use default lengths where a bucket has no deadline (layout only; all counts come from the backend).
+- [x] **P1 Fair check beside an application** uses `GET /desk/underwriting/assessments/latest?applicationId=`.
+- [x] **P1 Cover form**: the hardship case page links to `/reserve?loanId=&hardshipCaseId=` and the form fills from it. The case data has no member id, so the officer still types that field.
+- [ ] **P2 Cover SLA badges** compare with the web server's clock; application SLA badges use the backend `slaState`. Needs an `asOf` on the cover list.
+- [x] **P2 Workload bars** use default lengths only where a bucket has no deadline (layout only; all counts come from the backend).
 
 ---
 
@@ -150,7 +150,7 @@ Pending:
 
 - [ ] **P0 Deploy to Render** and set the values above.
 - [ ] **P0 Public webhook URL** for PayPal on the `ingress` service; register it in the sandbox app.
-- [ ] **P0 Edge rate limit.** Render has no built-in limiter, so put a CDN or WAF rule (about 60 requests a minute per IP) in front of the three public routes: `GET /api/v1/records/verify/{token}`, `GET /api/v1/reserve/summary` and `POST /api/v1/reserve/donations/intent`. Until that exists they are open to scraping; the verify answer is cached 5 seconds and the summary 30 seconds, which helps a little.
+- [x] **P0 App rate limit** (ADR 0030): 60 requests a minute per client address on the three public routes, `429 rate-limited` with `Retry-After`; in memory per instance. Still advisable: a CDN or WAF rule in front of the same routes: `GET /api/v1/records/verify/{token}`, `GET /api/v1/reserve/summary` and `POST /api/v1/reserve/donations/intent`. Until that exists they are open to scraping; the verify answer is cached 5 seconds and the summary 30 seconds, which helps a little.
 - [ ] **P1 Render Workflows** for the daily hardship scan, close of business, payouts and reconciliation (`workflows/` is placeholder today).
 - [ ] **P1 CI**: backend build and tests, web typecheck, lint and build, Postman run.
 - [ ] **P2 Render Key Value** for idempotency, rate limits and the kill switch cache.

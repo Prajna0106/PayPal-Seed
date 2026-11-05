@@ -19,6 +19,18 @@ const en = {
   "hardship.askTitle": "Ask for help with a payment",
   "hardship.askReason": "Anything you want to tell us (optional)",
   "hardship.askReasonHint": "We only use this to sort your request. It is never shared.",
+  "home.activityTitle": "Recent activity",
+  "home.activityEmpty": "Nothing yet. Your first deposit will show up here.",
+  "home.monthsToGo": "{count} more months of on-time saving to unlock the next step.",
+  "savings.nextDeposit": "Next deposit",
+  "savings.changeAmount": "Change monthly amount",
+  "savings.changeAmountHint": "The new amount starts with your next deposit. You can change it again any time.",
+  "savings.withdrawalOnItsWay": "On its way",
+  "savings.withdrawalSent": "Sent",
+  "savings.checkWithPaypal": "Check with PayPal",
+  "fund.chooseAmount": "Choose an amount",
+  "fund.amountRange": "Any amount from $1 to $1,000.",
+  "fund.thanks": "Thank you. It can take a moment to show in the total.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -37,6 +49,18 @@ const es: Dictionary = {
   "hardship.askTitle": "Pide ayuda con un pago",
   "hardship.askReason": "Algo que quieras contarnos (opcional)",
   "hardship.askReasonHint": "Solo lo usamos para ordenar tu solicitud. Nunca se comparte.",
+  "home.activityTitle": "Actividad reciente",
+  "home.activityEmpty": "Aún nada. Tu primer depósito aparecerá aquí.",
+  "home.monthsToGo": "Faltan {count} meses ahorrando a tiempo para el siguiente paso.",
+  "savings.nextDeposit": "Próximo depósito",
+  "savings.changeAmount": "Cambiar el monto mensual",
+  "savings.changeAmountHint": "El nuevo monto empieza con tu próximo depósito. Puedes cambiarlo otra vez cuando quieras.",
+  "savings.withdrawalOnItsWay": "En camino",
+  "savings.withdrawalSent": "Enviado",
+  "savings.checkWithPaypal": "Consultar con PayPal",
+  "fund.chooseAmount": "Elige un monto",
+  "fund.amountRange": "Cualquier monto de $1 a $1,000.",
+  "fund.thanks": "Gracias. Puede tardar un momento en verse en el total.",
 };
 
 const DICTIONARIES: Record<Locale, Dictionary> = { en, es };
