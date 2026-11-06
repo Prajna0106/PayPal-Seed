@@ -88,6 +88,7 @@ services:
       - key: SEED_ROLE
         value: ingress
       - fromGroup: seed-shared
+      - fromGroup: seed-desk
       - fromGroup: seed-backend
       - key: DATABASE_URL
         sync: false
@@ -118,6 +119,7 @@ services:
       - key: SEED_ROLE
         value: worker
       - fromGroup: seed-shared
+      - fromGroup: seed-desk
       - fromGroup: seed-backend
       - key: DATABASE_URL
         sync: false
