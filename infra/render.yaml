@@ -169,7 +169,7 @@ services:
     name: seed-member-web
     runtime: node
     rootDir: web
-    buildCommand: npm install -g pnpm@10.22.0 && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/member... build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/member build:lowmem
     startCommand: pnpm --filter @paypal-seed/member exec next start --port $PORT
     healthCheckPath: /
     envVars:
@@ -203,7 +203,7 @@ services:
     name: seed-desk-web
     runtime: node
     rootDir: web
-    buildCommand: npm install -g pnpm@10.22.0 && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/desk... build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/desk build:lowmem
     startCommand: pnpm --filter @paypal-seed/desk exec next start --port $PORT
     healthCheckPath: /login
     envVars:
