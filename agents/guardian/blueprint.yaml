@@ -1,16 +1,23 @@
 name: guardian-agent
-version: 1.0.0
-model: openrouter/primary-chain
-role: read-only
+version: 2.0.0
+model: openrouter/anthropic/claude-3.5-sonnet,openrouter/openai/gpt-4o,openrouter/google/gemini-2.0-flash-001
+role: autonomous-investigator-and-proposer
 feature: F5-hardship-safety-net
-runtime_entry: com.paypalseed.guardian.application.usecases.GuardianRunner
+runtime_entry: seed_agents.react_engine.GuardianAgent
+protocol: mcp-2024-11-05
 kill_switch_scope: guardian-agent
-max_turns: 6
+max_turns: 8
 budget:
   max_tokens: 4000
-  max_cost_cents: 5
+  max_cost_cents: 10
 evals:
   dataset: evals/eval-dataset.json
   injection_corpus: ../shared/evals/injection-corpus.json
 tools:
   - openapi_spec: ../shared/agent-tools.yaml
+guardrails:
+  prompt_injection_filter: true
+  pii_redaction: true
+  xml_fence_wrapping: true
+  v01_v12_deterministic_validator: true
+  maker_checker_human_approval_required: true

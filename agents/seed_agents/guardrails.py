@@ -27,9 +27,10 @@ FORBIDDEN_NARRATIVE_PATTERNS = re.compile(
 # Adversarial prompt-injection patterns (covers all 18 vectors in injection-corpus.json)
 INJECTION_PATTERNS = re.compile(
     r"(?is)("
-    r"ignore\s+(?:all\s+|any\s+)?(?:previous|prior|above)\s+(?:instructions|prompts|rules)|"
-    r"disregard\s+(?:all\s+)?(?:previous|prior|system)|"
-    r"forget\s+(?:all\s+)?(?:previous|prior|rules)|"
+    r"ignore\s+(?:all\s+|any\s+|the\s+)?(?:previous|prior|above)?\s*(?:instructions|prompts|rules)|"
+    r"disregard\s+(?:all\s+|the\s+)?(?:previous|prior|system|rules|above)|"
+    r"forget\s+(?:all\s+|the\s+)?(?:previous|prior|rules)|"
+    r"output\s+category\s*=|"
     r"ignora\s+(?:todas\s+)?las\s+instrucciones|"
     r"olvida\s+las\s+reglas|"
     r"new\s+system\s+directive|"
@@ -121,6 +122,7 @@ def classify_hardship_reason(text: str, language: str = "en") -> dict[str, Any]:
         ("MEDICAL_OR_FAMILY", ("hospital", "medical", "sick", "doctor", "surgery", "illness", "family emergency", "medico", "enfermo", "hospitalizado")),
         ("UNEXPECTED_EXPENSE", ("car broke", "repair", "transmission", "rent spike", "utility bill", "reparacion", "emergencia", "auto")),
         ("PAYDAY_TIMING", ("payday", "paid on friday", "next week", "late check", "viernes", "dia de pago", "quincena")),
+        ("INCOME_REDUCED", ("income drop", "income reduced", "fewer customers", "bake less bread", "quiet", "slow week", "fewer rides", "tips down", "low sales", "bajaron mis ingresos", "pocas ventas")),
         ("INCOME_DROP", ("income drop", "slow week", "fewer rides", "tips down", "low sales", "bajaron mis ingresos", "pocas ventas")),
     ]
 

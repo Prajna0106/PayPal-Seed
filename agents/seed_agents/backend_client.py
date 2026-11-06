@@ -31,6 +31,11 @@ class AgentTokenContext:
     run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     case_id: str = "0197f3a8-1111-7000-8000-00000000c001"
     bound_loan_id: str | None = None
+    loan_id: str | None = None
+    agent_id: str = "guardian-agent"
+    actor_id: str = "agent-system"
+    actor_role: str = "AGENT"
+    member_id: str | None = None
     token: str | None = None
     scopes: set[str] = field(
         default_factory=lambda: {
@@ -44,10 +49,17 @@ class AgentTokenContext:
         }
     )
 
+    def __post_init__(self) -> None:
+        if self.loan_id and not self.bound_loan_id:
+            self.bound_loan_id = self.loan_id
+        elif self.bound_loan_id and not self.loan_id:
+            self.loan_id = self.bound_loan_id
+
     def assert_scope(self, required_scope: str, requested_loan_id: str | None = None) -> None:
         if required_scope not in self.scopes:
             raise PermissionError(f"403 missing-scope: token lacks required scope '{required_scope}'")
-        if self.bound_loan_id and requested_loan_id and str(requested_loan_id) != str(self.bound_loan_id):
+        effective_loan = self.bound_loan_id or self.loan_id
+        if effective_loan and requested_loan_id and str(requested_loan_id) != str(effective_loan):
             # Per ADR 0003 & F5 §4: asking for any other loan returns 404 (never confirms loan existence)
             raise LookupError("404 loan-not-found: token is not bound to the requested loanId")
 
@@ -568,3 +580,8 @@ class SeedToolGateway:
             "status": "AWAITING_ONE_CLICK_MEMBER_CONFIRMATION",
         }
         return self.record_output(ctx.run_id, "propose_goal_adjustment", result)
+
+
+BackendClient = SeedToolGateway
+backend_client = SeedToolGateway()
+
