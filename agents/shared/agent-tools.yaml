@@ -1,5 +1,232 @@
 openapi: 3.1.0
 info:
-  title: Shared Agent Tools
+  title: PayPal Seed MCP & Autonomous Agent Tool Catalogue
   version: 1.0.0
-paths: {}
+  description: |
+    Scoped tool definitions exposed by `paypal-seed-mcp` and `agent-gateway` (`/agent/v1/tools/*`).
+    Every tool operates under a short-lived `AgentToken` with explicit scopes (`loan:read`, `schedule:read`,
+    `signals:read`, `income:read`, `preview:run`, `desk:read`, `proposal:submit`).
+    All monetary values are integer USD cents. All dates are `YYYY-MM-DD` business dates.
+servers:
+  - url: http://localhost:8080
+    description: Java Backend Tool Gateway
+  - url: http://localhost:8090
+    description: Python Agent & MCP Runtime
+paths:
+  /agent/v1/tools/loan-summary:
+    get:
+      operationId: get_loan_summary
+      summary: Fetch pseudonymous loan summary, principal, outstanding balance, DPD and aging bucket
+      x-mcp-scope: "loan:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Loan summary facts
+
+  /agent/v1/tools/repayment-schedule:
+    get:
+      operationId: get_repayment_schedule
+      summary: Read current repayment schedule version and instalment lines
+      x-mcp-scope: "schedule:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Schedule version and instalments
+
+  /agent/v1/tools/loan-aging:
+    get:
+      operationId: get_loan_aging
+      summary: Read days past due (DPD), aging bucket, next instalment and grace window
+      x-mcp-scope: "loan:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Loan aging details
+
+  /agent/v1/tools/hardship-signals:
+    get:
+      operationId: get_hardship_signals
+      summary: Read deterministic hardship scorecard signals and computed risk level
+      x-mcp-scope: "signals:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Fired hardship signals and evidence
+
+  /agent/v1/tools/income-summary:
+    get:
+      operationId: get_income_summary
+      summary: Read consented 90-day PayPal inflow medians, recent 4-week average and payday weekday
+      x-mcp-scope: "income:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Redacted consented income summary
+
+  /agent/v1/tools/offered-options:
+    get:
+      operationId: list_offered_options
+      summary: List pre-computed hardship options with preview hashes and OptionRanker recommendation
+      x-mcp-scope: "preview:run"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Eligible hardship options
+
+  /agent/v1/tools/preview-option:
+    post:
+      operationId: preview_hardship_option
+      summary: Simulate a schedule modification (MOVE_DATE, PAUSE_ONE_MONTH, EXTEND_PLAN) without writing state
+      x-mcp-scope: "preview:run"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loanId, option]
+              properties:
+                loanId: { type: string, format: uuid }
+                option: { type: string, enum: [MOVE_DATE, PAUSE_ONE_MONTH, EXTEND_PLAN] }
+                seq: { type: integer }
+                days: { type: integer }
+                extraMonths: { type: integer }
+      responses:
+        "200":
+          description: Simulated schedule diff and previewHash
+
+  /agent/v1/tools/prior-cases:
+    get:
+      operationId: list_prior_cases
+      summary: List historical hardship cases and outcomes on this loan to enforce policy caps
+      x-mcp-scope: "signals:read"
+      parameters:
+        - name: loanId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Prior hardship cases
+
+  /agent/v1/tools/simulate-catchup:
+    post:
+      operationId: simulate_catchup_payment
+      summary: Calculate Option D ('Pay what you can') safe catch-up amount (15% burden rule) and remaining shortfall
+      x-mcp-scope: "preview:run"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loanId]
+              properties:
+                loanId: { type: string, format: uuid }
+                customAmountCents: { type: integer }
+      responses:
+        "200":
+          description: Option D catch-up simulation
+
+  /agent/v1/tools/simulate-affordability:
+    post:
+      operationId: simulate_loan_affordability
+      summary: Stress-test a requested microloan against worst-week consented PayPal income and 15% burden cap
+      x-mcp-scope: "preview:run"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestedAmountCents, termMonths, lowestMonthlyIncomeCents]
+              properties:
+                requestedAmountCents: { type: integer }
+                termMonths: { type: integer }
+                lowestMonthlyIncomeCents: { type: integer }
+                averageMonthlyIncomeCents: { type: integer }
+                savingStreakMonths: { type: integer }
+      responses:
+        "200":
+          description: Affordability simulation and safe counter-offer
+
+  /agent/v1/tools/simulate-tier:
+    post:
+      operationId: simulate_tier_progression
+      summary: Simulate saving streak and on-time repayment requirements to unlock the next credit record tier
+      x-mcp-scope: "preview:run"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentTier, streakMonths, onTimeRepaymentsCount]
+              properties:
+                currentTier: { type: string, enum: [NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY] }
+                streakMonths: { type: integer }
+                onTimeRepaymentsCount: { type: integer }
+                monthlyGoalCents: { type: integer }
+      responses:
+        "200":
+          description: Tier mobility roadmap and goal adjustment options
+
+  /agent/v1/tools/portfolio-health:
+    get:
+      operationId: query_portfolio_health
+      summary: Query portfolio aging buckets, active loan counts, hardship conversion and inclusion impact
+      x-mcp-scope: "desk:read"
+      responses:
+        "200":
+          description: Portfolio health snapshot
+
+  /agent/v1/tools/sla-queue:
+    get:
+      operationId: query_sla_queue
+      summary: Query open applications, fair-check disputes and maker-checker approvals near 24h SLA breach
+      x-mcp-scope: "desk:read"
+      responses:
+        "200":
+          description: Prioritized SLA queue items
+
+  /agent/v1/proposals:
+    post:
+      operationId: submit_hardship_proposal
+      summary: Submit a structured, figure-cited proposal to the deterministic V01-V12 validator
+      x-mcp-scope: "proposal:submit"
+      responses:
+        "202":
+          description: Proposal validated and queued
+
+  /agent/v1/checkout-orders:
+    post:
+      operationId: create_agentic_checkout_order
+      summary: Request a PayPal Catch-Up Checkout Order/Link (Option D) for 1-click member approval
+      x-mcp-scope: "proposal:submit"
+      responses:
+        "201":
+          description: PayPal order created with member approval URL
