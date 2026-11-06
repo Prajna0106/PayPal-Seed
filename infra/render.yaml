@@ -30,6 +30,8 @@ envVarGroups:
     envVars:
       - key: DATABASE_URL
         value: jdbc:postgresql://dpg-dbn1jnajnfac73cieh50-a.oregon-postgres.render.com:5432/seed_postgres?sslmode=require
+      - key: DATABASE_POOL_SIZE
+        value: "3"
       - key: SEED_RECORD_SIGNING_SECRET
         generateValue: true
       - key: SEED_DESK_QUERY_CURSOR_KEY
