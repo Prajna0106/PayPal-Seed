@@ -19,3 +19,13 @@ services:
       - xpack.security.enabled=false
     ports:
       - "9200:9200"
+  seed-agents-mcp:
+    build:
+      context: ../agents
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - SEED_API_URL=http://host.docker.internal:8080
+      - AGENT_RUNTIME_PORT=8090
+      - SEED_MCP_TRANSPORT=http
