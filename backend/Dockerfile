@@ -1,10 +1,8 @@
 # Multi-stage Docker build for PayPal Seed Spring Boot Modular Monolith (Java 21)
-FROM eclipse-temurin:21-jdk-alpine AS builder
+# Uses Debian-based Temurin (glibc) so embedded PostgreSQL (jOOQ codegen) runs cleanly
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
-
-# Install bash for gradlew script
-RUN apk add --no-cache bash
 
 # Copy gradle wrapper & configuration
 COPY gradlew gradlew.bat ./
@@ -26,12 +24,12 @@ COPY tools/ ./tools/
 RUN ./gradlew :app:bootJar -x test --no-daemon
 
 # Production runtime container
-FROM eclipse-temurin:21-jre-alpine AS runner
+FROM eclipse-temurin:21-jre AS runner
 
 WORKDIR /app
 
 # Run as non-root user
-RUN addgroup -S seed && adduser -S seed -G seed
+RUN groupadd -r seed && useradd -r -g seed seed
 
 COPY --from=builder --chown=seed:seed /app/app/build/libs/*.jar /app/seed.jar
 
