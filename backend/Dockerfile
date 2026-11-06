@@ -38,7 +38,7 @@ WORKDIR /app
 # Run as non-root user
 RUN groupadd -r seed && useradd -r -g seed seed
 
-COPY --from=builder --chown=seed:seed /app/app/build/libs/*.jar /app/seed.jar
+COPY --from=builder --chown=seed:seed /app/app/build/libs/seed.jar /app/seed.jar
 
 USER seed
 

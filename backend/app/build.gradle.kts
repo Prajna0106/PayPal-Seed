@@ -9,6 +9,11 @@ tasks.named<Jar>("jar") {
     enabled = true
 }
 
+// Give the boot jar a stable name so the Dockerfile COPY doesn't glob two jars.
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName.set("seed.jar")
+}
+
 dependencies {
     implementation(project(":platform:kernel"))
     implementation(project(":platform:persistence"))

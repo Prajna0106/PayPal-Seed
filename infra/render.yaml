@@ -213,6 +213,10 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      # Signs staff actor tokens (ADR 0023). Must differ from SEED_ACTOR_TOKEN_SECRETS.
+      # Set manually: d1:<output of `openssl rand -hex 32`>
+      - key: SEED_STAFF_ACTOR_TOKEN_SECRETS
+        sync: false
       - fromGroup: seed-shared
       - fromGroup: seed-desk
 
