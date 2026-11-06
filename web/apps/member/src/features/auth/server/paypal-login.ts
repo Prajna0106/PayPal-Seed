@@ -23,15 +23,15 @@ export function loginFailureReason(error: unknown): string {
   if (error instanceof PayPalLoginError) {
     return error.reason;
   }
-  if (!(error instanceof ApiProblem)) {
-    console.warn(`[paypal-login] member login failed: ${error instanceof Error ? error.name : "unknown"}`);
-    return "unavailable";
+  if (error instanceof ApiProblem) {
+    console.error(`[paypal-login] member login ApiProblem: status=${error.status}, code=${error.code}, title=${error.title}, detail=${error.detail}`);
+    if (error.status >= 500) {
+      return "unavailable";
+    }
+    return BAD_IDENTITY_CODES.has(error.code) ? "identity" : "refused";
   }
-  console.warn(`[paypal-login] member login returned HTTP ${error.status} (${error.code})`);
-  if (error.status >= 500) {
-    return "unavailable";
-  }
-  return BAD_IDENTITY_CODES.has(error.code) ? "identity" : "refused";
+  console.error(`[paypal-login] member login failed:`, error);
+  return "unavailable";
 }
 
 const tokenSchema = z.object({ access_token: z.string().min(1), scope: z.string().optional().catch(undefined) });
