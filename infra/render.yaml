@@ -169,10 +169,12 @@ services:
     name: seed-member-web
     runtime: node
     rootDir: web
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/member... build
+    buildCommand: npm install -g pnpm@10.22.0 && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/member... build
     startCommand: pnpm --filter @paypal-seed/member exec next start --port $PORT
     healthCheckPath: /
     envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
       - key: SEED_API_URL
         sync: false # https URL of seed-api
       - key: SESSION_SECRET
@@ -201,10 +203,12 @@ services:
     name: seed-desk-web
     runtime: node
     rootDir: web
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/desk... build
+    buildCommand: npm install -g pnpm@10.22.0 && pnpm install --frozen-lockfile && pnpm --filter @paypal-seed/desk... build
     startCommand: pnpm --filter @paypal-seed/desk exec next start --port $PORT
     healthCheckPath: /login
     envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
       - key: SEED_API_URL
         sync: false
       - key: SESSION_SECRET
