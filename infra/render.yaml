@@ -185,6 +185,27 @@ services:
       - fromGroup: seed-shared
       - fromGroup: seed-desk
 
+  # Autonomous Agent Runtime & Model Context Protocol (MCP) Server (Python, port 8090)
+  - type: web
+    name: seed-agents-mcp
+    runtime: python
+    rootDir: agents
+    buildCommand: pip install -e .
+    startCommand: python -m seed_agents.server
+    healthCheckPath: /health
+    envVars:
+      - key: SEED_API_URL
+        sync: false # https URL of seed-api
+      - key: AGENT_RUNTIME_PORT
+        value: "8090"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - fromGroup: seed-shared
+
 databases:
   - name: seed-postgres
     plan: standard
