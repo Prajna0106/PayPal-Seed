@@ -1,9 +1,9 @@
 name: coach-agent
-version: 1.0.0
-model: openrouter/primary-chain
-role: read-only-narrator
+version: 2.0.0
+model: openrouter/anthropic/claude-3.5-sonnet,openrouter/openai/gpt-4o,openrouter/google/gemini-2.0-flash-001
+role: read-only-narrator-and-mobility-planner
 feature: F1-F2-savings-and-loan-term-coach
-runtime_entry: com.paypalseed.agentgateway.application.usecases.SavingsCoachAgentRunner
+runtime_entry: seed_agents.react_engine.WealthMobilityAgent
 kill_switch_scope: coach-agent
 max_output_tokens: 400
 timeout_seconds: 10
@@ -15,4 +15,5 @@ grounding:
   require_saving_and_loan_figures_in_en: true
   forbid_credit_score_and_fee_terms: true
   fallback_mode: deterministic_template
-tools: []
+tools:
+  - openapi_spec: ../shared/agent-tools.yaml

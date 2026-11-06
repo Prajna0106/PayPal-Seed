@@ -1,9 +1,9 @@
 name: desk-analyst-agent
-version: 1.0.0
-model: openrouter/primary-chain
-role: read-only-narrator
+version: 2.0.0
+model: openrouter/anthropic/claude-3.5-sonnet,openrouter/openai/gpt-4o,openrouter/google/gemini-2.0-flash-001
+role: operational-intelligence-and-triage-copilot
 feature: Desk-Operations-and-Risk-Briefing
-runtime_entry: com.paypalseed.agentgateway.application.usecases.DeskAnalystAgentRunner
+runtime_entry: seed_agents.react_engine.DeskTriageCopilotAgent
 kill_switch_scope: desk-analyst-agent
 max_output_tokens: 600
 timeout_seconds: 12
@@ -14,4 +14,5 @@ grounding:
   enforce_allowed_dollar_figures: true
   forbid_credit_score_and_fee_terms: true
   fallback_mode: deterministic_template
-tools: []
+tools:
+  - openapi_spec: ../shared/agent-tools.yaml

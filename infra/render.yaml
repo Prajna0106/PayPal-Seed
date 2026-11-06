@@ -36,17 +36,13 @@ envVarGroups:
         generateValue: true
 
 services:
-  # The api serves members, the desk and partners.
-  #
-  # EDGE RATE LIMIT (not provided by Render): these routes are public and need a limit in front of the service, for
-  # example a CDN or WAF rule of about 60 requests a minute per IP address:
-  #   GET  /api/v1/records/verify/{token}    partners verifying a shared record (the answer is cached for 5 s)
-  #   GET  /api/v1/reserve/summary           public fund page (cached for 30 s)
-  #   POST /api/v1/reserve/donations/intent  starts a donation; writes one small row
-  # Webhook routes check PayPal's signature and are not rate limited here.
+  # The api serves members, the desk and partners (Java 21 via Docker)
   - type: web
     name: seed-api
-    env: java
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
     envVars:
       - key: SEED_ROLE
         value: api
@@ -80,10 +76,14 @@ services:
         sync: false # https://<member web>/app/savings/return
       - key: SEED_SAVINGS_CANCEL_URL
         sync: false # https://<member web>/app/savings/cancelled
+
   # The ingress receives PayPal webhooks (verify the signature, store, answer 200) and drains the inbox.
   - type: web
     name: seed-ingress
-    env: java
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
     envVars:
       - key: SEED_ROLE
         value: ingress
@@ -107,10 +107,13 @@ services:
         sync: false
       - key: PAYPAL_LOAN_PLAN_ID
         sync: false
+
   # The worker runs the pollers, the close of business, the hardship scan and sweep and the credit record close.
   - type: worker
     name: seed-worker
-    env: java
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     envVars:
       - key: SEED_ROLE
         value: worker
@@ -141,9 +144,27 @@ services:
       - key: SEED_SAVINGS_CANCEL_URL
         sync: false
 
-  # Web apps: pnpm workspace in web/. They reach the backend server-side only (SEED_API_URL). The member app's tokens
-  # come through seed-shared, and the desk's staff tokens and staff service token through seed-desk (manual steps at
-  # the top). SEED_TRUSTED_PROXY_HOPS (default 1) is how many proxies append to X-Forwarded-For; raise it behind a CDN.
+  # Autonomous Agent Runtime & Model Context Protocol (MCP) Server (Python, port 8090)
+  - type: web
+    name: seed-agents-mcp
+    runtime: docker
+    dockerfilePath: ./agents/Dockerfile
+    dockerContext: ./agents
+    healthCheckPath: /health
+    envVars:
+      - key: SEED_API_URL
+        sync: false # https URL of seed-api
+      - key: AGENT_RUNTIME_PORT
+        value: "8090"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - fromGroup: seed-shared
+
+  # Web apps: pnpm workspace in web/. They reach the backend server-side only (SEED_API_URL).
   - type: web
     name: seed-member-web
     runtime: node
@@ -168,8 +189,14 @@ services:
         sync: false # the login-only PayPal app, not the payments one
       - key: PAYPAL_LOGIN_CLIENT_SECRET
         sync: false
+      # Sandbox by default; both must change together when going live.
+      - key: PAYPAL_WEB_URL
+        value: https://www.sandbox.paypal.com
+      - key: PAYPAL_API_URL
+        value: https://api-m.sandbox.paypal.com
       # SEED_DEMO_LOGIN=true turns on sign-in with no password. Set it only on a demo deployment.
       - fromGroup: seed-shared
+
   - type: web
     name: seed-desk-web
     runtime: node
@@ -187,4 +214,4 @@ services:
 
 databases:
   - name: seed-postgres
-    plan: standard
+    plan: basic-1gb
