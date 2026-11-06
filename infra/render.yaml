@@ -28,6 +28,8 @@ envVarGroups:
   #   SEED_PAYMENTS_RECIPIENT_FINGERPRINT_KEY  keys the hash of a payout recipient that the fraud rule compares
   - name: seed-backend
     envVars:
+      - key: DATABASE_URL
+        value: jdbc:postgresql://dpg-dbn1jnajnfac73cieh50-a.oregon-postgres.render.com:5432/seed_postgres?sslmode=require
       - key: SEED_RECORD_SIGNING_SECRET
         generateValue: true
       - key: SEED_DESK_QUERY_CURSOR_KEY
@@ -51,8 +53,6 @@ services:
       - fromGroup: seed-backend
       # Database: Render's internal connection string is postgres://; Spring needs the jdbc: form of the same host and
       # database, e.g. jdbc:postgresql://<internal host>:5432/<database>?sslmode=require
-      - key: DATABASE_URL
-        sync: false
       - key: DATABASE_USER
         fromDatabase: { name: seed-postgres, property: user }
       - key: DATABASE_PASSWORD
@@ -90,8 +90,6 @@ services:
       - fromGroup: seed-shared
       - fromGroup: seed-desk
       - fromGroup: seed-backend
-      - key: DATABASE_URL
-        sync: false
       - key: DATABASE_USER
         fromDatabase: { name: seed-postgres, property: user }
       - key: DATABASE_PASSWORD
@@ -121,8 +119,6 @@ services:
       - fromGroup: seed-shared
       - fromGroup: seed-desk
       - fromGroup: seed-backend
-      - key: DATABASE_URL
-        sync: false
       - key: DATABASE_USER
         fromDatabase: { name: seed-postgres, property: user }
       - key: DATABASE_PASSWORD
