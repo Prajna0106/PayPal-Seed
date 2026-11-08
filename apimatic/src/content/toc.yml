@@ -1,6 +1,16 @@
 toc:
   - group: Guides
-    dir: guides
+    items:
+      - page: Getting started
+        file: guides/getting-started.md
+      - page: Verify a credit record
+        file: guides/verify-a-credit-record.md
+      - page: Reserve and donations
+        file: guides/reserve-and-donations.md
+      - page: Errors and limits
+        file: guides/errors-and-limits.md
+      - page: Conventions
+        file: guides/conventions.md
   - generate: API Endpoints
     from: endpoints
   - generate: Models

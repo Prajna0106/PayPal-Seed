@@ -63,3 +63,6 @@ __pycache__/
 venv/
 .pytest_cache/
 *.egg-info/
+
+# APIMatic generated portal (built at deploy time)
+apimatic/portal/
