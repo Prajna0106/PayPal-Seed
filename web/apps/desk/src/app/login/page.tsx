@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "@paypal-seed/ui/components/avatar";
 import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import { signInAs } from "@/features/auth/actions";
+import { JudgeAccess } from "@/features/auth/components/judge-access";
 import { StaffLogin } from "@/features/auth/components/staff-login";
 import { env } from "@/server/env";
 import { PERSONAS } from "@/server/personas";
@@ -31,6 +32,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           ) : null}
         </div>
         <StaffLogin {...(nextPath ? { next: nextPath } : {})} />
+        {env.judgeAccess ? <JudgeAccess /> : null}
         {env.demoLogin ? (
           <>
             <div className="flex flex-col gap-1">

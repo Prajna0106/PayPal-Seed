@@ -12,7 +12,7 @@ export function Hero() {
       <GradientOrb tone="mint" blend="sky" className="-top-48 -left-40 -z-10 size-[38rem]" />
       <GradientOrb tone="peach" blend="rose" className="top-24 -right-48 -z-10 size-[34rem] opacity-60" />
 
-      <div className="mx-auto grid max-w-6xl items-center gap-14 px-6 pt-10 pb-16 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[1.1fr_1fr] lg:gap-20 lg:py-10">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-14 lg:min-h-[34rem] lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:py-20">
         <RevealGroup>
           <RevealItem>
             <h1 id="hero-title" className="text-display-mega text-balance text-ink">
@@ -20,7 +20,7 @@ export function Hero() {
             </h1>
           </RevealItem>
           <RevealItem>
-            <p className="mt-6 max-w-md text-xl leading-snug text-pretty text-body">
+            <p className="mt-6 max-w-lg text-xl leading-snug lg:text-2xl text-pretty text-body">
               Save from $5 a month. Unlock a 0% loan, inside PayPal.
             </p>
           </RevealItem>

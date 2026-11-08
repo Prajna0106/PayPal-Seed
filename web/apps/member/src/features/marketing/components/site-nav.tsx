@@ -14,13 +14,13 @@ export function SiteNav() {
     <header className="sticky top-0 z-40 border-b border-hairline/70 bg-canvas/80 backdrop-blur-md supports-backdrop-filter:bg-canvas/70">
       <nav
         aria-label="Main"
-        className="mx-auto grid h-16 max-w-6xl grid-cols-[auto_1fr] items-center gap-6 px-6 lg:grid-cols-[1fr_auto_1fr]"
+        className="mx-auto grid h-16 max-w-6xl grid-cols-[auto_1fr] items-center gap-6 px-6 lg:grid-cols-[auto_1fr_auto]"
       >
         <Link href="/" aria-label="PayPal Seed home" className="justify-self-start rounded-full">
           <Wordmark markClassName="size-8" />
         </Link>
 
-        <ul className="hidden items-center gap-0.5 lg:flex">
+        <ul className="hidden items-center justify-center gap-0.5 lg:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <a
@@ -33,7 +33,7 @@ export function SiteNav() {
           ))}
         </ul>
 
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
           <Link
             href="/developers"
             className="hidden h-10 items-center rounded-full px-3.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-strong hover:text-ink sm:inline-flex"

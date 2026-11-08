@@ -4,6 +4,7 @@ import { Button } from "@paypal-seed/ui/components/button";
 import { Separator } from "@paypal-seed/ui/components/separator";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JudgeAccess } from "@/features/auth/components/judge-access";
 import { AnaStoryForm, MemberIdForm } from "@/features/auth/components/sign-in-forms";
 import { env } from "@/server/env";
 
@@ -47,6 +48,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <a href="/api/auth/paypal/start">Log in with PayPal</a>
           </Button>
         </section>
+        {env.judgeAccess ? <JudgeAccess /> : null}
         {env.demoLogin ? (
           <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
             <div className="flex flex-col gap-1">

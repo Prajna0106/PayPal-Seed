@@ -173,6 +173,9 @@ services:
     startCommand: pnpm --filter @paypal-seed/member exec next start --port $PORT
     healthCheckPath: /
     envVars:
+      # Shows the shared test logins on the sign-in page. Delete this variable after judging.
+      - key: SEED_JUDGE_ACCESS
+        value: "true"
       - key: NODE_VERSION
         value: 22.14.0
       - key: SEED_API_URL
@@ -207,6 +210,9 @@ services:
     startCommand: pnpm --filter @paypal-seed/desk exec next start --port $PORT
     healthCheckPath: /login
     envVars:
+      # Shows the shared test logins on the sign-in page. Delete this variable after judging.
+      - key: SEED_JUDGE_ACCESS
+        value: "true"
       - key: NODE_VERSION
         value: 22.14.0
       - key: SEED_API_URL

@@ -17,6 +17,7 @@ const schema = z.object({
   SEED_STAFF_SERVICE_TOKEN: z.string().min(16).optional(),
   SEED_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   SEED_DEMO_LOGIN: z.enum(["true", "false"]).optional(),
+  SEED_JUDGE_ACCESS: z.enum(["true", "false"]).optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -53,5 +54,7 @@ export const env = {
   SEED_STAFF_SERVICE_TOKEN: parsed.data.SEED_STAFF_SERVICE_TOKEN ?? DEV_STAFF_SERVICE_TOKEN,
   staffTokenSecrets: parsed.data.SEED_STAFF_ACTOR_TOKEN_SECRETS ?? (isProduction ? undefined : parsed.data.SEED_ACTOR_TOKEN_SECRETS),
   isProduction,
+  // Shows the shared test logins on the sign-in page. They open a demo deployment only: never turn this on for real members.
+  judgeAccess: parsed.data.SEED_JUDGE_ACCESS ? parsed.data.SEED_JUDGE_ACCESS === "true" : parsed.data.NODE_ENV !== "production",
   demoLogin: parsed.data.SEED_DEMO_LOGIN ? parsed.data.SEED_DEMO_LOGIN === "true" : parsed.data.NODE_ENV !== "production",
 } as const;

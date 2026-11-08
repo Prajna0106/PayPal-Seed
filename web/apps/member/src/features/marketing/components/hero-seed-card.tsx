@@ -16,7 +16,7 @@ export function HeroSeedCard({ className }: { className?: string }) {
         className="absolute inset-x-8 -bottom-3 h-full rounded-2xl border border-hairline bg-surface/70 shadow-soft"
       />
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-lift">
-        <div className="flex items-center justify-between px-6 pt-5">
+        <div className="flex items-center justify-between px-7 pt-6">
           <p className="flex items-center gap-2 text-sm font-medium text-ink">
             <SeedMark className="size-5" />
             Seed savings
@@ -24,7 +24,7 @@ export function HeroSeedCard({ className }: { className?: string }) {
           <span className="text-xs text-muted-ink">Example</span>
         </div>
 
-        <div className="space-y-6 px-6 pt-6 pb-6">
+        <div className="space-y-7 px-7 pt-7 pb-7">
           <div>
             <p className="text-display-md text-ink tabular-nums">
               {HERO_CARD.saved} <span className="font-sans text-sm text-body">saved</span>
@@ -44,7 +44,7 @@ export function HeroSeedCard({ className }: { className?: string }) {
             </ul>
           </div>
 
-          <div className="rounded-xl bg-canvas-soft p-5">
+          <div className="rounded-xl bg-canvas-soft p-6">
             <p className="flex items-center gap-2 text-eyebrow text-success">
               <LockOpen aria-hidden="true" className="size-3.5" />
               Loan unlocked

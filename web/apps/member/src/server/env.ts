@@ -13,6 +13,7 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32).optional(),
   SEED_ACTOR_TOKEN_SECRETS: z.string().refine(isActorTokenSecrets, "must start with kid:secret, with 32 or more characters of secret").optional(),
   SEED_DEMO_LOGIN: z.enum(["true", "false"]).optional(),
+  SEED_JUDGE_ACCESS: z.enum(["true", "false"]).optional(),
   SEED_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   APP_ORIGIN: z.url().optional(),
   PAYPAL_WEB_URL: z.url().default("https://www.sandbox.paypal.com"),
@@ -53,5 +54,7 @@ export const env = {
   SESSION_SECRET: parsed.data.SESSION_SECRET ?? DEV_SESSION_SECRET,
   APP_ORIGIN: parsed.data.APP_ORIGIN ?? DEV_APP_ORIGIN,
   isProduction: parsed.data.NODE_ENV === "production",
+  // Shows the shared test logins on the sign-in page. They open a demo deployment only: never turn this on for real members.
+  judgeAccess: parsed.data.SEED_JUDGE_ACCESS ? parsed.data.SEED_JUDGE_ACCESS === "true" : parsed.data.NODE_ENV !== "production",
   demoLogin: parsed.data.SEED_DEMO_LOGIN ? parsed.data.SEED_DEMO_LOGIN === "true" : parsed.data.NODE_ENV !== "production",
 } as const;
