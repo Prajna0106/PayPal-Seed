@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "paypalseedpartnerapi"
+description = "PayPal Seed is savings and fair microloans built into PayPal. This is the **partner** slice of the Seed API: the three routes that need no sign-in.  - **Verify a credit record.** A member shares a link from their Seed app. A partner lender reads the token in   that link and asks Seed whether it is genuine, current and what it says. - **Read the safety-fund summary.** Public totals for the community safety fund. - **Start a donation.** Get the `customId` to put on a PayPal order or Donate button.  The sandbox server holds demo data only. No real money moves.  ## Conventions - Money is integer cents in USD. `125000` means $1,250.00. - Dates are business dates in America/Los_Angeles, written `YYYY-MM-DD`. Timestamps are UTC (RFC 3339). - Errors are RFC 9457 `application/problem+json` with a stable `type` (`https://problems.paypal-seed.dev/{code}`)   and the same `code` property. Branch on `code`, not on the message. - The responses never contain a name, email, payer id, loan amount or member id.  ## Rate limit Each client address may make a limited number of requests per minute across the three routes (ADR 0030). Past the limit the API answers `429` with a `Retry-After` header in seconds. Wait that long, then retry. "
+version = "2.0.0"
+dependencies = ["apimatic-core~=0.2.0, >= 0.2.24", "apimatic-core-interfaces~=0.1.0, >= 0.1.8", "apimatic-requests-client-adapter~=0.1.0, >= 0.1.10", "python-dotenv>=0.21, <2.0"]
+requires-python = ">=3.7"
+[[project.authors]]
+name = "PayPal Seed developer support"
+
+[project.optional-dependencies]
+testutils = ["pytest>=7.2.2"]
+[tool]
+[tool.setuptools]
+[tool.setuptools.packages]
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*"]
