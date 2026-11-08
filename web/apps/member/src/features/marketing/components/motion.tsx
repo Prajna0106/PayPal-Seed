@@ -109,12 +109,23 @@ export function GrowBar({ className, to = 1, delay = 0 }: GrowBarProps) {
   );
 }
 
-export function Float({ children, className }: { children: ReactNode; className?: string }) {
+interface FloatProps {
+  children: ReactNode;
+  className?: string;
+  /** Seconds for one up-and-down cycle. */
+  duration?: number;
+  /** Seconds before the first cycle, so neighbours drift out of step. */
+  delay?: number;
+  /** Pixels travelled upward. */
+  distance?: number;
+}
+
+export function Float({ children, className, duration = 6, delay = 0, distance = 6 }: FloatProps) {
   return (
     <m.div
       className={className}
-      animate={{ y: [0, -6, 0] }}
-      transition={{ duration: 6, ease: "easeInOut", repeat: Number.POSITIVE_INFINITY }}
+      animate={{ y: [0, -distance, 0] }}
+      transition={{ duration, delay, ease: "easeInOut", repeat: Number.POSITIVE_INFINITY }}
     >
       {children}
     </m.div>

@@ -15,13 +15,19 @@ export function HeroSeedCard({ className }: { className?: string }) {
         aria-hidden="true"
         className="absolute inset-x-8 -bottom-3 h-full rounded-2xl border border-hairline bg-surface/70 shadow-soft"
       />
-      <div className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-lift">
+      <div className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-lift transition-transform duration-500 ease-out hover:-translate-y-1 hover:-rotate-1 motion-reduce:transition-none motion-reduce:hover:transform-none">
         <div className="flex items-center justify-between px-7 pt-6">
           <p className="flex items-center gap-2 text-sm font-medium text-ink">
             <SeedMark className="size-5" />
             Seed savings
           </p>
-          <span className="text-xs text-muted-ink">Example</span>
+          <span className="flex items-center gap-2 text-xs text-muted-ink">
+            <span aria-hidden="true" className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-gradient-mint opacity-75 motion-reduce:animate-none" />
+              <span className="relative inline-flex size-2 rounded-full bg-success" />
+            </span>
+            Example
+          </span>
         </div>
 
         <div className="space-y-7 px-7 pt-7 pb-7">

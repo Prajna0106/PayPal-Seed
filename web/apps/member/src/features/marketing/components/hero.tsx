@@ -4,6 +4,7 @@ import { ArrowRight, Check } from "lucide-react";
 import Link from "next/link";
 import { HERO_CHECKS } from "../content";
 import { HeroSeedCard } from "./hero-seed-card";
+import { HeroStage } from "./hero-stage";
 import { RevealGroup, RevealItem } from "./motion";
 
 export function Hero() {
@@ -11,12 +12,17 @@ export function Hero() {
     <section aria-labelledby="hero-title" className="relative isolate overflow-hidden">
       <GradientOrb tone="mint" blend="sky" className="-top-48 -left-40 -z-10 size-[38rem]" />
       <GradientOrb tone="peach" blend="rose" className="top-24 -right-48 -z-10 size-[34rem] opacity-60" />
+      {/* A faint dot grid that fades out towards the edges: depth without another thing to read. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 bg-[radial-gradient(circle,var(--color-hairline-strong)_1px,transparent_1.5px)] bg-[size:26px_26px] opacity-50 [mask-image:radial-gradient(ellipse_70%_60%_at_60%_45%,black,transparent)]"
+      />
 
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-14 lg:min-h-[34rem] lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:py-20">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-14 min-h-[calc(100dvh-4rem)] lg:grid-cols-[1.15fr_1fr] lg:gap-14 lg:py-20">
         <RevealGroup>
           <RevealItem>
             <h1 id="hero-title" className="text-display-mega text-balance text-ink">
-              Fair credit for the people banks <em className="italic">overlook.</em>
+              Fair credit for the people banks <em className="bg-linear-to-r from-gradient-mint/80 via-gradient-sky/80 to-gradient-lavender/80 bg-[length:100%_0.34em] bg-bottom bg-no-repeat px-1 italic">overlook.</em>
             </h1>
           </RevealItem>
           <RevealItem>
@@ -44,7 +50,9 @@ export function Hero() {
           </RevealItem>
         </RevealGroup>
 
-        <HeroSeedCard />
+        <HeroStage>
+          <HeroSeedCard />
+        </HeroStage>
       </div>
     </section>
   );
