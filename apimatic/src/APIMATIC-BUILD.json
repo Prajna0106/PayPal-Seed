@@ -1,0 +1,17 @@
+{
+  "$schema": "https://titan.apimatic.io/api/build/schema",
+  "buildFileVersion": "1",
+  "generatePortal": {
+    "apiSpecs": ["seed-partner"],
+    "languageConfig": {
+      "typescript": {},
+      "python": {},
+      "java": {},
+      "csharp": {},
+      "go": {},
+      "php": {},
+      "ruby": {},
+      "http": {}
+    }
+  }
+}

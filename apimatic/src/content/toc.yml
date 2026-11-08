@@ -1,0 +1,7 @@
+toc:
+  - group: Guides
+    dir: guides
+  - generate: API Endpoints
+    from: endpoints
+  - generate: Models
+    from: models
