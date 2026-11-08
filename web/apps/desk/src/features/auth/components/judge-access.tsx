@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@paypal-seed/ui/components/badge";
 import { Button } from "@paypal-seed/ui/components/button";
 import { JUDGE_LOGINS } from "../judge-logins";
 
@@ -17,23 +18,34 @@ function fill(email: string, password: string) {
 
 export function JudgeAccess() {
   return (
-    <section aria-labelledby="judge-access" className="rounded-2xl border border-dashed border-hairline-strong bg-surface/70 p-5">
-      <h2 id="judge-access" className="text-lg font-medium text-ink">
-        For judges: try each role
-      </h2>
-      <p className="mt-1 text-sm text-body">Test accounts for this demo. A loan needs two different people to approve it.</p>
-      <ul className="mt-4 flex flex-col divide-y divide-hairline-soft">
+    <section aria-labelledby="judge-access" className="rounded-3xl border border-hairline bg-surface p-6 shadow-soft sm:p-8">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="judge-access" className="text-display-md text-ink">
+          Try each role
+        </h2>
+        <Badge variant="outline">Judge access</Badge>
+      </div>
+      <p className="mt-2 text-sm text-body">
+        Test accounts for this demo. A loan needs two different people to approve it, so use the officer first and the
+        checker second.
+      </p>
+      <ul className="mt-6 flex flex-col gap-3">
         {JUDGE_LOGINS.map((login) => (
-          <li key={login.role} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+          <li key={login.role} className="flex items-center justify-between gap-4 rounded-2xl border border-hairline-soft bg-canvas-soft p-4">
             <div className="min-w-0">
               <p className="font-medium text-ink">{login.role}</p>
               <p className="text-sm text-muted-ink">{login.does}</p>
-              <p className="mt-1 font-mono text-xs break-all text-body">
-                {login.email} / {login.password}
+              <p className="mt-2 font-mono text-xs break-all text-body">
+                {login.email}
+                <span aria-hidden="true" className="px-1.5 text-muted-ink">
+                  /
+                </span>
+                {login.password}
               </p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => fill(login.email, login.password)}>
-              Fill in
+            <Button type="button" size="sm" onClick={() => fill(login.email, login.password)}>
+              Use
+              <span className="sr-only"> the {login.role} account</span>
             </Button>
           </li>
         ))}
