@@ -14,6 +14,7 @@ const BY_CODE: Record<string, string> = {
   "topup-not-allowed": "This goal cannot take a top-up right now.",
   "dependency-unavailable": "PayPal is not answering right now. Nothing was changed, so you can try again in a moment.",
   "legacy-id-not-allowed": "We could not start this goal. Please try again.",
+  "paypal-rejected": "PayPal did not accept this request, so nothing was started or taken. Please try again in a little while.",
   "subscription-unavailable": "This goal saves from Venmo with top-ups, so it has no monthly plan to change.",
 };
 

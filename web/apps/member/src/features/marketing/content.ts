@@ -12,16 +12,16 @@ export const NAV_LINKS = [
   { href: "#faq", label: "FAQ" },
 ] as const;
 
-export const HERO_CHECKS = ["No credit score", "0% interest", "$0 fees", "Starts at $5 a month"] as const;
+export const HERO_CHECKS = ["No credit score", "0% interest", "$0 fees"] as const;
 
 /** An example, not a quote: three months of $25 saving unlocking a first loan. */
 export const HERO_CARD = {
   goal: "Emergency buffer",
   saved: "$75",
-  cadence: "$25 a month, three months in a row",
+  cadence: "$25 a month for three months",
   months: ["Month 1", "Month 2", "Month 3"],
   loan: "$300",
-  terms: "6 payments of $50. No fees, and no credit check.",
+  terms: "6 payments of $50. No fees.",
 } as const;
 
 export const PROOF_POINTS = [
