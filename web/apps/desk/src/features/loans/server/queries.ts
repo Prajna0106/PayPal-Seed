@@ -4,7 +4,7 @@ import { ApiProblem, identityHeaders, unwrap } from "@paypal-seed/api-client";
 import type { ScheduleView, VersionView } from "@paypal-seed/api-client/types";
 import type { TimelineEvent, TimelinePayload } from "@paypal-seed/timeline";
 import { formatMoney } from "@paypal-seed/ui/lib/format";
-import { staffApi } from "@/server/api";
+import { staffApi, staffIdentity } from "@/server/api";
 import { env } from "@/server/env";
 import { requireSession } from "@/server/session";
 
@@ -26,7 +26,7 @@ export async function deskIntegrity(loanId: string) {
 export async function deskVersions(loanId: string): Promise<VersionView[]> {
   const session = await requireSession();
   const response = await fetch(`${env.SEED_API_URL}/api/v1/desk/loans/${encodeURIComponent(loanId)}/schedule/versions`, {
-    headers: identityHeaders({ kind: "staff", staffId: session.staffId, roles: session.roles }),
+    headers: identityHeaders(await staffIdentity(session)),
     cache: "no-store",
     signal: AbortSignal.timeout(10_000),
   });
