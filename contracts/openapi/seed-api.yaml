@@ -867,7 +867,7 @@ paths:
 
         Unknown, expired, revoked and tampered tokens all return the same generic 404 `record-not-found`; nothing
         says which. The response never contains a name, an email, a payer id, a loan amount or a member id. It may
-        be cached for 5 seconds. Put a rate limit in front of this route.
+        be cached for 5 seconds. The app limits each client address (429 `rate-limited`, ADR 0030).
       security: []
       parameters:
         - { name: token, in: path, required: true, schema: { type: string, maxLength: 400 } }
@@ -878,6 +878,7 @@ paths:
             Cache-Control: { schema: { type: string }, description: 'public, max-age=5' }
           content: { application/json: { schema: { $ref: '#/components/schemas/VerifiedRecord' } } }
         '404': { description: record-not-found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { description: rate-limited (too many requests from this address; see Retry-After), headers: { Retry-After: { schema: { type: integer }, description: Seconds to wait } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
         '503': { description: dependency-unavailable (no signing key is configured), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
   /api/v1/desk/members/{memberId}/record:

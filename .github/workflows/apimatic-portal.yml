@@ -1,0 +1,56 @@
+name: apimatic-portal
+
+# Generates the APIMatic developer portal from apimatic/src. The CLI help says
+# --input is "the parent directory containing the 'src' directory", so we pass
+# --input=apimatic. Not confirmed by a run in this repo.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apimatic/**"
+      - "contracts/openapi/seed-api.yaml"
+      - ".github/workflows/apimatic-portal.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  portal:
+    runs-on: ubuntu-latest
+    env:
+      APIMATIC_API_KEY: ${{ secrets.APIMATIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the APIMatic key
+        id: key
+        run: |
+          if [ -z "$APIMATIC_API_KEY" ]; then
+            echo "APIMATIC_API_KEY is not set. Skipping portal generation."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 20
+
+      - name: Generate the portal
+        if: steps.key.outputs.present == 'true'
+        run: >
+          npx --yes @apimatic/cli@1 portal generate
+          --input=apimatic
+          --destination=portal
+          --force
+          --auth-key="$APIMATIC_API_KEY"
+
+      - name: Upload the portal
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: seed-developer-portal
+          path: portal
+          if-no-files-found: error

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createInternalClient, createSeedClient, type InternalClient, type SeedClient, unwrap } from "@paypal-seed/api-client";
+import type { SeedIdentity } from "@paypal-seed/api-client/types";
 import { signActorToken } from "@paypal-seed/api-client/actor-token";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -27,15 +28,17 @@ export const staffApi = cache(async (): Promise<SeedClient> => {
   return client;
 });
 
-export async function staffApiWithoutRedirect(session: StaffSession): Promise<SeedClient> {
+/** Who a backend call is made as: a signed staff token, or dev headers when no secret is set (dev and demo only). */
+export async function staffIdentity(session: StaffSession): Promise<SeedIdentity> {
   const secrets = env.staffTokenSecrets;
   const claims = { type: "staff", id: session.staffId, roles: session.roles, authTime: session.startedAt } as const;
-  return createSeedClient({
-    baseUrl: env.SEED_API_URL,
-    identity: secrets
-      ? { kind: "actor", token: await signActorToken(secrets, claims) }
-      : { kind: "staff", staffId: session.staffId, roles: session.roles },
-  });
+  return secrets
+    ? { kind: "actor", token: await signActorToken(secrets, claims) }
+    : { kind: "staff", staffId: session.staffId, roles: session.roles };
+}
+
+export async function staffApiWithoutRedirect(session: StaffSession): Promise<SeedClient> {
+  return createSeedClient({ baseUrl: env.SEED_API_URL, identity: await staffIdentity(session) });
 }
 
 /** The staff login and account routes. Their token is the desk's alone: the member app can't reach them. */

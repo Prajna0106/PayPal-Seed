@@ -1,0 +1,297 @@
+openapi: 3.1.0
+info:
+  title: PayPal Seed Partner API
+  version: 2.0.0
+  summary: Verify a member's Seed credit record and read the public safety-fund summary.
+  description: |
+    PayPal Seed is savings and fair microloans built into PayPal. This is the **partner** slice of the Seed API:
+    the three routes that need no sign-in.
+
+    - **Verify a credit record.** A member shares a link from their Seed app. A partner lender reads the token in
+      that link and asks Seed whether it is genuine, current and what it says.
+    - **Read the safety-fund summary.** Public totals for the community safety fund.
+    - **Start a donation.** Get the `customId` to put on a PayPal order or Donate button.
+
+    The sandbox server holds demo data only. No real money moves.
+
+    ## Conventions
+    - Money is integer cents in USD. `125000` means $1,250.00.
+    - Dates are business dates in America/Los_Angeles, written `YYYY-MM-DD`. Timestamps are UTC (RFC 3339).
+    - Errors are RFC 9457 `application/problem+json` with a stable `type` (`https://problems.paypal-seed.dev/{code}`)
+      and the same `code` property. Branch on `code`, not on the message.
+    - The responses never contain a name, email, payer id, loan amount or member id.
+
+    ## Rate limit
+    Each client address may make a limited number of requests per minute across the three routes (ADR 0030).
+    Past the limit the API answers `429` with a `Retry-After` header in seconds. Wait that long, then retry.
+  contact:
+    name: PayPal Seed developer support
+    url: https://github.com/airajena/PayPal-Seed
+  license:
+    name: See repository LICENSE
+    url: https://github.com/airajena/PayPal-Seed/blob/main/LICENSE
+servers:
+  - url: https://seed-api-4hui.onrender.com
+    description: Sandbox (demo data, no real money). The free host may need up to a minute to wake after idle.
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: record-public
+    description: Verify a credit record a member chose to share. No sign-in; the token is the credential.
+  - name: reserve
+    description: The community safety fund. Public totals and donation intents. No sign-in.
+paths:
+  /api/v1/records/verify/{token}:
+    get:
+      tags: [record-public]
+      operationId: verifyRecord
+      summary: Verify a shared credit record
+      description: |
+        Returns only what the member chose to share: level, since date, loans repaid on plan, loans completed with
+        safety-fund help, an on-time band, when the link was issued and when it expires, and a `valid` flag.
+        `valid` is false when the member has had a default since the snapshot was taken, so a partner does not rely
+        on an out-of-date answer.
+
+        Unknown, expired, revoked and tampered tokens all return the same generic 404 `record-not-found`; nothing
+        says which. The response never contains a name, an email, a payer id, a loan amount or a member id. It may
+        be cached for 5 seconds. The app limits each client address (429 `rate-limited`, ADR 0030).
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The token from the member's share link, the last path segment of `/app/record/...`. Pass it as is.
+          schema: { type: string, maxLength: 400 }
+          example: v1.k1.AAAA.BBBB
+      responses:
+        '200':
+          description: Verified
+          headers:
+            Cache-Control: { schema: { type: string }, description: 'public, max-age=5' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifiedRecord' }
+              examples:
+                summary:
+                  summary: Member shared a summary
+                  value:
+                    valid: true
+                    level: STEADY
+                    since: '2026-01-01'
+                    loansRepaidOnPlan: 2
+                    loansCompletedWithFundHelp: 0
+                    onTimeBand: '95-100%'
+                    issuedAt: '2026-11-08T17:00:00Z'
+                    expiresAt: '2026-11-15T17:00:00Z'
+                levelOnly:
+                  summary: Member shared the level only
+                  value:
+                    valid: true
+                    level: BUILDING
+                    issuedAt: '2026-11-08T17:00:00Z'
+                    expiresAt: '2026-11-15T17:00:00Z'
+                defaultSince:
+                  summary: A default happened after the snapshot
+                  value:
+                    valid: false
+                    level: TRUSTED
+                    since: '2025-03-01'
+                    loansRepaidOnPlan: 4
+                    loansCompletedWithFundHelp: 1
+                    onTimeBand: '85-94%'
+                    issuedAt: '2026-11-01T09:30:00Z'
+                    expiresAt: '2026-11-08T09:30:00Z'
+        '404':
+          description: record-not-found. Unknown, expired, revoked or tampered token; the answer is the same for all four.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://problems.paypal-seed.dev/record-not-found
+                title: No such record
+                status: 404
+                detail: No such record
+                instance: /api/v1/records/verify
+                code: record-not-found
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503':
+          description: dependency-unavailable (no signing key is configured). Retry later.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://problems.paypal-seed.dev/dependency-unavailable
+                title: Service unavailable
+                status: 503
+                detail: Record verification is not available right now.
+                instance: /api/v1/records/verify
+                code: dependency-unavailable
+
+  /api/v1/reserve/summary:
+    get:
+      tags: [reserve]
+      operationId: getReserveSummary
+      summary: Read the safety-fund summary
+      description: |
+        Exposure is the sum of outstanding balances of loans, kept up to date from lending events. The coverage
+        ratio is `balanceCents / openExposureCents` in basis points (10000 means the fund could repay every open
+        loan once); it is null when there is no exposure. The response may be cached for 30 seconds.
+      security: []
+      responses:
+        '200':
+          description: Summary
+          headers:
+            Cache-Control: { schema: { type: string }, description: 'public, max-age=30' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReserveSummary' }
+              examples:
+                active:
+                  summary: A fund with donations and open loans
+                  value: { balanceCents: 125000, totalDonatedCents: 175000, donationCount: 31, totalPaidOutCents: 50000, membersCovered: 3, openExposureCents: 900000, coverageRatioBps: 1388, supporters: [Maria, Tom], asOf: '2026-11-10' }
+                noExposure:
+                  summary: No open loans, so no coverage ratio
+                  value: { balanceCents: 20000, totalDonatedCents: 20000, donationCount: 4, totalPaidOutCents: 0, membersCovered: 0, openExposureCents: 0, coverageRatioBps: null, supporters: [], asOf: '2026-11-10' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/reserve/donations/intent:
+    post:
+      tags: [reserve]
+      operationId: createDonationIntent
+      summary: Start a donation
+      description: |
+        Public. The server remembers whether the donor wants their display name shown (default: anonymous) and
+        returns a `customId` of the form `reserve-donation:{uuid}`. The web page passes it to PayPal as
+        `custom_id`; the capture webhook carries it back. No PayPal credential is returned. The same
+        `Idempotency-Key` with the same body returns the same `customId`. The same key with a different body
+        returns 409 `idempotency-key-reused`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationIntentRequest' }
+            examples:
+              named:
+                summary: Show the donor's first name on the public summary
+                value: { anonymous: false, displayName: Maria }
+              anonymous:
+                summary: Stay anonymous (the default)
+                value: { anonymous: true }
+      responses:
+        '201':
+          description: Intent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationIntent' }
+              example: { intentId: 0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10, customId: 'reserve-donation:0197f3a4-1b2c-7d3e-8f40-5a6b7c8d9e10' }
+        '400':
+          description: validation-failed. The body is not valid, or the Idempotency-Key header is missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://problems.paypal-seed.dev/validation-failed
+                title: Invalid request
+                status: 400
+                detail: displayName must be at most 40 characters
+                instance: /api/v1/reserve/donations/intent
+                code: validation-failed
+        '409':
+          description: idempotency-key-reused. The key was already used with a different body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://problems.paypal-seed.dev/idempotency-key-reused
+                title: Idempotency key reused
+                status: 409
+                detail: This Idempotency-Key was used with a different request body.
+                instance: /api/v1/reserve/donations/intent
+                code: idempotency-key-reused
+        '429': { $ref: '#/components/responses/RateLimited' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A unique value for this user action, for example a UUID. Retrying with the same key and body is safe and returns the same result.
+      schema: { type: string, maxLength: 128 }
+      example: 6f1c2b7e-3d4a-4e5f-9a10-b2c3d4e5f607
+  responses:
+    RateLimited:
+      description: rate-limited. Too many requests from this address. Wait `Retry-After` seconds, then retry.
+      headers:
+        Retry-After: { schema: { type: integer }, description: Seconds to wait }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://problems.paypal-seed.dev/rate-limited
+            title: Too many requests
+            status: 429
+            detail: Too many requests. Try again shortly.
+            instance: /api/v1/reserve/summary
+            code: rate-limited
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem. Branch on `code`.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, examples: ['https://problems.paypal-seed.dev/loan-not-found'] }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    RecordLevel:
+      type: string
+      enum: [NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY]
+      description: 'The member''s credit-record level, lowest to highest: NEW, BUILDING, STEADY, TRUSTED, EXEMPLARY.'
+    OnTimeBand:
+      type: string
+      enum: ['below 70%', '70-84%', '85-94%', '95-100%']
+      description: The on-time share of saving months and instalments, as a band
+    VerifiedRecord:
+      type: object
+      required: [valid, level, issuedAt, expiresAt]
+      description: Fields beyond `level` appear only when the member chose a wider `detail`.
+      properties:
+        valid: { type: boolean }
+        level: { $ref: '#/components/schemas/RecordLevel' }
+        since: { type: string, format: date, description: 'First day of the month the record began (SUMMARY and FULL)' }
+        loansRepaidOnPlan: { type: integer, minimum: 0, description: 'SUMMARY and FULL' }
+        loansCompletedWithFundHelp: { type: integer, minimum: 0, description: 'SUMMARY and FULL. Loans the community safety fund paid in full; they are not in loansRepaidOnPlan. A count only: it says nothing about why help was needed.' }
+        onTimeBand: { $ref: '#/components/schemas/OnTimeBand' }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    ReserveSummary:
+      type: object
+      required: [balanceCents, totalDonatedCents, donationCount, totalPaidOutCents, membersCovered, openExposureCents, coverageRatioBps, supporters, asOf]
+      properties:
+        balanceCents: { type: integer, minimum: 0 }
+        totalDonatedCents: { type: integer, minimum: 0 }
+        donationCount: { type: integer, minimum: 0, description: 'Gifts received, one per PayPal capture. A repeat donor counts each time: Seed keeps no donor identity to deduplicate on.' }
+        totalPaidOutCents: { type: integer, minimum: 0, description: Paid to loans on behalf of members }
+        membersCovered: { type: integer, minimum: 0 }
+        openExposureCents: { type: integer, minimum: 0, description: Outstanding balance of all open loans }
+        coverageRatioBps: { type: [integer, 'null'], minimum: 0, description: 'balance over exposure in basis points; null without exposure' }
+        supporters: { type: array, maxItems: 10, items: { type: string }, description: Display names of the latest donors who opted in; never an email or amount }
+        asOf: { type: string, format: date }
+      example: { balanceCents: 125000, totalDonatedCents: 175000, donationCount: 31, totalPaidOutCents: 50000, membersCovered: 3, openExposureCents: 900000, coverageRatioBps: 1388, supporters: [Maria, Tom], asOf: '2026-11-10' }
+    DonationIntentRequest:
+      type: object
+      properties:
+        anonymous: { type: boolean, default: true }
+        displayName: { type: string, maxLength: 40, description: Shown on the public summary only when anonymous is false }
+    DonationIntent:
+      type: object
+      required: [intentId, customId]
+      properties:
+        intentId: { type: string, format: uuid }
+        customId: { type: string, pattern: '^reserve-donation:[0-9a-f-]{36}$', description: Pass to PayPal as custom_id }

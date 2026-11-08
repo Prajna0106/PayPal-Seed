@@ -11,7 +11,7 @@ export function ProofStrip() {
         {PROOF_POINTS.map((point, index) => (
           <RevealItem
             key={point.label}
-            className={`flex flex-col-reverse gap-1 ${index === PROOF_POINTS.length - 1 ? "col-span-2 sm:col-span-1" : ""}`}
+            className={`flex flex-col-reverse justify-end gap-1 ${index === PROOF_POINTS.length - 1 ? "col-span-2 sm:col-span-1" : ""}`}
           >
             <dt className="text-sm leading-snug text-body">{point.label}</dt>
             <dd className="text-display-md text-ink tabular-nums">{point.value}</dd>

@@ -1,10 +1,9 @@
 import { GradientOrb } from "@paypal-seed/ui/brand/gradient-orb";
 import { Wordmark } from "@paypal-seed/ui/brand/wordmark";
 import { Button } from "@paypal-seed/ui/components/button";
-import { Separator } from "@paypal-seed/ui/components/separator";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AnaStoryForm, MemberIdForm } from "@/features/auth/components/sign-in-forms";
+import { JudgeAccess } from "@/features/auth/components/judge-access";
 import { env } from "@/server/env";
 
 export const metadata: Metadata = { title: "Log in" };
@@ -25,41 +24,37 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const message = error ? (LOGIN_ERRORS[error] ?? LOGIN_ERRORS.unavailable) : null;
 
   return (
-    <main className="relative isolate grid min-h-dvh place-items-center overflow-hidden px-6 py-16">
+    <main className="relative isolate grid min-h-dvh place-items-center overflow-hidden px-6 py-12">
       <GradientOrb tone="peach" blend="lavender" className="-top-32 -left-24 -z-10 size-[34rem]" />
       <GradientOrb tone="mint" blend="sky" className="-right-32 -bottom-40 -z-10 size-[30rem]" />
-      <div className="flex w-full max-w-md flex-col gap-8">
-        <Link href="/" className="self-start" aria-label="PayPal Seed home">
-          <Wordmark />
-        </Link>
-        <div className="flex flex-col gap-2">
-          <h1 className="text-display-lg text-ink">Welcome to Seed</h1>
-          <p className="text-body">Log in with your PayPal account to see your savings and loans.</p>
-        </div>
-        <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
-          {message ? (
-            <p role="alert" className="text-sm text-danger">
-              {message}
-            </p>
-          ) : null}
-          {/* A plain link on purpose: a prefetch would start a login nobody asked for. */}
-          <Button asChild size="lg" className="w-full">
-            <a href="/api/auth/paypal/start">Log in with PayPal</a>
-          </Button>
-        </section>
-        {env.demoLogin ? (
-          <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-medium text-ink">Or try the demo as Ana, home baker</h2>
-              <p className="text-sm text-body">
-                Saved $75 a month, borrowed $1,200 for a mixer. This month her sales dropped by half.
+      <div
+        className={
+          env.judgeAccess
+            ? "grid w-full max-w-5xl items-center gap-10 lg:grid-cols-[minmax(0,26rem)_1fr] lg:gap-16"
+            : "w-full max-w-md"
+        }
+      >
+        <div className="flex flex-col gap-8">
+          <Link href="/" className="self-start" aria-label="PayPal Seed home">
+            <Wordmark />
+          </Link>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-display-lg text-ink">Welcome to Seed</h1>
+            <p className="text-body">Log in with your PayPal account to see your savings and loans.</p>
+          </div>
+          <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-surface p-6 shadow-soft">
+            {message ? (
+              <p role="alert" className="text-sm text-danger">
+                {message}
               </p>
-            </div>
-            <AnaStoryForm />
-            <Separator />
-            <MemberIdForm />
+            ) : null}
+            {/* A plain link on purpose: a prefetch would start a login nobody asked for. */}
+            <Button asChild size="lg" className="w-full">
+              <a href="/api/auth/paypal/start">Log in with PayPal</a>
+            </Button>
           </section>
-        ) : null}
+        </div>
+        {env.judgeAccess ? <JudgeAccess /> : null}
       </div>
     </main>
   );

@@ -805,7 +805,7 @@ export interface paths {
          *
          *     Unknown, expired, revoked and tampered tokens all return the same generic 404 `record-not-found`; nothing
          *     says which. The response never contains a name, an email, a payer id, a loan amount or a member id. It may
-         *     be cached for 5 seconds. Put a rate limit in front of this route.
+         *     be cached for 5 seconds. The app limits each client address (429 `rate-limited`, ADR 0030).
          */
         get: operations["verifyRecord"];
         put?: never;
@@ -4886,6 +4886,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description rate-limited (too many requests from this address; see Retry-After) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description dependency-unavailable (no signing key is configured) */
             503: {
                 headers: {
@@ -4953,6 +4964,17 @@ export interface operations {
             /** @description record-not-found */
             404: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description rate-limited (too many requests from this address; see Retry-After) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5178,6 +5200,17 @@ export interface operations {
                     "application/json": components["schemas"]["ReserveSummary"];
                 };
             };
+            /** @description rate-limited (too many requests from this address; see Retry-After) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     createDonationIntent: {
@@ -5214,6 +5247,17 @@ export interface operations {
             /** @description idempotency-key-reused */
             409: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description rate-limited (too many requests from this address; see Retry-After) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
