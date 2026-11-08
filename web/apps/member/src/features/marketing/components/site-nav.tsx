@@ -34,6 +34,12 @@ export function SiteNav() {
         </ul>
 
         <div className="flex items-center justify-end gap-1.5">
+          <Link
+            href="/developers"
+            className="hidden h-10 items-center rounded-full px-3.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-strong hover:text-ink sm:inline-flex"
+          >
+            Developers
+          </Link>
           <a
             href={DESK_URL}
             className="hidden h-10 items-center rounded-full px-3.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-strong hover:text-ink sm:inline-flex"
@@ -64,6 +70,12 @@ export function SiteNav() {
                   </li>
                 ))}
                 <li className="mt-1 border-t border-hairline-soft pt-1">
+                  <Link
+                    href="/developers"
+                    className="flex min-h-11 items-center rounded-xl px-3 text-[15px] text-ink hover:bg-surface-strong"
+                  >
+                    Developers
+                  </Link>
                   <a
                     href={DESK_URL}
                     className="flex min-h-11 items-center rounded-xl px-3 text-[15px] text-ink hover:bg-surface-strong"

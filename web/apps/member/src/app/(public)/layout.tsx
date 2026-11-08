@@ -14,9 +14,14 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           <Link href="/" aria-label="PayPal Seed home">
             <Wordmark />
           </Link>
-          <Link href="/fund" className="text-sm text-body transition-colors hover:text-ink">
-            Safety fund
-          </Link>
+          <nav aria-label="Public" className="flex items-center gap-5">
+            <Link href="/developers" className="text-sm text-body transition-colors hover:text-ink">
+              Developers
+            </Link>
+            <Link href="/fund" className="text-sm text-body transition-colors hover:text-ink">
+              Safety fund
+            </Link>
+          </nav>
         </div>
       </header>
       <main id="main" className="mx-auto w-full max-w-4xl flex-1 px-6 py-10 sm:py-14">
