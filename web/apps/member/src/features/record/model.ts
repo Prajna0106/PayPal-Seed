@@ -6,6 +6,7 @@ export type HistoryItem = Schemas["HistoryItem"];
 export type ShareView = Schemas["ShareView"];
 export type ShareDetail = Schemas["ShareDetail"];
 export type VerifiedRecord = Schemas["VerifiedRecord"];
+export type TrustRecord = Schemas["TrustRecord"];
 
 export const LEVEL_NAME: Record<RecordLevel, string> = {
   NEW: "New",

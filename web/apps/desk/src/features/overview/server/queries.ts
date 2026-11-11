@@ -1,7 +1,13 @@
 import "server-only";
 
 import { unwrap } from "@paypal-seed/api-client";
-import type { CobRun, HardshipCaseStatus, HardshipQueueRow, KillSwitchState } from "@paypal-seed/api-client/types";
+import type {
+  CobRun,
+  DeskBriefing,
+  HardshipCaseStatus,
+  HardshipQueueRow,
+  KillSwitchState,
+} from "@paypal-seed/api-client/types";
 import { cache } from "react";
 import { CASE_STATUSES, STATUS_ORDER } from "@/features/hardship/model";
 import { approvalStage, caseDetail, queuePage } from "@/features/hardship/server/queries";
@@ -78,4 +84,10 @@ export async function recentCobRuns(limit = 7): Promise<CobRun[]> {
   const api = await staffApi();
   const runs = await unwrap(api.GET("/api/v1/desk/cob-runs", { params: { query: { from: "2000-01-01", to: "2099-12-31" } } }));
   return [...runs].sort((a, b) => (b.businessDate ?? "").localeCompare(a.businessDate ?? "")).slice(0, limit);
+}
+
+/** The analyst's morning briefing. Figures are deterministic; only the wording may come from the model. */
+export async function deskBriefing(): Promise<DeskBriefing> {
+  const api = await staffApi();
+  return unwrap(api.GET("/api/v1/desk/analyst/briefing"));
 }

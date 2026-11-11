@@ -26,6 +26,7 @@ export type HardshipChoice = Schemas["HardshipChoice"];
 export type HardshipQueueRow = Schemas["HardshipQueueRow"];
 export type HardshipCaseDetail = Schemas["HardshipCaseDetail"];
 export type KillSwitchState = Schemas["KillSwitchState"];
+export type DeskBriefing = Schemas["DeskBriefing"];
 export type Problem = Schemas["Problem"];
 
 /** Who a request is made as: a signed actor token (ADR 0016), or dev headers that only the dev and demo profiles read. */

@@ -16,6 +16,8 @@ dependencies {
     implementation(project(":modules:hardship"))
     implementation(project(":modules:underwriting"))
     implementation(project(":modules:governance"))
+    // Reads the fund summary (balance and coverage) through its facade, for the morning briefing.
+    implementation(project(":modules:reserve"))
     testImplementation("org.mockito:mockito-core")
     testImplementation(project(":platform:testing"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

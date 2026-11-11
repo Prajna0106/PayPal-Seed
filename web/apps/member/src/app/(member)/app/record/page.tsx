@@ -1,18 +1,23 @@
+import { isLocale, type Locale } from "@paypal-seed/i18n";
 import { PageHeader } from "@paypal-seed/ui/brand/page-header";
 import { Button } from "@paypal-seed/ui/components/button";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import { HistoryList } from "@/features/record/components/history-list";
 import { HardshipNote, NextLevel, RecordSummary } from "@/features/record/components/record-summary";
 import { ShareList } from "@/features/record/components/share-list";
 import { SharePanel } from "@/features/record/components/share-panel";
+import { TrustExplanation, TrustExplanationSkeleton } from "@/features/record/components/trust-explanation";
+import { trustWords } from "@/features/record/copy";
 import { getRecordPage } from "@/features/record/server/queries";
 
 export const metadata: Metadata = { title: "My record" };
 
-export default async function RecordPage() {
+export default async function RecordPage({ searchParams }: PageProps<"/app/record">) {
+  const query = await searchParams;
+  const locale: Locale = isLocale(query.lang) ? query.lang : "en";
   const { record, history, shares, sharingAllowed } = await getRecordPage();
 
   return (
@@ -31,6 +36,10 @@ export default async function RecordPage() {
       />
 
       <RecordSummary record={record} />
+
+      <Suspense fallback={<TrustExplanationSkeleton label={trustWords(locale).loading} />}>
+        <TrustExplanation locale={locale} />
+      </Suspense>
 
       <Section title="What comes next">
         <NextLevel record={record} />

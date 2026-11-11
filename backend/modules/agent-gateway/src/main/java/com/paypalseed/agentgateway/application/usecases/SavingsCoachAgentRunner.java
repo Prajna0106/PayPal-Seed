@@ -52,7 +52,7 @@ public class SavingsCoachAgentRunner implements SavingsCoachNarrator {
     private static final Logger log = LoggerFactory.getLogger(SavingsCoachAgentRunner.class);
     private static final int MAX_OUTPUT_TOKENS = 400;
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(10);
-    private static final Pattern DOLLAR_AMOUNT = Pattern.compile("\\$[0-9][0-9,]*(?:\\.[0-9]{1,2})?");
+    private static final Pattern DOLLAR_AMOUNT = NarrationGuard.DOLLAR_AMOUNT;
 
     private static final String SYSTEM_PROMPT = loadPrompt("/coach/prompts/v1/suggest.md");
     public static final String PROMPT_HASH = "sha256:" + sha256Hex(SYSTEM_PROMPT + "\u0000" + SCHEMA).substring(0, 16);

@@ -9,6 +9,8 @@ import com.paypalseed.deskquery.api.dto.DeskQueryDtos.StatusTotal;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.Workload;
 import com.paypalseed.deskquery.api.dto.DeskQueryDtos.WorkloadItem;
 import com.paypalseed.deskquery.domain.model.AgingBuckets;
+import com.paypalseed.deskquery.domain.model.DeskBriefingFigures;
+import com.paypalseed.deskquery.domain.model.DeskBriefingFigures.BucketCount;
 import com.paypalseed.deskquery.domain.model.ImpactFigures;
 import com.paypalseed.deskquery.domain.model.OnTimeRate;
 import com.paypalseed.deskquery.domain.model.SlaBucket;
@@ -70,5 +72,19 @@ public class PortfolioQueries {
                                 .mapToLong(WorkloadItem::waiting).sum()))
                 .toList();
         return new Workload(summaries.asOf().orElse(now), items, byRole);
+    }
+
+    /**
+     * What the morning briefing narrates, from the same projections as {@link #summary()} and {@link #workload()}, read in
+     * one snapshot so the counts agree with each other.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public DeskBriefingFigures briefingFigures() {
+        List<BucketCount> active = summaries.byAgingBucket().stream()
+                .map(b -> new BucketCount(b.bucket(), b.loans(), b.outstandingCents())).toList();
+        long overdue = summaries.workload(clock.now(), settings.dueSoonWindow()).stream()
+                .filter(i -> SlaBucket.OVERDUE.name().equals(i.slaBucket())).mapToLong(WorkloadItem::waiting).sum();
+        return DeskBriefingFigures.of(active, (int) Math.min(Integer.MAX_VALUE, summaries.openHardshipCases()),
+                summaries.oldestOpenHardshipCaseOn(), clock.today(), overdue);
     }
 }

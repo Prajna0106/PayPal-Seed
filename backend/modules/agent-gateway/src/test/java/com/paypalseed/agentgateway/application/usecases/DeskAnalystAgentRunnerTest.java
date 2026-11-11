@@ -70,6 +70,29 @@ class DeskAnalystAgentRunnerTest {
     }
 
     @Test
+    void acceptsFigureFollowedByCommaOrPeriod() {
+        // A live model wrote "$35,000, 2.05x coverage": the comma is punctuation, not part of the figure.
+        when(killSwitch.mode(DeskAnalystAgentRunner.AGENT)).thenReturn(Mode.LIVE);
+        when(models.complete(any())).thenReturn(new ModelResponse(
+            "test-model",
+            """
+            {
+              "executiveSummary": "Portfolio scale: 142 active loans, $170,400 outstanding. Reserve buffer: $35,000, 2.05x coverage.",
+              "queuePriorities": ["Review 4 pending cases"],
+              "riskObservations": ["Reserve of $35,000."],
+              "recommendedStaffingFocus": "Prioritize 4 pending cases."
+            }
+            """,
+            List.of(), 421, 152, 91L, 220L, "stop"
+        ));
+
+        DeskBriefingResult result = runner.brief(sampleInput());
+
+        assertThat(result.modelGenerated()).isTrue();
+        verify(runs).finish(runId, "PASSED", "MODEL", null);
+    }
+
+    @Test
     void rejectsHallucinatedPortfolioSumAndFallsBack() {
         when(killSwitch.mode(DeskAnalystAgentRunner.AGENT)).thenReturn(Mode.LIVE);
         when(models.complete(any())).thenReturn(new ModelResponse(

@@ -66,6 +66,12 @@ public class SummaryRepository {
         return dsl.fetchOne("select count(*) from deskquery.hardship_case_view where state = 'OPEN'").get(0, Long.class);
     }
 
+    /** When the oldest case still open was opened, or empty when none is open or none carries a date. */
+    public Optional<LocalDate> oldestOpenHardshipCaseOn() {
+        Record r = dsl.fetchOne("select min(opened_on) from deskquery.hardship_case_view where state = 'OPEN'");
+        return Optional.ofNullable(r.get(0, LocalDate.class));
+    }
+
     public List<OutcomeCount> hardshipOutcomes() {
         return dsl.fetch("select coalesce(closed_reason, 'UNSPECIFIED'), count(*) from deskquery.hardship_case_view "
                         + "where state = 'CLOSED' group by 1 order by 2 desc, 1")

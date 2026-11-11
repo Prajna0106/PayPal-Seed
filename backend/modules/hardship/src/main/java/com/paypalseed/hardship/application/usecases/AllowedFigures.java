@@ -7,6 +7,7 @@ import com.paypalseed.engines.rules.hardship.HardshipPolicy;
 import com.paypalseed.hardship.domain.model.CaseRow;
 import com.paypalseed.hardship.domain.model.OfferModel.OptionRow;
 import com.paypalseed.hardship.infrastructure.persistence.ScorecardRepository.StoredSignal;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -92,19 +93,35 @@ final class AllowedFigures {
     static boolean contains(Allowed a, String unit, Object value) {
         try {
             return switch (unit) {
-                case "USD_CENTS" -> a.moneyCents().contains(((Number) value).longValue());
+                case "USD_CENTS" -> a.moneyCents().contains(whole(value));
                 case "PERCENT" -> {
-                    int bps = ((Number) value).intValue() * 100;
-                    yield a.percentBps().stream().anyMatch(p -> Math.abs(p - bps) <= 50);
+                    // The model writes a percentage as text, often with decimals ("31.46"): compare it in basis points.
+                    BigDecimal bps = decimal(value).movePointRight(2);
+                    yield a.percentBps().stream().anyMatch(p -> bps.subtract(BigDecimal.valueOf(p)).abs().compareTo(PERCENT_TOLERANCE_BPS) <= 0);
                 }
-                case "DAYS" -> a.durationsDays().contains(((Number) value).intValue()) || a.counts().contains(((Number) value).intValue());
+                case "DAYS" -> a.durationsDays().contains(Math.toIntExact(whole(value))) || a.counts().contains(Math.toIntExact(whole(value)));
                 case "DATE" -> a.dates().contains(LocalDate.parse(value.toString()));
-                case "COUNT" -> a.counts().contains(((Number) value).intValue()) || a.durationsMonths().contains(((Number) value).intValue());
+                case "COUNT" -> a.counts().contains(Math.toIntExact(whole(value))) || a.durationsMonths().contains(Math.toIntExact(whole(value)));
                 default -> false;
             };
         } catch (RuntimeException e) {
             return false;
         }
+    }
+
+    private static final BigDecimal PERCENT_TOLERANCE_BPS = BigDecimal.valueOf(GroundingChecker.PERCENT_TOLERANCE_BPS);
+
+    /** A figure arrives as a JSON number or as text; thousands separators are punctuation. */
+    private static BigDecimal decimal(Object value) {
+        if (value instanceof Number n) {
+            return new BigDecimal(n.toString());
+        }
+        return new BigDecimal(value.toString().replace(",", "").trim());
+    }
+
+    /** Money, days and counts are whole numbers: "12.5" is not 12 or 13, it is ungrounded. */
+    private static long whole(Object value) {
+        return decimal(value).longValueExact();
     }
 
     static Map<String, String> optionNames() {

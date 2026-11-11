@@ -2138,7 +2138,7 @@ components:
         oldestCaseHours: { type: integer }
         slaBreachesCount: { type: integer }
         reserveBalanceCents: { type: integer }
-        reserveCoverageRatio: { type: number }
+        reserveCoverageRatio: { type: [number, 'null'], description: Fund balance over the open exposure; null when no loan needs cover }
         executiveSummary: { type: string }
         queuePriorities: { type: array, items: { type: string } }
         riskObservations: { type: array, items: { type: string } }
@@ -2150,10 +2150,10 @@ components:
       required: [memberId, currentTier, nextTier, currentLimitCents, nextLimitCents, onTimeRepaymentsCount, streakMonths, totalSavedCents, totalRepaidCents, summaryEn, summaryEs, certificateAttestation, milestoneAdvice, verificationHash, issuedAt, modelGenerated]
       properties:
         memberId: { type: string, format: uuid }
-        currentTier: { type: string }
-        nextTier: { type: string }
+        currentTier: { $ref: '#/components/schemas/RecordLevel' }
+        nextTier: { oneOf: [ { $ref: '#/components/schemas/RecordLevel' }, { type: 'null' } ], description: The next level of the record; null at the top level }
         currentLimitCents: { type: integer }
-        nextLimitCents: { type: integer }
+        nextLimitCents: { type: [integer, 'null'], description: The loan limit the next level unlocks; null at the top level }
         onTimeRepaymentsCount: { type: integer }
         streakMonths: { type: integer }
         totalSavedCents: { type: integer }

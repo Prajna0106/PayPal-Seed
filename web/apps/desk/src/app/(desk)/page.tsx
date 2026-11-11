@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import {
   AttentionSection,
+  BriefingSection,
   CobSection,
   KpiSection,
   KpiSkeleton,
@@ -36,6 +37,9 @@ export default async function OverviewPage() {
       />
       <Suspense fallback={<KpiSkeleton />}>
         <KpiSection />
+      </Suspense>
+      <Suspense fallback={<PanelSkeleton height="h-96" />}>
+        <BriefingSection />
       </Suspense>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Suspense fallback={<PanelSkeleton />}>

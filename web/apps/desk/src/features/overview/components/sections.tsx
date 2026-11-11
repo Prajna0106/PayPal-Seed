@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   Bot,
   ChevronRight,
+  FileText,
   FolderOpen,
+  ShieldCheck,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -27,12 +29,15 @@ import { CASE_STATUSES, RISK_LEVELS } from "@/features/hardship/model";
 import {
   agentState,
   casesByStatus,
+  deskBriefing,
   deskKpis,
   needsAttention,
   recentCobRuns,
 } from "../server/queries";
 import { CobRunsTable } from "./cob-runs-table";
 import { StatusChart } from "./status-chart";
+
+const ratio = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type Loaded<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -299,6 +304,100 @@ export async function CobSection() {
     >
       {content}
     </Panel>
+  );
+}
+
+function BriefingList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium text-ink">{title}</h3>
+      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-body">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Morning briefing. The wording is labelled AI-written only when the backend says the model wrote it (it passes the
+ * grounding check before it is returned); otherwise it is the template. Figures come from structured fields.
+ * A failed call hides the card: the overview works without it.
+ */
+export async function BriefingSection() {
+  const loaded = await load(deskBriefing);
+  if (!loaded.ok) {
+    return null;
+  }
+  const b = loaded.value;
+  const metrics: { label: string; value: ReactNode }[] = [
+    { label: "Active loans", value: b.activeLoansCount },
+    { label: "Outstanding", value: formatMoney(b.totalOutstandingCents) },
+    { label: "Healthy / at risk", value: `${b.healthyLoansCount} / ${b.atRiskLoansCount}` },
+    { label: "Cases to review", value: b.casesPendingReviewCount },
+    { label: "Oldest case", value: `${b.oldestCaseHours} h` },
+    { label: "SLA breaches", value: b.slaBreachesCount },
+    { label: "Reserve", value: formatMoney(b.reserveBalanceCents) },
+    {
+      label: "Reserve coverage",
+      value: b.reserveCoverageRatio === null ? "No cover needed" : `${ratio.format(b.reserveCoverageRatio)}x`,
+    },
+  ];
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1.5">
+            <CardTitle>Morning briefing</CardTitle>
+            <CardDescription>
+              Portfolio and queue as of <BusinessDate value={b.businessDate} dateStyle="long" />. Numbers come from
+              code; only the wording may come from the analyst agent.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone={b.modelGenerated ? "ink" : "neutral"} dot={false}>
+              <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
+                {b.modelGenerated ? <Bot aria-hidden="true" /> : <FileText aria-hidden="true" />}
+                {b.modelGenerated ? "Written by the analyst agent (AI)" : "Template"}
+              </span>
+            </StatusPill>
+            {b.modelGenerated ? (
+              <StatusPill tone="success" dot={false}>
+                <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
+                  <ShieldCheck aria-hidden="true" />
+                  Every figure grounded
+                </span>
+              </StatusPill>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          {metrics.map((m) => (
+            <div key={m.label} className="flex flex-col gap-0.5">
+              <dt className="text-xs text-muted-ink">{m.label}</dt>
+              <dd className="text-lg font-medium text-ink">{m.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="whitespace-pre-line text-[15px] leading-relaxed text-body">{b.executiveSummary}</p>
+        <div className="grid gap-6 md:grid-cols-2">
+          <BriefingList title="Queue priorities" items={b.queuePriorities} />
+          <BriefingList title="Risk observations" items={b.riskObservations} />
+        </div>
+        {b.recommendedStaffingFocus ? (
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-medium text-ink">Staffing focus</h3>
+            <p className="text-[15px] leading-relaxed text-body">{b.recommendedStaffingFocus}</p>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 

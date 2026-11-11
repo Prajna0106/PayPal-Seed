@@ -89,6 +89,13 @@ class HardshipUnitTest {
         assertThat(AllowedFigures.contains(officer, "USD_CENTS", 90_000)).isTrue();
         assertThat(AllowedFigures.contains(officer, "USD_CENTS", 90_001)).isFalse();
         assertThat(AllowedFigures.contains(officer, "PERCENT", 52)).isTrue();
+        // A live model lists a percentage as text with decimals; that must be judged, not thrown away as a bad type.
+        assertThat(AllowedFigures.contains(officer, "PERCENT", "52.00")).isTrue();
+        assertThat(AllowedFigures.contains(officer, "PERCENT", "52.4")).isTrue();
+        assertThat(AllowedFigures.contains(officer, "PERCENT", "53.1")).isFalse();
+        assertThat(AllowedFigures.contains(officer, "USD_CENTS", "90,000")).isTrue();
+        assertThat(AllowedFigures.contains(officer, "USD_CENTS", "900.50")).isFalse();
+        assertThat(AllowedFigures.contains(officer, "COUNT", "five")).isFalse();
         assertThat(AllowedFigures.contains(officer, "DATE", "2027-03-20")).isTrue();
         assertThat(AllowedFigures.contains(officer, "UNKNOWN_UNIT", 1)).isFalse();
 

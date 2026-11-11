@@ -2205,7 +2205,8 @@ export interface components {
             oldestCaseHours: number;
             slaBreachesCount: number;
             reserveBalanceCents: number;
-            reserveCoverageRatio: number;
+            /** @description Fund balance over the open exposure; null when no loan needs cover */
+            reserveCoverageRatio: number | null;
             executiveSummary: string;
             queuePriorities: string[];
             riskObservations: string[];
@@ -2215,10 +2216,12 @@ export interface components {
         TrustRecord: {
             /** Format: uuid */
             memberId: string;
-            currentTier: string;
-            nextTier: string;
+            currentTier: components["schemas"]["RecordLevel"];
+            /** @description The next level of the record; null at the top level */
+            nextTier: components["schemas"]["RecordLevel"] | null;
             currentLimitCents: number;
-            nextLimitCents: number;
+            /** @description The loan limit the next level unlocks; null at the top level */
+            nextLimitCents: number | null;
             onTimeRepaymentsCount: number;
             streakMonths: number;
             totalSavedCents: number;

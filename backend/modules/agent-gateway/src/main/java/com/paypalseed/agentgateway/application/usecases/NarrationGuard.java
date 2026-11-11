@@ -21,6 +21,12 @@ final class NarrationGuard {
             + "|without\\s+(?:a\\s+|an\\s+|the\\s+)?(?:officer\\s+|second\\s+)?(?:review|check)",
         Pattern.CASE_INSENSITIVE);
 
+    /**
+     * A dollar figure as the prompts write it: "$35,000" or "$1,200.50". Thousands groups must be exactly three digits, so
+     * the comma in "$35,000, 2.05x coverage" is punctuation, not part of the figure.
+     */
+    static final Pattern DOLLAR_AMOUNT = Pattern.compile("\\$[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?");
+
     private NarrationGuard() {
     }
 

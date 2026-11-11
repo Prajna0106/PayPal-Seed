@@ -54,7 +54,7 @@ public class UnderwritingAgentRunner implements FairCheckNarrator {
     private static final Logger log = LoggerFactory.getLogger(UnderwritingAgentRunner.class);
     private static final int MAX_OUTPUT_TOKENS = 600;
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(12);
-    private static final Pattern DOLLAR_AMOUNT = Pattern.compile("\\$[0-9][0-9,]*(?:\\.[0-9]{1,2})?");
+    private static final Pattern DOLLAR_AMOUNT = NarrationGuard.DOLLAR_AMOUNT;
 
     private static final String SYSTEM_PROMPT = loadPrompt("/underwriting/prompts/v1/explain.md");
     public static final String PROMPT_HASH = "sha256:" + sha256Hex(SYSTEM_PROMPT + "\u0000" + SCHEMA).substring(0, 16);

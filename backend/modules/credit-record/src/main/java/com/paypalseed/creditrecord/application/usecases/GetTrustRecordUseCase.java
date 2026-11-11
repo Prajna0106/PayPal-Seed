@@ -1,29 +1,50 @@
 package com.paypalseed.creditrecord.application.usecases;
 
+import com.paypalseed.creditrecord.api.TrustRecordFigures;
+import com.paypalseed.creditrecord.api.TrustRecordFigures.MemberFigures;
 import com.paypalseed.creditrecord.api.TrustRecordNarrator;
 import com.paypalseed.creditrecord.api.TrustRecordNarrator.TrustNarrationInput;
 import com.paypalseed.creditrecord.api.TrustRecordNarrator.TrustNarrationResult;
+import com.paypalseed.creditrecord.api.dto.CreditRecordDtos.RecordView;
+import com.paypalseed.engines.rules.record.RecordLevel;
 import com.paypalseed.platform.kernel.BusinessClock;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/**
+ * The signed-in member's trust record: their own credit-record level and counts (ADR 0014), with the saving and repayment
+ * totals the wiring module reads from savings and lending, in the member's words. The caller passes the member from the
+ * session and nothing here takes another id, so one member's figures can never carry another's. The narrator may only
+ * reword; the figures and the verification hash come from code.
+ */
 @Service
 public class GetTrustRecordUseCase {
 
+    /** What the narrator is told when the member is already at the top level and there is no next one. */
+    static final String NO_NEXT_TIER = "NONE";
+
     private final TrustRecordNarrator narrator;
+    private final RecordQueries records;
+    private final TrustRecordFigures figures;
     private final BusinessClock clock;
 
+    /**
+     * {@code currentTier} and {@code nextTier} are the record's own level names ({@code NEW} to {@code EXEMPLARY});
+     * {@code nextTier} and {@code nextLimitCents} are null at the top level. {@code onTimeRepaymentsCount} counts instalments
+     * paid on time over the whole record.
+     */
     public record TrustRecordResponse(
         UUID memberId,
         String currentTier,
         String nextTier,
         long currentLimitCents,
-        long nextLimitCents,
+        Long nextLimitCents,
         int onTimeRepaymentsCount,
         int streakMonths,
         long totalSavedCents,
@@ -37,51 +58,56 @@ public class GetTrustRecordUseCase {
         boolean modelGenerated
     ) {}
 
-    public GetTrustRecordUseCase(@Autowired(required = false) TrustRecordNarrator narrator, BusinessClock clock) {
+    public GetTrustRecordUseCase(@Autowired(required = false) TrustRecordNarrator narrator, RecordQueries records,
+                                 TrustRecordFigures figures, BusinessClock clock) {
         this.narrator = narrator;
+        this.records = records;
+        this.figures = figures;
         this.clock = clock;
     }
 
     public TrustRecordResponse getTrustRecord(UUID memberId) {
         String today = clock.today().toString();
-        String currentTier = "LEVEL_1";
-        String nextTier = "LEVEL_2";
-        long currentLimit = 120000L;
-        long nextLimit = 240000L;
-        int onTimeRepayments = 8;
-        int streakMonths = 4;
-        long totalSaved = 30000L;
-        long totalRepaid = 120000L;
+        RecordView view = records.record(memberId);
+        MemberFigures money = figures.of(memberId);
+        RecordLevel level = RecordLevel.valueOf(view.level());
+        Optional<RecordLevel> next = level.next();
 
-        String templateSummaryEn = "You are currently at Level 1 with 8 on-time repayments and $300 in verified savings. Unlocking Level 2 increases your credit limit to $2,400.";
-        String templateSummaryEs = "Actualmente estás en el Nivel 1 con 8 pagos puntuales y $300 en ahorros verificados. El Nivel 2 aumentará tu límite de crédito a $2,400.";
-        String templateAttestation = "Community Credit Standing: Member has completed 8 consecutive on-time repayments totaling $1,200 with zero default events.";
-        String templateAdvice = "Complete your current microloan repayment schedule to graduate to Level 2 ($2,400 limit).";
+        String currentTier = level.name();
+        String nextTier = next.map(RecordLevel::name).orElse(null);
+        long currentLimit = level.loanLimitCents();
+        Long nextLimit = next.map(RecordLevel::loanLimitCents).orElse(null);
+        int onTimeRepayments = view.instalments().onTime();
+
+        TrustTemplates template = TrustTemplates.of(view, money.savingStreakMonths(), money.totalSavedCents(),
+            money.totalRepaidCents());
 
         TrustNarrationInput input = new TrustNarrationInput(
             memberId.toString(),
             currentTier,
-            nextTier,
+            nextTier == null ? NO_NEXT_TIER : nextTier,
             currentLimit,
-            nextLimit,
+            nextLimit == null ? currentLimit : nextLimit,
             onTimeRepayments,
-            streakMonths,
-            totalSaved,
-            totalRepaid,
-            templateSummaryEn,
-            templateSummaryEs,
-            templateAttestation,
-            templateAdvice
+            money.savingStreakMonths(),
+            money.totalSavedCents(),
+            money.totalRepaidCents(),
+            template.summaryEn(),
+            template.summaryEs(),
+            template.attestation(),
+            template.advice()
         );
 
         TrustNarrationResult result;
         if (narrator != null) {
             result = narrator.narrate(input);
         } else {
-            result = new TrustNarrationResult(templateSummaryEn, templateSummaryEs, templateAttestation, templateAdvice, false);
+            result = new TrustNarrationResult(template.summaryEn(), template.summaryEs(), template.attestation(),
+                template.advice(), false);
         }
 
-        String rawFacts = memberId + ":" + currentTier + ":" + currentLimit + ":" + onTimeRepayments + ":" + totalRepaid + ":" + today;
+        String rawFacts = memberId + ":" + currentTier + ":" + currentLimit + ":" + onTimeRepayments + ":"
+            + money.savingStreakMonths() + ":" + money.totalSavedCents() + ":" + money.totalRepaidCents() + ":" + today;
         String verificationHash = sha256Hex(rawFacts);
 
         return new TrustRecordResponse(
@@ -91,9 +117,9 @@ public class GetTrustRecordUseCase {
             currentLimit,
             nextLimit,
             onTimeRepayments,
-            streakMonths,
-            totalSaved,
-            totalRepaid,
+            money.savingStreakMonths(),
+            money.totalSavedCents(),
+            money.totalRepaidCents(),
             result.summaryEn(),
             result.summaryEs(),
             result.certificateAttestation(),
