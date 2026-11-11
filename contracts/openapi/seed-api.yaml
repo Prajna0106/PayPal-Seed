@@ -3091,10 +3091,11 @@ components:
     FairCheckCard:
       type: object
       description: |
-        The fair loan check as the member and the officer read it. Every figure is computed by the engine; the
-        sentences in `plainLanguageReasons` and `officerQuestions` come from fixed templates over those figures.
-        There is no credit score on the card.
-      required: [assessmentId, memberId, purpose, recommended, requestedAmountCents, requestedTermMonths, suggestedLoanCents, suggestedTermMonths, suggestedMonthlyInstalmentCents, plainLanguageReasons, usedData, neverUsedData, memberDisputed, officerDecision, createdAt]
+        The fair loan check as the member and the officer read it. Every figure is computed by the engine. The
+        sentences in `plainLanguageReasons` and `officerQuestions` are written by the underwriting agent only when
+        `modelGenerated` is true, and only after the grounding check passed; otherwise they are fixed templates
+        over those figures. There is no credit score on the card.
+      required: [assessmentId, memberId, purpose, recommended, requestedAmountCents, requestedTermMonths, suggestedLoanCents, suggestedTermMonths, suggestedMonthlyInstalmentCents, plainLanguageReasons, usedData, neverUsedData, modelGenerated, memberDisputed, officerDecision, createdAt]
       properties:
         assessmentId: { type: string, format: uuid }
         memberId: { type: string, format: uuid }
@@ -3123,6 +3124,7 @@ components:
         officerQuestions: { type: array, items: { type: string } }
         usedData: { type: array, items: { type: string } }
         neverUsedData: { type: array, items: { type: string } }
+        modelGenerated: { type: boolean, description: True when the underwriting agent wrote the reasons and officer questions; false when they are the fixed templates }
         memberDisputed: { type: boolean }
         memberDisputeNote: { type: [string, 'null'] }
         officerDecision: { $ref: '#/components/schemas/OfficerDecisionType' }

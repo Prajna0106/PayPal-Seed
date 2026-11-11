@@ -294,7 +294,15 @@ public class FairLoanCheckService {
                 reasons.add(bannerPrefix + " \"" + disputeNote + "\" — flagged for manual loan-officer conversation.");
             }
         }
-        assessment.withGroundedNarration(reasons, narrated.officerQuestions());
+        // The runner hands the fallback sentences back unchanged when the model is off, unavailable or fails grounding.
+        // Only text that differs from what was sent in is model output.
+        boolean modelWritten = !narrated.plainLanguageReasons().equals(r.plainLanguageReasons())
+            || !narrated.officerQuestions().equals(r.officerQuestions());
+        if (modelWritten) {
+            assessment.withGroundedNarration(reasons, narrated.officerQuestions());
+        } else {
+            assessment.withTemplateWording(reasons, narrated.officerQuestions());
+        }
     }
 
     public FairCheckCardView recordOfficerDecision(
@@ -416,6 +424,7 @@ public class FairLoanCheckService {
             r.officerQuestions(),
             r.usedData(),
             r.neverUsedData(),
+            a.isNarratedByModel(),
             a.isMemberDisputed(),
             a.getMemberDisputeNote(),
             a.getOfficerDecision().name(),

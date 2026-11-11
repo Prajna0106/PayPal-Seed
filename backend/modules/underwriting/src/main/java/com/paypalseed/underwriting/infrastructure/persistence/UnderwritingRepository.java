@@ -133,6 +133,7 @@ public class UnderwritingRepository {
             .set(FAIR_LOAN_CHECK_ASSESSMENT.OFFICER_QUESTIONS, toJsonb(r.officerQuestions()))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.USED_DATA, toJsonb(r.usedData()))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.NEVER_USED_DATA, toJsonb(r.neverUsedData()))
+            .set(FAIR_LOAN_CHECK_ASSESSMENT.NARRATED_BY_MODEL, a.isNarratedByModel())
             .set(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTED, a.isMemberDisputed())
             .set(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTE_NOTE, a.getMemberDisputeNote())
             .set(FAIR_LOAN_CHECK_ASSESSMENT.DISPUTED_AT, a.getDisputedAt())
@@ -146,6 +147,7 @@ public class UnderwritingRepository {
             .onConflict(FAIR_LOAN_CHECK_ASSESSMENT.ID).doUpdate()
             .set(FAIR_LOAN_CHECK_ASSESSMENT.PLAIN_LANGUAGE_REASONS, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.PLAIN_LANGUAGE_REASONS))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.OFFICER_QUESTIONS, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.OFFICER_QUESTIONS))
+            .set(FAIR_LOAN_CHECK_ASSESSMENT.NARRATED_BY_MODEL, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.NARRATED_BY_MODEL))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTED, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTED))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTE_NOTE, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.MEMBER_DISPUTE_NOTE))
             .set(FAIR_LOAN_CHECK_ASSESSMENT.DISPUTED_AT, DSL.excluded(FAIR_LOAN_CHECK_ASSESSMENT.DISPUTED_AT))
@@ -242,6 +244,7 @@ public class UnderwritingRepository {
             r.getModelVersion(),
             r.getCreatedAt()
         );
+        a.restoreNarratedByModel(Boolean.TRUE.equals(r.getNarratedByModel()));
         a.restoreReviewState(
             Boolean.TRUE.equals(r.getMemberDisputed()),
             r.getMemberDisputeNote(),

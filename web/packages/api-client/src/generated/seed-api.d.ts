@@ -3392,9 +3392,10 @@ export interface components {
         /** @enum {string} */
         OfficerDecisionType: "PENDING" | "APPROVED" | "ADJUSTED" | "DECLINED";
         /**
-         * @description The fair loan check as the member and the officer read it. Every figure is computed by the engine; the
-         *     sentences in `plainLanguageReasons` and `officerQuestions` come from fixed templates over those figures.
-         *     There is no credit score on the card.
+         * @description The fair loan check as the member and the officer read it. Every figure is computed by the engine. The
+         *     sentences in `plainLanguageReasons` and `officerQuestions` are written by the underwriting agent only when
+         *     `modelGenerated` is true, and only after the grounding check passed; otherwise they are fixed templates
+         *     over those figures. There is no credit score on the card.
          */
         FairCheckCard: {
             /** Format: uuid */
@@ -3436,6 +3437,8 @@ export interface components {
             officerQuestions?: string[];
             usedData: string[];
             neverUsedData: string[];
+            /** @description True when the underwriting agent wrote the reasons and officer questions; false when they are the fixed templates */
+            modelGenerated: boolean;
             memberDisputed: boolean;
             memberDisputeNote?: string | null;
             officerDecision: components["schemas"]["OfficerDecisionType"];

@@ -30,6 +30,7 @@ public class FairLoanCheckAssessment {
     private FairCheckResult result;
     private final String modelVersion;
     private final Instant createdAt;
+    private boolean narratedByModel;
 
     private boolean memberDisputed;
     private String memberDisputeNote;
@@ -85,6 +86,10 @@ public class FairLoanCheckAssessment {
         this.decidedAt = decidedAt;
     }
 
+    public void restoreNarratedByModel(boolean narratedByModel) {
+        this.narratedByModel = narratedByModel;
+    }
+
     public static FairLoanCheckAssessment create(
         UUID memberId,
         UUID applicationId,
@@ -119,10 +124,25 @@ public class FairLoanCheckAssessment {
     /**
      * Replaces the plain-language explanation and officer questions with grounded AI narration
      * while keeping every computed numeric field and inputsHash immutable.
+     * Marks the assessment as model-written only when the narration is actually applied.
      */
-    public void withGroundedNarration( java.util.List<String> plainLanguageReasons, java.util.List<String> officerQuestions) {
+    public void withGroundedNarration(java.util.List<String> plainLanguageReasons, java.util.List<String> officerQuestions) {
+        if (replaceWording(plainLanguageReasons, officerQuestions)) {
+            this.narratedByModel = true;
+        }
+    }
+
+    /**
+     * Replaces the wording with deterministic template sentences (for example to append the member dispute
+     * line). Leaves {@code narratedByModel} as it was: the sentences are not new model output.
+     */
+    public void withTemplateWording(java.util.List<String> plainLanguageReasons, java.util.List<String> officerQuestions) {
+        replaceWording(plainLanguageReasons, officerQuestions);
+    }
+
+    private boolean replaceWording(java.util.List<String> plainLanguageReasons, java.util.List<String> officerQuestions) {
         if (plainLanguageReasons == null || plainLanguageReasons.isEmpty() || officerQuestions == null || officerQuestions.isEmpty()) {
-            return;
+            return false;
         }
         this.result = new FairCheckResult(
             result.recommended(),
@@ -148,6 +168,7 @@ public class FairLoanCheckAssessment {
             result.usedData(),
             result.neverUsedData()
         );
+        return true;
     }
 
     /**
@@ -194,6 +215,7 @@ public class FairLoanCheckAssessment {
     public FairCheckResult getResult() { return result; }
     public String getModelVersion() { return modelVersion; }
     public Instant getCreatedAt() { return createdAt; }
+    public boolean isNarratedByModel() { return narratedByModel; }
     public boolean isMemberDisputed() { return memberDisputed; }
     public String getMemberDisputeNote() { return memberDisputeNote; }
     public Instant getDisputedAt() { return disputedAt; }

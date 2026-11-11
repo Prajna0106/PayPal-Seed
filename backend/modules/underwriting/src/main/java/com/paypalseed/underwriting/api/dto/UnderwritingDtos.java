@@ -76,6 +76,7 @@ public final class UnderwritingDtos {
         List<String> officerQuestions,
         List<String> usedData,
         List<String> neverUsedData,
+        boolean modelGenerated,
         boolean memberDisputed,
         String memberDisputeNote,
         String officerDecision,

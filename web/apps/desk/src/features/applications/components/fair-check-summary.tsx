@@ -5,6 +5,7 @@ import { formatMoney } from "@paypal-seed/ui/lib/format";
 import { ArrowUpRight } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { WordingBadge } from "../../fair-checks/components/wording-badge";
 import type { FairCheckCard } from "../model";
 
 const DECISION = {
@@ -41,7 +42,10 @@ export function FairCheckSummary({ card }: { card: FairCheckCard | null }) {
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Fair check</CardTitle>
-          <StatusPill tone={decision.tone}>{decision.label}</StatusPill>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <WordingBadge modelGenerated={card.modelGenerated} />
+            <StatusPill tone={decision.tone}>{decision.label}</StatusPill>
+          </div>
         </div>
         <CardDescription>
           {card.recommended ? "The calculation recommends a loan." : "The calculation does not recommend this loan as asked."}

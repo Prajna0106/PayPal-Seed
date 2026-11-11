@@ -4,11 +4,15 @@ import { CircleAlert, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { ASSESSMENT_STATUSES, type FairCheckCard, monthStart } from "../model";
 import { CapacityChart } from "./capacity-chart";
+import { WordingBadge } from "./wording-badge";
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, badge, children }: { title: string; badge?: ReactNode; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-sm font-medium text-ink">{title}</h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium text-ink">{title}</h3>
+        {badge}
+      </div>
       {children}
     </section>
   );
@@ -35,7 +39,7 @@ function List({ items }: { items: string[] }) {
 
 /**
  * The evidence behind one fair check, for an officer. Every figure is a structured field of the check, shown as
- * given; the sentences come from fixed templates over those figures (the contract has no model-written text here).
+ * given. The sentences are model-written only when `modelGenerated` is true; otherwise they are fixed templates.
  */
 export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
   const decision = ASSESSMENT_STATUSES[card.officerDecision];
@@ -61,14 +65,26 @@ export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
         ) : null}
       </div>
 
-      <p className="flex items-start gap-2 rounded-xl bg-canvas-soft p-3 text-xs text-body [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0">
-        <ShieldCheck aria-hidden="true" />
-        <span>
-          Every figure comes from the calculation (model {card.modelVersion}, inputs {(card.inputsHash ?? "").slice(0, 8)}). The
-          sentences are fixed templates over those figures. No assistant wrote any of this page, and none of it is a credit
-          score.
-        </span>
-      </p>
+      <div className="flex flex-col gap-2 rounded-xl bg-canvas-soft p-3 text-xs text-body">
+        <div className="flex flex-wrap items-center gap-2">
+          <WordingBadge modelGenerated={card.modelGenerated} long />
+          {card.modelGenerated ? (
+            <StatusPill tone="success" dot={false}>
+              <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
+                <ShieldCheck aria-hidden="true" />
+                Every figure grounded
+              </span>
+            </StatusPill>
+          ) : null}
+        </div>
+        <p>
+          Every figure comes from the calculation (model {card.modelVersion}, inputs {(card.inputsHash ?? "").slice(0, 8)}).{" "}
+          {card.modelGenerated
+            ? "The wording may come from the underwriting agent, which only restates those figures."
+            : "The sentences are fixed templates over those figures."}{" "}
+          None of it is a credit score.
+        </p>
+      </div>
 
       {card.memberDisputed ? (
         <div role="note" className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft p-3 text-sm text-warning [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0">
@@ -148,13 +164,13 @@ export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
       </Section>
 
       {card.plainLanguageReasons.length > 0 ? (
-        <Section title="Why, in the words the member sees">
+        <Section title="Why, in the words the member sees" badge={<WordingBadge modelGenerated={card.modelGenerated} />}>
           <List items={card.plainLanguageReasons} />
         </Section>
       ) : null}
 
       {(card.officerQuestions ?? []).length > 0 ? (
-        <Section title="Questions to ask">
+        <Section title="Questions to ask" badge={<WordingBadge modelGenerated={card.modelGenerated} />}>
           <List items={card.officerQuestions ?? []} />
         </Section>
       ) : null}
