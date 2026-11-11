@@ -648,6 +648,7 @@ public class MicroloanApplicationService {
 
         boolean hasActiveLoan = false;
         int completedLoansOnTime = 0;
+        boolean loanLookupUnavailable = loans == null;
 
         if (loans != null) {
             try {
@@ -658,10 +659,13 @@ public class MicroloanApplicationService {
                     .count();
             } catch (Exception ignored) {
                 // Fallback when running without Postgres
+                loanLookupUnavailable = true;
             }
         }
 
-        if (!hasActiveLoan) {
+        // A DISBURSED application stays DISBURSED after the loan is repaid, so it only stands in for the loan when
+        // the loan itself cannot be read. Otherwise a member with every loan repaid could never borrow again.
+        if (!hasActiveLoan && loanLookupUnavailable) {
             hasActiveLoan = applications.findByMemberId(memberId).stream()
                 .anyMatch(a -> a.getStatus() == ApplicationStatus.DISBURSED);
         }

@@ -20,9 +20,15 @@ import com.paypalseed.lending.application.usecases.LoanRegistration;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.PreviewApplicationCommand;
 import com.paypalseed.lending.application.usecases.MicroloanApplicationService.SubmitApplicationCommand;
+import com.paypalseed.engines.schedule.Bucket;
+import com.paypalseed.engines.schedule.RepaymentPolicy;
 import com.paypalseed.lending.domain.model.LendingErrors;
+import com.paypalseed.lending.domain.model.LoanRow;
+import com.paypalseed.lending.domain.model.LoanRow.CollectionMode;
+import com.paypalseed.lending.domain.model.LoanRow.LoanStatus;
 import com.paypalseed.lending.domain.model.LoanApplication.WalletType;
 import com.paypalseed.lending.infrastructure.persistence.InMemoryLoanApplicationRepository;
+import com.paypalseed.lending.infrastructure.persistence.LoanRepository;
 import com.paypalseed.platform.kernel.DomainException;
 import com.paypalseed.platform.kernel.Ids;
 import com.paypalseed.platform.kernel.Money;
@@ -42,6 +48,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class MicroloanApplicationServiceTest {
 
@@ -251,6 +259,41 @@ class MicroloanApplicationServiceTest {
         assertThat(preview.suggestedAmountCents()).isNull();
         assertThat(preview.suggestedTermMonths()).isNull();
         assertThat(preview.reasons()).isNotEmpty();
+    }
+
+    @Test
+    void aRepaidLoanDoesNotBlockTheNextOneEvenThoughItsApplicationStaysDisbursed() {
+        disburseOneApplication();
+
+        assertThat(eligibilityWithLoans(LoanStatus.REPAID).hasActiveLoan()).isFalse();
+        assertThat(eligibilityWithLoans(LoanStatus.ACTIVE).hasActiveLoan()).isTrue();
+    }
+
+    @Test
+    void aDisbursedApplicationStandsInForTheLoanOnlyWhenTheLoanCannotBeRead() {
+        disburseOneApplication();
+
+        assertThat(service.checkEligibility(ANA_ID, OptionalLong.of(160_000L)).hasActiveLoan()).isTrue();
+    }
+
+    private void disburseOneApplication() {
+        LoanApplicationView submitted = service.submitApplication(
+            ANA_ID,
+            new SubmitApplicationCommand("Stand mixer", 120_000L, 8, 15, WalletType.VENMO, true, OptionalLong.of(160_000L)));
+        service.approveApplication(submitted.id(), OFFICER_1);
+        service.approveApplication(submitted.id(), OFFICER_2);
+        service.disburseApplication(submitted.id());
+    }
+
+    private EligibilityView eligibilityWithLoans(LoanStatus status) {
+        LoanRepository loans = mock(LoanRepository.class);
+        LoanRow row = new LoanRow(UUID.randomUUID(), ANA_ID, 120_000, 8, 15, LocalDate.of(2026, 9, 1),
+            RepaymentPolicy.V1.version(), status, CollectionMode.MANUAL, 1, status == LoanStatus.ACTIVE ? 60_000 : 0, 0, 0,
+            Bucket.CURRENT, null, null, null, 1);
+        when(loans.byMember(ANA_ID)).thenReturn(List.of(row));
+        MicroloanApplicationService withLoans = new MicroloanApplicationService(
+            repository, savingsFacade, loans, lendingFacade, new FakeBusinessClock(LocalDate.of(2026, 11, 1)));
+        return withLoans.checkEligibility(ANA_ID, OptionalLong.of(160_000L));
     }
 
     static class StubSavingsFacade implements SavingsFacade {
