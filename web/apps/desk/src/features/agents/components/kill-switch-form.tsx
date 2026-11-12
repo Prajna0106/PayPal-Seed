@@ -17,12 +17,12 @@ export const MODES: { value: Mode; label: string; description: string }[] = [
   {
     value: "LIVE",
     label: "Live",
-    description: "The Guardian writes briefs and messages. Text reaches people only after all 12 checks pass.",
+    description: "The Guardian Agent writes briefs and messages. Text reaches people only after all 12 checks pass.",
   },
   {
     value: "SHADOW",
     label: "Shadow",
-    description: "The Guardian runs and its text is stored for comparison, but members and officers get templates.",
+    description: "The Guardian Agent runs and its text is stored for comparison, but members and officers get templates.",
   },
   {
     value: "TEMPLATES_ONLY",
@@ -77,7 +77,7 @@ export function KillSwitchForm({ current, isAdmin }: { current: Mode; isAdmin: b
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="GLOBAL">All agents</SelectItem>
-              <SelectItem value="guardian">Guardian only</SelectItem>
+              <SelectItem value="guardian">Guardian Agent only</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -15,7 +15,7 @@ export function OptionsPanel({ options, chosen, revision }: { options: Option[];
         <CardTitle>Options offered</CardTitle>
         <CardDescription>
           {revision ? `Offer revision ${revision}. ` : null}Every figure is the engine&apos;s preview; the suggested option was
-          picked by code, not by the Guardian.
+          picked by code, not by the Guardian Agent.
         </CardDescription>
       </CardHeader>
       <CardContent>

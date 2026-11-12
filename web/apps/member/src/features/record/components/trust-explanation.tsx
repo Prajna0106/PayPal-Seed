@@ -1,16 +1,17 @@
 import type { Locale } from "@paypal-seed/i18n";
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { Kpi } from "@paypal-seed/ui/brand/kpi";
 import { Skeleton } from "@paypal-seed/ui/components/skeleton";
 import { formatBusinessDate, formatMoney } from "@paypal-seed/ui/lib/format";
-import { Languages, ScrollText, Sparkles } from "lucide-react";
+import { Languages, ScrollText } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { trustWords } from "../copy";
 import { getTrustRecord } from "../server/trust";
 
 /**
- * The explanation and certificate wording the trust agent wrote, with the backend's own figures beside it. Text is
- * labelled when a model wrote it; no number is taken from the text, and there is no score or risk level here.
+ * The explanation and certificate wording the Trust Agent wrote, with the backend's own figures beside it. Text sits
+ * in an agent card, labelled when a model wrote it; no number is taken from the text, and there is no score or risk level here.
  */
 export async function TrustExplanation({ locale }: { locale: Locale }) {
   const trust = await getTrustRecord(locale);
@@ -20,6 +21,8 @@ export async function TrustExplanation({ locale }: { locale: Locale }) {
   const t = trustWords(locale);
   const other: Locale = locale === "es" ? "en" : "es";
   const { figures } = trust;
+  const agentState = trust.aiWritten ? "ai" : "template";
+  const checkedNote = trust.aiWritten ? t.checkedNote : undefined;
 
   return (
     <section aria-labelledby="trust-title" lang={locale} className="flex flex-col gap-6">
@@ -41,20 +44,16 @@ export async function TrustExplanation({ locale }: { locale: Locale }) {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-5 rounded-3xl border border-hairline bg-canvas-soft p-6 sm:p-8">
-        <h3 className="text-eyebrow text-muted-ink">{t.explanationHeading}</h3>
-        <p className="max-w-2xl font-display text-2xl leading-snug font-light text-ink text-pretty">{trust.explanation}</p>
-        <div className="flex flex-col gap-1 border-t border-hairline pt-4">
-          <h3 className="text-eyebrow text-muted-ink">{t.adviceHeading}</h3>
-          <p className="max-w-2xl text-sm text-body text-pretty">{trust.advice}</p>
+      <AgentCard agent="trust" state={agentState} footer={checkedNote}>
+        <div className="flex flex-col gap-5">
+          <h3 className="text-eyebrow text-muted-ink">{t.explanationHeading}</h3>
+          <p className="max-w-2xl font-display text-2xl leading-snug font-light text-ink text-pretty">{trust.explanation}</p>
+          <div className="flex flex-col gap-1 border-t border-hairline pt-4">
+            <h3 className="text-eyebrow text-muted-ink">{t.adviceHeading}</h3>
+            <p className="max-w-2xl text-sm text-body text-pretty">{trust.advice}</p>
+          </div>
         </div>
-        {trust.aiWritten ? (
-          <p className="inline-flex items-center gap-2 text-xs text-muted-ink">
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            {t.aiLabel}
-          </p>
-        ) : null}
-      </div>
+      </AgentCard>
 
       <div className="flex flex-col gap-3" role="group" aria-label={t.figuresLabel}>
         <h3 className="text-sm font-medium text-ink">{t.figuresLabel}</h3>
@@ -73,16 +72,12 @@ export async function TrustExplanation({ locale }: { locale: Locale }) {
           <ScrollText className="size-4 text-muted-ink" aria-hidden="true" />
           {t.attestationHeading}
         </figcaption>
-        <blockquote lang="en" className="text-sm text-body text-pretty">
-          {trust.attestation}
-        </blockquote>
+        <AgentCard agent="trust" state={agentState} footer={checkedNote}>
+          <blockquote lang="en" className="text-sm text-body text-pretty">
+            {trust.attestation}
+          </blockquote>
+        </AgentCard>
         <p className="text-xs text-muted-ink">{t.attestationHint}</p>
-        {trust.aiWritten ? (
-          <p className="inline-flex items-center gap-2 text-xs text-muted-ink">
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            {t.aiLabel}
-          </p>
-        ) : null}
         <dl className="flex flex-col gap-1 border-t border-hairline pt-3 text-xs text-muted-ink">
           <div className="flex flex-wrap gap-x-2">
             <dt>{t.issued}</dt>

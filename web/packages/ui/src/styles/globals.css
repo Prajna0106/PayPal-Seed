@@ -35,6 +35,11 @@
   --color-gradient-sky: #a8c8e8;
   --color-gradient-rose: #e8b8c4;
 
+  /* One violet family marks everything an AI agent wrote, so it reads at a glance. Text on agent-soft is 6.9:1. */
+  --color-agent: #5b3f9e;
+  --color-agent-soft: #f3effa;
+  --color-agent-line: #d9cdee;
+
   --color-success: #15803d;
   --color-success-soft: #e7f4ec;
   --color-warning: #b45309;

@@ -28,7 +28,7 @@ export async function setKillSwitch(_previous: ActionResult, formData: FormData)
     const api = await staffApi();
     const state = await unwrap(api.POST("/api/v1/desk/agents/kill-switch", { body: parsed.data }));
     refresh();
-    return { status: "ok", message: `Guardian is now ${state.mode === "TEMPLATES_ONLY" ? "on templates only" : (state.mode ?? "").toLowerCase()}.` };
+    return { status: "ok", message: `Guardian Agent is now ${state.mode === "TEMPLATES_ONLY" ? "on templates only" : (state.mode ?? "").toLowerCase()}.` };
   } catch (error) {
     unstable_rethrow(error);
     if (isProblem(error, "kill-switch-up-needs-admin")) {

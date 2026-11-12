@@ -11,7 +11,7 @@ export interface TrustView {
   /** Third-party certificate wording. The backend sends one English text. */
   attestation: string;
   advice: string;
-  /** True when Seed's assistant wrote the text above; false when it is the fixed template. */
+  /** True when the Trust Agent wrote the text above; false when it is the fixed template. */
   aiWritten: boolean;
   /** Every figure is the backend's, shown as sent. */
   figures: {

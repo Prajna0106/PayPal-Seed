@@ -25,7 +25,7 @@ export default async function OverviewPage() {
       <PageHeader
         eyebrow="Today"
         title={`Good to see you, ${firstName}`}
-        description="The safety net at a glance: who needs a decision, what the Guardian is doing, and how the daily close went."
+        description="The safety net at a glance: who needs a decision, what the Guardian Agent is doing, and how the daily close went."
         actions={
           <Button asChild>
             <Link href="/hardship">

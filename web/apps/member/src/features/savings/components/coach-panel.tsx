@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { Button } from "@paypal-seed/ui/components/button";
 import { Input } from "@paypal-seed/ui/components/input";
 import { Label } from "@paypal-seed/ui/components/label";
@@ -18,7 +19,7 @@ export interface CoachPanelProps {
 
 /**
  * Optional help with "how much?". The member says what comes in and goes out; the numbers come back as fields
- * computed by code, and the one sentence the assistant writes is labelled as such. Nothing here is saved.
+ * computed by code, and the sentence the Savings Coach Agent writes sits in a labelled card. Nothing here is saved.
  */
 export function CoachPanel({ goalName, targetCents, language, onApply }: CoachPanelProps) {
   const id = useId();
@@ -48,8 +49,8 @@ export function CoachPanel({ goalName, targetCents, language, onApply }: CoachPa
   return (
     <details className="group rounded-2xl border border-hairline bg-canvas-soft p-5">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
-        <Sparkles className="size-4 text-muted-ink" aria-hidden="true" />
-        Not sure how much? Ask the coach
+        <Sparkles className="size-4 text-agent" aria-hidden="true" />
+        Not sure how much? Ask the Savings Coach Agent
       </summary>
 
       <div className="mt-4 flex flex-col gap-4">
@@ -119,10 +120,13 @@ function Suggestion({ result, onApply }: { result: Extract<CoachResult, { ok: tr
           </p>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 border-l-2 border-hairline-strong pl-3">
-        <p className="text-xs font-medium text-muted-ink">{result.modelGenerated ? "Written by our assistant" : "Standard summary"}</p>
+      <AgentCard
+        agent="coach"
+        state={result.modelGenerated ? "ai" : "template"}
+        footer={result.modelGenerated ? "The amounts above come from code; this wording was checked against them." : undefined}
+      >
         <p className="text-sm text-body">{result.message}</p>
-      </div>
+      </AgentCard>
       <Button type="button" onClick={() => onApply(result.suggestedCents)} className="self-start">
         Use {formatMoney(result.suggestedCents)} a month
       </Button>

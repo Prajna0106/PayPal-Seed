@@ -1,7 +1,8 @@
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { Kpi } from "@paypal-seed/ui/brand/kpi";
 import { Button } from "@paypal-seed/ui/components/button";
 import { formatMoney } from "@paypal-seed/ui/lib/format";
-import { ArrowRight, Bot, MessageCircleHeart } from "lucide-react";
+import { ArrowRight, MessageCircleHeart } from "lucide-react";
 import Link from "next/link";
 import { applyHref, type FairCheckCard, type WizardParams } from "../model";
 import { DisputeForm } from "./dispute-form";
@@ -49,19 +50,18 @@ export function CheckResult({ card, params }: { card: FairCheckCard; params: Wiz
           Why
         </h2>
         {card.plainLanguageReasons.length > 0 ? (
-          <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body text-pretty">
-            {card.plainLanguageReasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+          <AgentCard
+            agent="underwriting"
+            state={card.modelGenerated ? "ai" : "template"}
+            footer={card.modelGenerated ? "The figures on this page come from our calculations; this wording was checked against them." : undefined}
+          >
+            <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body text-pretty">
+              {card.plainLanguageReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </AgentCard>
         ) : null}
-        <p className="flex items-start gap-2 text-xs text-muted-ink">
-          <Bot aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          <span>
-            Explained in plain words, and some of the wording may be written by Seed&apos;s assistant. Every figure on this page comes from
-            our own calculations, never from the assistant.
-          </span>
-        </p>
       </section>
 
       <section aria-labelledby="how" className="flex flex-col gap-3 rounded-2xl border border-hairline bg-surface p-6">

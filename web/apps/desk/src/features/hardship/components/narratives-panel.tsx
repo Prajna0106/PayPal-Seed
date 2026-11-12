@@ -1,9 +1,10 @@
 import type { HardshipCaseDetail } from "@paypal-seed/api-client/types";
+import { AgentBadge, AgentCard } from "@paypal-seed/ui/brand/agent";
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@paypal-seed/ui/components/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@paypal-seed/ui/components/tabs";
 import { formatDateTime } from "@paypal-seed/ui/lib/format";
-import { Bot, FileText, ShieldCheck, ShieldX } from "lucide-react";
+import { ShieldCheck, ShieldX } from "lucide-react";
 
 type Narrative = NonNullable<HardshipCaseDetail["narratives"]>[number];
 
@@ -14,18 +15,15 @@ function latest(narratives: Narrative[], audience: "MEMBER" | "OFFICER", locale:
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))[0];
 }
 
+function agentState(narrative: Narrative): "ai" | "shadow" | "template" {
+  return narrative.source === "AI" ? "ai" : narrative.source === "AI_SHADOW" ? "shadow" : "template";
+}
+
 function SourceBadges({ narrative }: { narrative: Narrative }) {
-  const ai = narrative.source === "AI";
-  const shadow = narrative.source === "AI_SHADOW";
   const grounding = narrative.grounding ?? "NOT_RUN";
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <StatusPill tone={ai ? "ink" : shadow ? "info" : "neutral"} dot={false}>
-        <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
-          {ai || shadow ? <Bot aria-hidden="true" /> : <FileText aria-hidden="true" />}
-          {ai ? "Written by the Guardian" : shadow ? "Guardian (shadow, not sent)" : "Template"}
-        </span>
-      </StatusPill>
+      <AgentBadge agent="guardian" state={agentState(narrative)} />
       {grounding === "PASSED" ? (
         <StatusPill tone="success" dot={false}>
           <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
@@ -48,13 +46,38 @@ function SourceBadges({ narrative }: { narrative: Narrative }) {
 
 function Text({ narrative }: { narrative: Narrative | undefined }) {
   if (!narrative) {
-    return <p className="text-sm text-muted-ink">No text yet. The outreach goes out once the Guardian answers or its deadline passes.</p>;
+    return (
+      <p className="text-sm text-muted-ink">
+        No text yet. The outreach goes out once the Guardian Agent answers or its deadline passes.
+      </p>
+    );
+  }
+  const state = agentState(narrative);
+  const body = <p className="whitespace-pre-line text-[15px] leading-relaxed text-body">{narrative.text}</p>;
+  if (state === "template") {
+    return (
+      <div className="flex flex-col gap-3">
+        <SourceBadges narrative={narrative} />
+        {body}
+      </div>
+    );
   }
   return (
-    <div className="flex flex-col gap-3">
-      <SourceBadges narrative={narrative} />
-      <p className="whitespace-pre-line text-[15px] leading-relaxed text-body">{narrative.text}</p>
-    </div>
+    <AgentCard
+      agent="guardian"
+      state={state}
+      description={state === "shadow" ? "Shadow run: the member saw the template, not this text." : undefined}
+      footer={
+        narrative.grounding === "PASSED"
+          ? "Figures come from code and were checked against this wording."
+          : "Figures come from code, not from this wording."
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <SourceBadges narrative={narrative} />
+        {body}
+      </div>
+    </AgentCard>
   );
 }
 
@@ -65,7 +88,7 @@ export function NarrativesPanel({ narratives }: { narratives: Narrative[] }) {
       <CardHeader>
         <CardTitle>Brief and message</CardTitle>
         <CardDescription>
-          Numbers come from code; words may come from the Guardian. Its text is shown only after every figure in it was
+          Numbers come from code; words may come from the Guardian Agent. Its text is shown only after every figure in it was
           checked against the case.
         </CardDescription>
       </CardHeader>

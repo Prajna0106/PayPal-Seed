@@ -1,3 +1,4 @@
+import { AgentBadge } from "@paypal-seed/ui/brand/agent";
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
 import { Button } from "@paypal-seed/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@paypal-seed/ui/components/card";
@@ -5,7 +6,6 @@ import { formatMoney } from "@paypal-seed/ui/lib/format";
 import { ArrowUpRight } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { WordingBadge } from "../../fair-checks/components/wording-badge";
 import type { FairCheckCard } from "../model";
 
 const DECISION = {
@@ -43,7 +43,7 @@ export function FairCheckSummary({ card }: { card: FairCheckCard | null }) {
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Fair check</CardTitle>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <WordingBadge modelGenerated={card.modelGenerated} />
+            <AgentBadge agent="underwriting" state={card.modelGenerated ? "ai" : "template"} />
             <StatusPill tone={decision.tone}>{decision.label}</StatusPill>
           </div>
         </div>

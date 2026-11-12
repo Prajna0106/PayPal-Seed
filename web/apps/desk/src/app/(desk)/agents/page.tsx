@@ -51,7 +51,7 @@ export default async function AgentsPage() {
       <PageHeader
         eyebrow="Platform"
         title="Agents"
-        description="The Guardian proposes; code checks every figure; people decide. The kill switch drops it to templates at once, and the safety net keeps working."
+        description="The Guardian Agent proposes; code checks every figure; people decide. The kill switch drops it to templates at once, and the safety net keeps working."
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
@@ -66,7 +66,7 @@ export default async function AgentsPage() {
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Guardian now</CardTitle>
+              <CardTitle>Guardian Agent now</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               <StatusPill tone={MODE_TONES[mode] ?? "neutral"} className="self-start">

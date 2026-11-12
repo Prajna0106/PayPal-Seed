@@ -71,7 +71,7 @@ export const SIGNAL_NAMES: Record<string, string> = {
   RECENT_LATE: "Paid late recently",
   SAVINGS_STRESS: "Savings under strain",
   MEMBER_REQUEST: "Member asked for help",
-  AI_ESCALATION: "Raised by the Guardian's second opinion",
+  AI_ESCALATION: "Raised by the Guardian Agent's second opinion",
 };
 
 export const WARNING_NAMES: Record<string, string> = {

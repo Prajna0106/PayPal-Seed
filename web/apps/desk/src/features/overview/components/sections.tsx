@@ -1,4 +1,5 @@
 import { isProblem, problemMessage } from "@paypal-seed/api-client/problem";
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { BusinessDate } from "@paypal-seed/ui/brand/business-date";
 import { Kpi } from "@paypal-seed/ui/brand/kpi";
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
@@ -15,9 +16,7 @@ import {
   AlertTriangle,
   Bot,
   ChevronRight,
-  FileText,
   FolderOpen,
-  ShieldCheck,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -71,9 +70,9 @@ function Unavailable({ message }: { message: string }) {
 const MODE_TEXT = {
   LIVE: {
     label: "Live",
-    hint: "Guardian text reaches members after the checks.",
+    hint: "Guardian Agent text reaches members after the checks.",
   },
-  SHADOW: { label: "Shadow", hint: "Guardian runs; members get templates." },
+  SHADOW: { label: "Shadow", hint: "Guardian Agent runs; members get templates." },
   TEMPLATES_ONLY: {
     label: "Templates only",
     hint: "No model calls. Templates go out.",
@@ -128,7 +127,7 @@ export async function KpiSection() {
         }
       />
       <Kpi
-        label="Guardian"
+        label="Guardian Agent"
         value={<span className="text-3xl">{mode.label}</span>}
         icon={<Bot />}
         hint={mode.hint}
@@ -350,31 +349,11 @@ export async function BriefingSection() {
   return (
     <Card className="min-w-0">
       <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1.5">
-            <CardTitle>Morning briefing</CardTitle>
-            <CardDescription>
-              Portfolio and queue as of <BusinessDate value={b.businessDate} dateStyle="long" />. Numbers come from
-              code; only the wording may come from the analyst agent.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill tone={b.modelGenerated ? "ink" : "neutral"} dot={false}>
-              <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
-                {b.modelGenerated ? <Bot aria-hidden="true" /> : <FileText aria-hidden="true" />}
-                {b.modelGenerated ? "Written by the analyst agent (AI)" : "Template"}
-              </span>
-            </StatusPill>
-            {b.modelGenerated ? (
-              <StatusPill tone="success" dot={false}>
-                <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
-                  <ShieldCheck aria-hidden="true" />
-                  Every figure grounded
-                </span>
-              </StatusPill>
-            ) : null}
-          </div>
-        </div>
+        <CardTitle>Morning briefing</CardTitle>
+        <CardDescription>
+          Portfolio and queue as of <BusinessDate value={b.businessDate} dateStyle="long" />. Figures below come from
+          code; the violet block is the Desk Analyst Agent&apos;s wording.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
@@ -385,17 +364,29 @@ export async function BriefingSection() {
             </div>
           ))}
         </dl>
-        <p className="whitespace-pre-line text-[15px] leading-relaxed text-body">{b.executiveSummary}</p>
-        <div className="grid gap-6 md:grid-cols-2">
-          <BriefingList title="Queue priorities" items={b.queuePriorities} />
-          <BriefingList title="Risk observations" items={b.riskObservations} />
-        </div>
-        {b.recommendedStaffingFocus ? (
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-medium text-ink">Staffing focus</h3>
-            <p className="text-[15px] leading-relaxed text-body">{b.recommendedStaffingFocus}</p>
+        <AgentCard
+          agent="analyst"
+          state={b.modelGenerated ? "ai" : "template"}
+          footer={
+            b.modelGenerated
+              ? "Figures come from code and were checked against this wording."
+              : "Template wording over the figures above: no agent wrote this."
+          }
+        >
+          <div className="flex flex-col gap-6">
+            <p className="whitespace-pre-line text-[15px] leading-relaxed text-body">{b.executiveSummary}</p>
+            <div className="grid gap-6 md:grid-cols-2">
+              <BriefingList title="Queue priorities" items={b.queuePriorities} />
+              <BriefingList title="Risk observations" items={b.riskObservations} />
+            </div>
+            {b.recommendedStaffingFocus ? (
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-medium text-ink">Staffing focus</h3>
+                <p className="text-[15px] leading-relaxed text-body">{b.recommendedStaffingFocus}</p>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </AgentCard>
       </CardContent>
     </Card>
   );

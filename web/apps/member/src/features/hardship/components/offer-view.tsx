@@ -1,6 +1,7 @@
 import type { Locale } from "@paypal-seed/i18n";
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { GradientOrb } from "@paypal-seed/ui/brand/gradient-orb";
-import { CircleAlert, Sparkles, UserRoundCheck, Zap, Wallet } from "lucide-react";
+import { CircleAlert, UserRoundCheck, Zap, Wallet } from "lucide-react";
 import { randomUUID } from "node:crypto";
 import { date, describeOption, fill, money, words } from "../copy";
 import type { HardshipModel, OfferOption } from "../server/queries";
@@ -32,13 +33,14 @@ export function OfferView({ loanId, hardship, locale }: { loanId: string; hardsh
           <h2 id="offer-message" className="text-eyebrow text-muted-ink">
             {t.message}
           </h2>
-          <p className="mt-3 max-w-2xl font-display text-2xl leading-snug font-light text-ink text-pretty">{offer.message.text}</p>
-          {offer.message.source === "AI" ? (
-            <p className="mt-4 inline-flex items-center gap-2 text-xs text-muted-ink">
-              <Sparkles className="size-3.5" aria-hidden="true" />
-              {t.aiLabel}
-            </p>
-          ) : null}
+          <AgentCard
+            agent="guardian"
+            state={offer.message.source === "AI" ? "ai" : "template"}
+            footer={offer.message.source === "AI" ? t.aiLabel : undefined}
+            className="mt-3"
+          >
+            <p className="max-w-2xl font-display text-2xl leading-snug font-light text-ink text-pretty">{offer.message.text}</p>
+          </AgentCard>
         </section>
       ) : null}
 

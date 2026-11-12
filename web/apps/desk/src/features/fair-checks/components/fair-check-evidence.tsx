@@ -1,18 +1,15 @@
+import { AgentCard } from "@paypal-seed/ui/brand/agent";
 import { StatusPill } from "@paypal-seed/ui/brand/status-pill";
 import { formatBusinessDate, formatDateTime, formatMoney } from "@paypal-seed/ui/lib/format";
-import { CircleAlert, ShieldCheck } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { ASSESSMENT_STATUSES, type FairCheckCard, monthStart } from "../model";
 import { CapacityChart } from "./capacity-chart";
-import { WordingBadge } from "./wording-badge";
 
-function Section({ title, badge, children }: { title: string; badge?: ReactNode; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium text-ink">{title}</h3>
-        {badge}
-      </div>
+      <h3 className="text-sm font-medium text-ink">{title}</h3>
       {children}
     </section>
   );
@@ -46,6 +43,11 @@ export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
   const saved = card.monthsSaved ?? 0;
   const windowMonths = card.targetMonthsWindow ?? 0;
 
+  const wordingBlocks = [
+    { title: "Why, in the words the member sees", items: card.plainLanguageReasons },
+    { title: "Questions to ask", items: card.officerQuestions ?? [] },
+  ].filter((block) => block.items.length > 0);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -65,26 +67,23 @@ export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl bg-canvas-soft p-3 text-xs text-body">
-        <div className="flex flex-wrap items-center gap-2">
-          <WordingBadge modelGenerated={card.modelGenerated} long />
-          {card.modelGenerated ? (
-            <StatusPill tone="success" dot={false}>
-              <span className="inline-flex items-center gap-1 [&_svg]:size-3.5">
-                <ShieldCheck aria-hidden="true" />
-                Every figure grounded
-              </span>
-            </StatusPill>
-          ) : null}
-        </div>
-        <p>
+      <AgentCard
+        agent="underwriting"
+        state={card.modelGenerated ? "ai" : "template"}
+        footer={
+          card.modelGenerated
+            ? "Figures come from the calculation and were checked against this wording."
+            : undefined
+        }
+      >
+        <p className="text-sm text-body">
           Every figure comes from the calculation (model {card.modelVersion}, inputs {(card.inputsHash ?? "").slice(0, 8)}).{" "}
           {card.modelGenerated
-            ? "The wording may come from the underwriting agent, which only restates those figures."
+            ? "The wording is the Underwriting Agent's: it only restates those figures."
             : "The sentences are fixed templates over those figures."}{" "}
           None of it is a credit score.
         </p>
-      </div>
+      </AgentCard>
 
       {card.memberDisputed ? (
         <div role="note" className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft p-3 text-sm text-warning [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0">
@@ -163,16 +162,20 @@ export function FairCheckEvidence({ card }: { card: FairCheckCard }) {
         </div>
       </Section>
 
-      {card.plainLanguageReasons.length > 0 ? (
-        <Section title="Why, in the words the member sees" badge={<WordingBadge modelGenerated={card.modelGenerated} />}>
-          <List items={card.plainLanguageReasons} />
-        </Section>
-      ) : null}
-
-      {(card.officerQuestions ?? []).length > 0 ? (
-        <Section title="Questions to ask" badge={<WordingBadge modelGenerated={card.modelGenerated} />}>
-          <List items={card.officerQuestions ?? []} />
-        </Section>
+      {wordingBlocks.length > 0 ? (
+        <AgentCard
+          agent="underwriting"
+          state={card.modelGenerated ? "ai" : "template"}
+          footer={card.modelGenerated ? "Figures come from the calculation and were checked against this wording." : undefined}
+        >
+          <div className="flex flex-col gap-5">
+            {wordingBlocks.map((block) => (
+              <Section key={block.title} title={block.title}>
+                <List items={block.items} />
+              </Section>
+            ))}
+          </div>
+        </AgentCard>
       ) : null}
 
       <Section title="Data used">

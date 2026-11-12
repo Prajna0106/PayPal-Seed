@@ -69,14 +69,14 @@ export type CoachResult =
       streakMonths: number;
       instalmentCents: number | null;
       termMonths: number;
-      /** Written by the assistant when `modelGenerated`, otherwise a fixed template. Never the source of a figure. */
+      /** Written by the Savings Coach Agent when `modelGenerated`, otherwise a fixed template. Never the source of a figure. */
       message: string;
       modelGenerated: boolean;
     }
   | { ok: false; message: string };
 
 /**
- * Asks the savings coach for a plan from what the member says they earn and spend. The figures come back as fields
+ * Asks the Savings Coach Agent for a plan from what the member says they earn and spend. The figures come back as fields
  * computed by code; the sentence is the only model-written part and is labelled where it is shown.
  */
 export async function suggestPlan(input: {
@@ -117,7 +117,7 @@ export async function suggestPlan(input: {
   } catch (error) {
     unstable_rethrow(error);
     console.error("[savings] coach suggestion failed", error);
-    return { ok: false, message: "The coach could not make a suggestion right now. You can still pick your own amount." };
+    return { ok: false, message: "The Savings Coach Agent could not make a suggestion right now. You can still pick your own amount." };
   }
 }
 

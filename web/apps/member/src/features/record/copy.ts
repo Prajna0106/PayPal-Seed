@@ -16,7 +16,7 @@ export interface TrustWords {
   limitNext: string;
   verification: string;
   issued: string;
-  aiLabel: string;
+  checkedNote: string;
   language: string;
   loading: string;
 }
@@ -38,7 +38,7 @@ const WORDS: Record<Locale, TrustWords> = {
     limitNext: "At the next step",
     verification: "Verification code",
     issued: "Issued",
-    aiLabel: "Written by Seed's assistant and checked against your numbers.",
+    checkedNote: "The numbers come from your record, and this wording was checked against them.",
     language: "Español",
     loading: "Loading your record in words",
   },
@@ -58,7 +58,7 @@ const WORDS: Record<Locale, TrustWords> = {
     limitNext: "En el siguiente paso",
     verification: "Código de verificación",
     issued: "Emitido",
-    aiLabel: "Escrito por el asistente de Seed y comprobado con tus números.",
+    checkedNote: "Los números salen de tu historial, y este texto se comprobó con ellos.",
     language: "English",
     loading: "Cargando tu historial en palabras",
   },
